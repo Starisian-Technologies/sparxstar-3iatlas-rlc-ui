@@ -1,0 +1,62 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --brand: #1B3A6B;
+  --gold: #C9A84C;
+  --text: #1a1a1a;
+  --muted: #888780;
+  --border: #b4b2a9;
+  --bg: #f4f4f4;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+html, body, #root {
+  height: 100%;
+  min-height: 100dvh;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  overscroll-behavior: none;
+}
+
+/* All interactive elements meet 44px touch target minimum */
+button, input, select, textarea {
+  font: inherit;
+  min-height: 44px;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, textarea {
+  font-size: 16px; /* Prevents iOS auto-zoom on focus */
+}
+
+/* Smooth scrolling on iOS */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
