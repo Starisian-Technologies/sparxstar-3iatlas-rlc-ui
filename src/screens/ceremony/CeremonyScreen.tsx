@@ -18,6 +18,9 @@ const STAR_ORDER = [
   'Teacher Award',
 ] as const
 
+const STAR_REVEAL_INTERVAL_MS = 2000
+const FIREWORKS_DURATION_MS = 3000
+
 export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps) {
   const [awards, setAwards] = useState<AwardsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,7 +70,7 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
         }
         return count + 1
       })
-    }, 2000)
+    }, STAR_REVEAL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [orderedStars])
 
@@ -75,7 +78,7 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
     if (!awards) return
     if (revealedCount < orderedStars.length) return
     setShowFireworks(true)
-    const timeout = setTimeout(() => setShowFireworks(false), 3000)
+    const timeout = setTimeout(() => setShowFireworks(false), FIREWORKS_DURATION_MS)
     return () => clearTimeout(timeout)
   }, [awards, orderedStars.length, revealedCount])
 

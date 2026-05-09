@@ -35,10 +35,12 @@ export function RscCollectionScreen({
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const sentenceRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
+  const hasCollectionEndedRef = useRef(false)
   const { session } = useSessionPoll(session_id, true)
 
   useEffect(() => {
-    if (session?.status && session.status !== 'open') {
+    if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
+      hasCollectionEndedRef.current = true
       onCollectionEnded()
     }
   }, [onCollectionEnded, session?.status])

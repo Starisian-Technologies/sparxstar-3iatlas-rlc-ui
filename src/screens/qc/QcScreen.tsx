@@ -13,6 +13,7 @@ interface QcScreenProps {
 
 type QcStep = 'audio' | 'vote' | 'correction' | 'translation'
 type VoteCounts = { yes: number; no: number }
+type QcVoteToken = { vote_orthography: VoteCounts; vote_semantics: VoteCounts; vote_audio: VoteCounts }
 
 export function QcScreen({
   session_id,
@@ -285,7 +286,7 @@ export function QcScreen({
                 disabled={!teacherStarParticipant || teacherStarAssigned}
                 style={primaryButtonStyle(!teacherStarParticipant || teacherStarAssigned)}
               >
-                {teacherStarAssigned ? "Teacher's Star assigned" : "Assign Teacher's Star"}
+                {teacherStarAssigned ? 'Teacher’s Star assigned' : 'Assign Teacher’s Star'}
               </button>
               <button type="button" onClick={onGoCeremony} style={primaryButtonStyle(false)}>
                 Start ceremony
@@ -302,7 +303,7 @@ export function QcScreen({
   )
 }
 
-function getDefaultCounts(token: { vote_orthography: VoteCounts; vote_semantics: VoteCounts; vote_audio: VoteCounts }, dimension: VotePayload['dimension']): VoteCounts {
+function getDefaultCounts(token: QcVoteToken, dimension: VotePayload['dimension']): VoteCounts {
   if (dimension === 'orthography') return token.vote_orthography
   if (dimension === 'semantics') return token.vote_semantics
   return token.vote_audio

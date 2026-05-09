@@ -55,9 +55,11 @@ const BURSTS = [
   { x: '0px', y: '220px', color: '#ef5350', delay: '0.65s' },
 ] as const
 
-function toCssVars(x: string, y: string): React.CSSProperties {
+type FireworkCssVars = React.CSSProperties & Record<'--x' | '--y', string>
+
+function toCssVars(x: string, y: string): FireworkCssVars {
   return {
     '--x': x,
     '--y': y,
-  } as React.CSSProperties
+  }
 }

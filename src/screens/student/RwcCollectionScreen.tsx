@@ -31,11 +31,13 @@ export function RwcCollectionScreen({
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const { session } = useSessionPoll(session_id, true)
+  const hasCollectionEndedRef = useRef(false)
   const wordRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (session?.status && session.status !== 'open') {
+    if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
+      hasCollectionEndedRef.current = true
       onCollectionEnded()
     }
   }, [onCollectionEnded, session?.status])
