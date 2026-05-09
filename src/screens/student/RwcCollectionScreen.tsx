@@ -44,7 +44,7 @@ export function RwcCollectionScreen({
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
   const roundGoal = session?.round_goal ?? 10
-  const promptWord = session?.semantic_domain_id?.split(/[.\s_-]+/).slice(-1)[0]?.toUpperCase() ?? 'TARGET WORD'
+  const promptWord = getPromptWord(session?.semantic_domain_id)
   const minutes = Math.floor((session?.time_remaining_seconds ?? 0) / 60)
   const seconds = (session?.time_remaining_seconds ?? 0) % 60
   const needsTranslation = collection_depth !== 'basic'
@@ -120,7 +120,7 @@ export function RwcCollectionScreen({
         id: result.token_id,
         word: word.trim(),
         translation: needsTranslation ? translation.trim() || undefined : undefined,
-        points: result.xp_awarded,
+        xp: result.xp_awarded,
       }
       setSubmittedWords((prev) => [item, ...prev].slice(0, 20))
       setWord('')
@@ -195,7 +195,7 @@ export function RwcCollectionScreen({
                 <div style={{ fontWeight: 700 }}>{entry.word}</div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{entry.translation ?? 'No translation'}</div>
               </div>
-              <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.points} ⭐</div>
+            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp} ⭐</div>
             </div>
           ))}
           {submittedWords.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No words yet.</div>}
@@ -245,8 +245,8 @@ function buildRoundSummary(input: {
   participant_id: string
   display_name: string
 }): RoundCompleteSummary {
-  const top_words = [...input.submittedWords].sort((a, b) => b.points - a.points).slice(0, 5)
-  const points_earned = input.submittedWords.reduce((sum, item) => sum + item.points, 0)
+  const top_words = [...input.submittedWords].sort((a, b) => b.xp - a.xp).slice(0, 5)
+  const points_earned = input.submittedWords.reduce((sum, item) => sum + item.xp, 0)
   const me = input.leaderboard.find(
     (entry) => entry.participant_id === input.participant_id || entry.display_name === input.display_name,
   )
@@ -261,6 +261,13 @@ function buildRoundSummary(input: {
     player_rank: me?.rank ?? 1,
     total_players: input.leaderboard.length || 1,
   }
+}
+
+function getPromptWord(semanticDomainId?: string): string {
+  if (!semanticDomainId) return 'TARGET WORD'
+  const token = semanticDomainId.split(/[.\s_-]+/).slice(-1)[0]
+  if (!token) return 'TARGET WORD'
+  return token.toUpperCase()
 }
 
 const wrapStyle: React.CSSProperties = {
