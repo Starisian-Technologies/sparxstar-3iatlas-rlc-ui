@@ -120,7 +120,7 @@ export function RwcCollectionScreen({
         id: result.token_id,
         word: word.trim(),
         translation: needsTranslation ? translation.trim() || undefined : undefined,
-        xp: result.xp_awarded,
+        xp_awarded: result.xp_awarded,
       }
       setSubmittedWords((prev) => [item, ...prev].slice(0, 20))
       setWord('')
@@ -195,7 +195,7 @@ export function RwcCollectionScreen({
                 <div style={{ fontWeight: 700 }}>{entry.word}</div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{entry.translation ?? 'No translation'}</div>
               </div>
-            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp} ⭐</div>
+            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
             </div>
           ))}
           {submittedWords.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No words yet.</div>}
@@ -245,8 +245,8 @@ function buildRoundSummary(input: {
   participant_id: string
   display_name: string
 }): RoundCompleteSummary {
-  const top_words = [...input.submittedWords].sort((a, b) => b.xp - a.xp).slice(0, 5)
-  const points_earned = input.submittedWords.reduce((sum, item) => sum + item.xp, 0)
+  const top_words = [...input.submittedWords].sort((a, b) => b.xp_awarded - a.xp_awarded).slice(0, 5)
+  const points_earned = input.submittedWords.reduce((sum, item) => sum + item.xp_awarded, 0)
   const me = input.leaderboard.find(
     (entry) => entry.participant_id === input.participant_id || entry.display_name === input.display_name,
   )

@@ -39,7 +39,7 @@ export function RoundCompleteScreen({ summary, onNextRound, onBackToLobby }: Rou
               <div style={{ fontWeight: 700 }}>{word.word}</div>
               <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{word.translation ?? '—'}</div>
             </div>
-            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{word.xp} ⭐</div>
+            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{word.xp_awarded} ⭐</div>
           </div>
         ))}
       </section>

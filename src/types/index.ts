@@ -184,7 +184,7 @@ export interface SubmittedWord {
   id: string
   word: string
   translation?: string
-  xp: number
+  xp_awarded: number
 }
 
 export interface RoundCompleteSummary {
