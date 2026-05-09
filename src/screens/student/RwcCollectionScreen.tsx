@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import type { CollectionDepth, SaveTokenResponse } from '@/types'
+import { useSessionPoll } from '@/hooks/useSessionPoll'
 
 interface RwcCollectionScreenProps {
   session_id: string
@@ -9,6 +10,7 @@ interface RwcCollectionScreenProps {
   collection_depth: CollectionDepth
   language: string
   onSubmitted: (result: SaveTokenResponse) => void
+  onCollectionEnded: () => void
 }
 
 type Step = 'word' | 'translation' | 'recording' | 'done'
@@ -20,7 +22,7 @@ type Step = 'word' | 'translation' | 'recording' | 'done'
  * Special character bar is always visible above keyboard.
  */
 export function RwcCollectionScreen({
-  session_id, participant_id, collection_depth, language, onSubmitted,
+  session_id, participant_id, collection_depth, language, onSubmitted, onCollectionEnded,
 }: RwcCollectionScreenProps) {
   const [step, setStep] = useState<Step>('word')
   const [word, setWord] = useState('')
@@ -28,8 +30,15 @@ export function RwcCollectionScreen({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
+  const { session } = useSessionPoll(session_id, true)
   const wordRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (session?.status && session.status !== 'open') {
+      onCollectionEnded()
+    }
+  }, [onCollectionEnded, session?.status])
 
   const insertChar = (char: string) => {
     const ref = step === 'word' ? wordRef : translationRef
@@ -99,12 +108,21 @@ export function RwcCollectionScreen({
       {/* Last result feedback */}
       {lastResult && (
         <div style={{
-          background: lastResult.spelling_signal === 'discovery' ? '#eaf3de' : '#e6f1fb',
+          background: lastResult.saturation_signal === 'saturated'
+            ? '#fff7e4'
+            : lastResult.spelling_signal === 'discovery'
+              ? '#eaf3de'
+              : '#e6f1fb',
           padding: '10px 20px', fontSize: 13,
-          color: lastResult.spelling_signal === 'discovery' ? '#3b6d11' : '#0c447c',
+          color: lastResult.saturation_signal === 'saturated'
+            ? '#8a6208'
+            : lastResult.spelling_signal === 'discovery'
+              ? '#3b6d11'
+              : '#0c447c',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>
+            {lastResult.saturation_signal === 'saturated' && 'Great! We have lots of that word — try a different one. '}
             {lastResult.spelling_signal === 'discovery' && '⭐ New discovery! '}
             {lastResult.spelling_signal === 'confirmed' && '✓ Word confirmed. '}
             {lastResult.spelling_signal === 'variant' && '~ Spelling variant noted. '}

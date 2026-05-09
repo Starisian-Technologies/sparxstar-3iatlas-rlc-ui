@@ -2,7 +2,7 @@
 
 export type CollectionMode = 'rwc' | 'rsc'
 export type CollectionDepth = 'full' | 'translation_only' | 'basic'
-export type SessionStatus = 'open' | 'qc' | 'ceremony' | 'closed'
+export type SessionStatus = 'open' | 'closed' | 'archived' | 'qc' | 'ceremony'
 
 export interface Session {
   session_id: string
@@ -18,6 +18,7 @@ export interface Session {
   token_count: number
   time_remaining_seconds: number
   leaderboard: LeaderboardEntry[]
+  participants?: Participant[]
 }
 
 export interface CreateSessionPayload {
@@ -71,14 +72,17 @@ export interface QcToken {
   corrected_text?: string
   spelling_signal: SpellingSignal
   spelling_score: number
-  vote_spelling: { yes: number; no: number }
-  vote_meaning: { yes: number; no: number }
+  vote_orthography: { yes: number; no: number }
+  vote_semantics: { yes: number; no: number }
+  vote_audio: { yes: number; no: number }
   qc_translations: Array<{ participant_id: string; translation: string }>
   submitter_id: string
+  collection_mode?: CollectionMode
+  grammar_domain?: string
 }
 
 export interface VotePayload {
-  dimension: 'spelling' | 'meaning'
+  dimension: 'orthography' | 'semantics' | 'audio'
   vote_yes: boolean
 }
 

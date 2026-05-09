@@ -3,6 +3,10 @@ import { JoinScreen } from '@/screens/student/JoinScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
+import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
+import { QcScreen } from '@/screens/qc/QcScreen'
+import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
+import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
 import type { AppState, CollectionMode, CollectionDepth } from '@/types'
 
@@ -140,36 +144,80 @@ export function App() {
         onSubmitted={() => {
           // Stay on collection screen — student keeps submitting until timer ends
         }}
+        onCollectionEnded={() => setScreen('qc')}
       />
     )
   }
 
-  // ── Placeholder screens (QC, Ceremony, RSC) ───────────────────────────────
-  return (
-    <div style={{
-      minHeight: '100dvh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', flexDirection: 'column', gap: 16,
-      background: '#f4f4f4', padding: 24, textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#1B3A6B' }}>
-        {screen === 'qc' && 'QC Phase'}
-        {screen === 'ceremony' && 'Awards Ceremony'}
-        {screen === 'student_rsc_collection' && 'RSC Collection'}
-      </div>
-      <div style={{ fontSize: 14, color: '#888' }}>
-        Phase {screen === 'student_rsc_collection' ? '4' : screen === 'qc' ? '5' : '6'} — coming next
-      </div>
-      <button
-        type="button"
-        onClick={() => setScreen('landing')}
-        style={{
-          padding: '12px 24px', fontSize: 16, fontWeight: 600,
-          background: '#1B3A6B', color: '#fff',
-          border: 'none', borderRadius: 10, cursor: 'pointer',
+  // ── Student RSC collection ─────────────────────────────────────────────────
+  if (
+    screen === 'student_rsc_collection' &&
+    state.session_id && state.participant_id &&
+    state.collection_depth && state.language
+  ) {
+    return (
+      <RscCollectionScreen
+        session_id={state.session_id}
+        participant_id={state.participant_id}
+        collection_depth={state.collection_depth}
+        language={state.language}
+        onSubmitted={() => {
+          // Stay on collection screen until all 12 domains are complete.
         }}
-      >
-        Back to start
-      </button>
-    </div>
-  )
+        onCollectionCompleted={() => {
+          // Student has submitted all 12 domains and now waits.
+        }}
+        onCollectionEnded={() => setScreen('qc')}
+      />
+    )
+  }
+
+  // ── QC phase ────────────────────────────────────────────────────────────────
+  if (screen === 'qc' && state.session_id) {
+    if (state.role === 'teacher') {
+      return (
+        <QcTeacherScreen
+          session_id={state.session_id}
+          participant_id={state.participant_id ?? 'teacher'}
+          mode={state.mode ?? 'rwc'}
+          onGoCeremony={() => setScreen('ceremony')}
+        />
+      )
+    }
+    if (state.participant_id && state.mode) {
+      return (
+        <QcScreen
+          session_id={state.session_id}
+          participant_id={state.participant_id}
+          mode={state.mode}
+          isTeacher={false}
+          onGoCeremony={() => setScreen('ceremony')}
+        />
+      )
+    }
+  }
+
+  // ── Ceremony ────────────────────────────────────────────────────────────────
+  if (screen === 'ceremony' && state.session_id) {
+    return (
+      <CeremonyScreen
+        session_id={state.session_id}
+        onPlayAgain={() => {
+          setState({
+            role: 'none',
+            session_id: null,
+            participant_id: null,
+            join_code: null,
+            display_name: null,
+            mode: null,
+            collection_depth: null,
+            language: null,
+          })
+          setScreen('landing')
+        }}
+      />
+    )
+  }
+
+  return null
 }
