@@ -79,7 +79,7 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
 
       <AiGuidePanel compact />
 
-      {error && <div style={errorStyle}>Connection issue — retrying every 2 seconds.</div>}
+      {error && <div style={errorStyle}>Connection issue — retrying.</div>}
       <button type="button" onClick={onEndCollection} style={endBtnStyle}>End Round / Start QC</button>
     </div>
   )

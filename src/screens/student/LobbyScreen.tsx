@@ -2,6 +2,10 @@ import { useMemo } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 
+const LEVEL_XP_REQUIREMENT = 1200
+const MIN_PROGRESS_PERCENT = 8
+const MAX_PROGRESS_PERCENT = 100
+
 interface LobbyScreenProps {
   session_id: string
   display_name: string
@@ -75,7 +79,15 @@ export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScr
         <div style={sectionTitleStyle}>Your Progress</div>
         <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 8 }}>Level 7 · Word Collector</div>
         <div style={progressTrackStyle}>
-          <div style={{ ...progressFillStyle, width: `${Math.min(100, Math.max(8, (profile.score % 1200) / 12))}%` }} />
+          <div
+            style={{
+              ...progressFillStyle,
+              width: `${Math.min(
+                MAX_PROGRESS_PERCENT,
+                Math.max(MIN_PROGRESS_PERCENT, ((profile.score % LEVEL_XP_REQUIREMENT) / LEVEL_XP_REQUIREMENT) * 100),
+              )}%`,
+            }}
+          />
         </div>
         <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
           Rank {profile.rank} of {session?.leaderboard.length ?? 0}

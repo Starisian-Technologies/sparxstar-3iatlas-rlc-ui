@@ -178,8 +178,6 @@ export interface AppState {
   mode: CollectionMode | null
   collection_depth: CollectionDepth | null
   language: string | null
-  current_round: number
-  total_rounds: number
 }
 
 export interface RoundWord {

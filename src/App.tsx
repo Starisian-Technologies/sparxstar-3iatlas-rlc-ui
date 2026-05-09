@@ -34,8 +34,6 @@ export function App() {
     mode: null,
     collection_depth: null,
     language: null,
-    current_round: 1,
-    total_rounds: 5,
   })
 
   // ── Landing ────────────────────────────────────────────────────────────────
@@ -163,11 +161,6 @@ export function App() {
         }}
         onRoundComplete={(summary) => {
           setRoundSummary(summary)
-          setState((prev) => ({
-            ...prev,
-            current_round: summary.round + 1,
-            total_rounds: summary.total_rounds,
-          }))
           setScreen('student_round_complete')
         }}
         onClose={() => setScreen('student_lobby')}

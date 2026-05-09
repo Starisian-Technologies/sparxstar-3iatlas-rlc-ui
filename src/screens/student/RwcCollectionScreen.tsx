@@ -44,7 +44,7 @@ export function RwcCollectionScreen({
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
   const roundGoal = session?.round_goal ?? 10
-  const promptWord = session?.semantic_domain_id?.split(/[.\s_-]+/).slice(-1)[0]?.toUpperCase() ?? 'WELL'
+  const promptWord = session?.semantic_domain_id?.split(/[.\s_-]+/).slice(-1)[0]?.toUpperCase() ?? 'TARGET WORD'
   const minutes = Math.floor((session?.time_remaining_seconds ?? 0) / 60)
   const seconds = (session?.time_remaining_seconds ?? 0) % 60
   const needsTranslation = collection_depth !== 'basic'
