@@ -17,6 +17,11 @@ export interface Session {
   participant_count: number
   token_count: number
   time_remaining_seconds: number
+  current_round?: number
+  total_rounds?: number
+  round_status?: 'waiting' | 'active' | 'complete'
+  round_goal?: number
+  next_round_starts_in_seconds?: number
   leaderboard: LeaderboardEntry[]
   participants?: Participant[]
 }
@@ -69,6 +74,8 @@ export interface QcToken {
   token_id: string
   text: string
   translation?: string
+  xp_awarded?: number
+  created_at?: number
   corrected_text?: string
   spelling_signal: SpellingSignal
   spelling_score: number
@@ -171,4 +178,25 @@ export interface AppState {
   mode: CollectionMode | null
   collection_depth: CollectionDepth | null
   language: string | null
+  current_round: number
+  total_rounds: number
+}
+
+export interface RoundWord {
+  id: string
+  word: string
+  translation?: string
+  points: number
+}
+
+export interface RoundCompleteSummary {
+  round: number
+  total_rounds: number
+  words_collected: number
+  points_earned: number
+  stars_earned: number
+  top_words: RoundWord[]
+  player_score: number
+  player_rank: number
+  total_players: number
 }

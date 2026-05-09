@@ -5,12 +5,16 @@
 }
 
 :root {
-  --brand: #1B3A6B;
-  --gold: #C9A84C;
-  --text: #1a1a1a;
-  --muted: #888780;
-  --border: #b4b2a9;
-  --bg: #f4f4f4;
+  --bg: #0D0A1A;
+  --card: #1A1428;
+  --accent-primary: #FF2D78;
+  --accent-secondary: #A855F7;
+  --gold: #F59E0B;
+  --text-primary: #FFFFFF;
+  --text-secondary: #9B8EC4;
+  --border: rgba(255,255,255,0.08);
+  --success: #22c55e;
+  --danger: #ef4444;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -25,7 +29,7 @@ html, body, #root {
 
 body {
   background: var(--bg);
-  color: var(--text);
+  color: var(--text-primary);
   overscroll-behavior: none;
 }
 
@@ -59,4 +63,9 @@ input, textarea {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+@keyframes spx-wave {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.45; }
+  50% { transform: scaleY(1); opacity: 1; }
 }
