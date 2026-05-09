@@ -180,7 +180,7 @@ export interface AppState {
   language: string | null
 }
 
-export interface RoundWord {
+export interface SubmittedWord {
   id: string
   word: string
   translation?: string
@@ -193,7 +193,7 @@ export interface RoundCompleteSummary {
   words_collected: number
   points_earned: number
   stars_earned: number
-  top_words: RoundWord[]
+  top_words: SubmittedWord[]
   player_score: number
   player_rank: number
   total_players: number

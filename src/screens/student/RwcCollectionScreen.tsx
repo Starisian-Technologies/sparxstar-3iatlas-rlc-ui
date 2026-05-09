@@ -3,7 +3,7 @@ import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
-import type { CollectionDepth, RoundCompleteSummary, RoundWord, SaveTokenResponse } from '@/types'
+import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
   session_id: string
@@ -34,7 +34,7 @@ export function RwcCollectionScreen({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
-  const [submittedWords, setSubmittedWords] = useState<RoundWord[]>([])
+  const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
   const { session } = useSessionPoll(session_id, true)
   const inputRef = useRef<HTMLInputElement>(null)
   const roundRef = useRef<number | null>(null)
@@ -116,7 +116,7 @@ export function RwcCollectionScreen({
       })
       setLastResult(result)
       onSubmitted(result)
-      const item: RoundWord = {
+      const item: SubmittedWord = {
         id: result.token_id,
         word: word.trim(),
         translation: needsTranslation ? translation.trim() || undefined : undefined,
@@ -240,7 +240,7 @@ export function RwcCollectionScreen({
 function buildRoundSummary(input: {
   round: number
   totalRounds: number
-  submittedWords: RoundWord[]
+  submittedWords: SubmittedWord[]
   leaderboard: Array<{ participant_id: string; display_name: string; rank: number; xp: number }>
   participant_id: string
   display_name: string

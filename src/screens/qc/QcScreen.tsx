@@ -157,7 +157,11 @@ export function QcScreen({
             <h2 style={sectionTitleStyle}>Step 1 — Audio</h2>
             <div style={placeholderStyle}>
               <div style={{ fontSize: 42 }}>🔊</div>
-              <div>{currentToken.vote_audio ? 'Playback placeholder (Starmus not wired yet)' : 'No recording'}</div>
+              <div>
+                {(currentToken.vote_audio.yes + currentToken.vote_audio.no) > 0
+                  ? 'Playback placeholder (Starmus not wired yet)'
+                  : 'No recording'}
+              </div>
             </div>
             <button type="button" onClick={() => setStep('vote')} style={primaryButtonStyle(false)}>
               Continue to vote
