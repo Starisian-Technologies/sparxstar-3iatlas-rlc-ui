@@ -277,7 +277,6 @@ function FocusPreview({ sentence, focusWord }: { sentence: string; focusWord: st
 function findFocusWord(text: string, domainSlug: string): string | null {
   const words = text.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return null
-  const lowerWords = words.map((word) => word.toLowerCase().replace(/[^a-zA-ZÀ-ÿ'’-]/g, ''))
 
   if (['noun_phrase', 'adjective', 'adverb', 'classifier', 'formal', 'informal'].includes(domainSlug)) {
     return words[0] ?? null
@@ -286,26 +285,20 @@ function findFocusWord(text: string, domainSlug: string): string | null {
     return words[1] ?? words[0] ?? null
   }
   if (domainSlug === 'possession') {
-    const possessives = ['my', 'your', 'his', 'her', 'our', 'their']
-    const match = lowerWords.find((word) => possessives.includes(word))
-    return match ?? words[0] ?? null
+    return words[0] ?? null
   }
   if (domainSlug === 'numeric') {
     const match = words.find((word) => /\d/.test(word))
-    return match ?? words[0] ?? null
+    return match ?? words[1] ?? words[0] ?? null
   }
   if (domainSlug === 'interjection') {
     return words.find((word) => /[!]/.test(word)) ?? words[0] ?? null
   }
   if (domainSlug === 'conjunction') {
-    const conjunctions = ['and', 'but', 'because']
-    const matchIndex = lowerWords.findIndex((word) => conjunctions.includes(word))
-    return matchIndex >= 0 ? words[matchIndex] : words[0] ?? null
+    return words[Math.floor(words.length / 2)] ?? words[0] ?? null
   }
   if (domainSlug === 'question') {
-    const questionWords = ['who', 'what', 'where', 'when', 'why', 'how']
-    const matchIndex = lowerWords.findIndex((word) => questionWords.includes(word))
-    return matchIndex >= 0 ? words[matchIndex] : words[0] ?? null
+    return words.find((word) => /[?]/.test(word)) ?? words[0] ?? null
   }
   return words[0] ?? null
 }
