@@ -104,7 +104,12 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
       {/* ── Teacher action buttons ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {onNextRound && (
-          <button type="button" onClick={onNextRound} style={nextRoundBtnStyle}>
+          <button
+            type="button"
+            onClick={onNextRound}
+            aria-label="Start next round"
+            style={nextRoundBtnStyle}
+          >
             Next Round
           </button>
         )}

@@ -114,7 +114,7 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
           value={depth}
           onChange={(v) => setDepth(v as CollectionDepth)}
         />
-        <div style={{ fontSize: 12, color: '#a855f7', marginTop: 6 }}>
+        <div style={{ fontSize: 12, color: 'var(--accent-secondary)', marginTop: 6 }}>
           Audio recording (full depth) is not enabled in this sprint.
         </div>
         <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
