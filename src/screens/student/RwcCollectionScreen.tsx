@@ -138,6 +138,7 @@ export function RwcCollectionScreen({
         <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Back to lobby">✕</button>
         <div style={chipStyle}>🕘 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</div>
         <div style={chipStyle}>👥 {session?.participant_count ?? 0}</div>
+        <div style={chipStyle}>⭐ {myLeaderboard?.xp ?? 0}</div>
       </header>
 
       <section style={mainCardStyle}>
@@ -282,7 +283,7 @@ const wrapStyle: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '44px 1fr 1fr',
+  gridTemplateColumns: '44px 1fr 1fr 1fr',
   gap: 8,
 }
 

@@ -43,6 +43,7 @@ export interface CreateSessionResponse {
 export interface JoinSessionResponse {
   session_id: string
   participant_id: string
+  display_name?: string
   language: string
   mode: CollectionMode
   collection_depth: CollectionDepth
