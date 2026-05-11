@@ -172,7 +172,7 @@ export function QcScreen({
         {step === 'vote' && (
           <section style={sectionStyle}>
             <h2 style={sectionTitleStyle}>Step 2 — Community vote</h2>
-            <div style={{ fontSize: 16, color: '#1a1a1a' }}>
+            <div style={{ fontSize: 16, color: 'var(--text-primary)' }}>
               {mode === 'rsc' ? 'Does this sentence make sense?' : 'Is the spelling correct?'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -181,7 +181,7 @@ export function QcScreen({
                 aria-label="Vote yes"
                 onClick={() => void handleVote(true)}
                 disabled={hasVoted}
-                style={{ ...primaryButtonStyle(hasVoted), background: hasVoted ? '#b4b2a9' : '#1f7a1f', flex: 1 }}
+                style={{ ...primaryButtonStyle(hasVoted), background: hasVoted ? 'rgba(255,255,255,0.15)' : 'var(--success)', flex: 1 }}
               >
                 Yes
               </button>
@@ -190,12 +190,12 @@ export function QcScreen({
                 aria-label="Vote no"
                 onClick={() => void handleVote(false)}
                 disabled={hasVoted}
-                style={{ ...primaryButtonStyle(hasVoted), background: hasVoted ? '#b4b2a9' : '#8d1c1c', flex: 1 }}
+                style={{ ...primaryButtonStyle(hasVoted), background: hasVoted ? 'rgba(255,255,255,0.15)' : 'var(--danger)', flex: 1 }}
               >
                 No
               </button>
             </div>
-            {hasVoted && <div style={{ color: '#1f7a1f', fontSize: 14 }}>+5 XP for voting</div>}
+            {hasVoted && <div style={{ color: 'var(--success)', fontSize: 14 }}>+5 XP for voting</div>}
             <div style={voteCountStyle}>Votes — Yes: {voteCounts.yes} · No: {voteCounts.no}</div>
           </section>
         )}
@@ -264,7 +264,7 @@ export function QcScreen({
 
       {isTeacher && (
         <div style={teacherPanelStyle}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1B3A6B' }}>Teacher controls</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Teacher controls</h2>
           {isLastToken ? (
             <>
               <label htmlFor="teacher-star" style={{ fontSize: 14, fontWeight: 600 }}>
@@ -316,15 +316,16 @@ function getDefaultCounts(token: QcVoteToken, dimension: VotePayload['dimension'
 function FullScreenMessage({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div style={fullScreenMessageStyle}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: '#1B3A6B' }}>{title}</div>
-      <div style={{ fontSize: 16, color: '#666' }}>{subtitle}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 15, color: 'var(--text-secondary)' }}>{subtitle}</div>
     </div>
   )
 }
 
 const wrapStyle: React.CSSProperties = {
   minHeight: '100dvh',
-  background: '#f4f4f4',
+  background: 'var(--bg)',
+  color: 'var(--text-primary)',
   padding: 16,
   display: 'flex',
   flexDirection: 'column',
@@ -332,15 +333,16 @@ const wrapStyle: React.CSSProperties = {
 }
 
 const headerStyle: React.CSSProperties = {
-  background: '#1B3A6B',
-  color: '#fff',
-  borderRadius: 12,
+  background: 'linear-gradient(135deg, rgba(255,45,120,0.2) 0%, rgba(168,85,247,0.12) 100%)',
+  border: '1px solid var(--border)',
+  borderRadius: 14,
   padding: 14,
 }
 
 const panelStyle: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 12,
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 14,
   padding: 14,
   display: 'flex',
   flexDirection: 'column',
@@ -355,16 +357,16 @@ const sectionStyle: React.CSSProperties = {
 
 const sectionTitleStyle: React.CSSProperties = {
   fontSize: 18,
-  color: '#1B3A6B',
+  color: 'var(--accent-primary)',
   fontWeight: 700,
 }
 
 const placeholderStyle: React.CSSProperties = {
-  border: '2px dashed #b4b2a9',
+  border: '2px dashed var(--border)',
   borderRadius: 12,
   padding: 24,
   textAlign: 'center',
-  color: '#666',
+  color: 'var(--text-secondary)',
   display: 'flex',
   flexDirection: 'column',
   gap: 6,
@@ -374,7 +376,7 @@ const placeholderStyle: React.CSSProperties = {
 
 const voteCountStyle: React.CSSProperties = {
   fontSize: 15,
-  color: '#1a1a1a',
+  color: 'var(--text-secondary)',
   fontWeight: 600,
 }
 
@@ -382,14 +384,17 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   minHeight: 44,
   borderRadius: 10,
-  border: '2px solid #b4b2a9',
+  border: '1px solid var(--border)',
+  background: 'rgba(255,255,255,0.05)',
+  color: 'var(--text-primary)',
   padding: '10px 12px',
   fontSize: 16,
 }
 
 const translationsFeedStyle: React.CSSProperties = {
   borderRadius: 10,
-  border: '1px solid #ddd',
+  border: '1px solid var(--border)',
+  background: 'rgba(255,255,255,0.03)',
   padding: 10,
   minHeight: 88,
   display: 'flex',
@@ -398,17 +403,18 @@ const translationsFeedStyle: React.CSSProperties = {
 }
 
 const errorStyle: React.CSSProperties = {
-  background: '#ffeded',
-  border: '1px solid #f09595',
+  background: 'rgba(239,68,68,0.1)',
+  border: '1px solid rgba(239,68,68,0.4)',
   borderRadius: 8,
   padding: '10px 12px',
   fontSize: 14,
-  color: '#a32d2d',
+  color: '#fecaca',
 }
 
 const teacherPanelStyle: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 12,
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 14,
   padding: 14,
   display: 'flex',
   flexDirection: 'column',
@@ -422,7 +428,7 @@ const fullScreenMessageStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 8,
-  background: '#f4f4f4',
+  background: 'var(--bg)',
   textAlign: 'center',
   padding: 16,
 }
@@ -431,8 +437,8 @@ const primaryButtonStyle = (disabled: boolean): React.CSSProperties => ({
   minHeight: 52,
   borderRadius: 10,
   border: 'none',
-  background: disabled ? '#b4b2a9' : '#1B3A6B',
-  color: '#fff',
+  background: disabled ? 'rgba(255,255,255,0.15)' : 'var(--accent-primary)',
+  color: 'var(--text-primary)',
   fontSize: 16,
   fontWeight: 700,
   cursor: disabled ? 'not-allowed' : 'pointer',

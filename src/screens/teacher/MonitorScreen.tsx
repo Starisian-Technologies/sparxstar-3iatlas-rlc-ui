@@ -8,9 +8,10 @@ interface MonitorScreenProps {
   session_id: string
   join_code: string
   onEndCollection: () => void
+  onNextRound?: () => void
 }
 
-export function MonitorScreen({ session_id, join_code, onEndCollection }: MonitorScreenProps) {
+export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRound }: MonitorScreenProps) {
   const { session, error } = useSessionPoll(session_id, true)
   const [liveFeed, setLiveFeed] = useState<QcToken[]>([])
 
@@ -33,54 +34,98 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
     }
   }, [session_id])
 
+  const round = session?.current_round ?? 1
+  const totalRounds = session?.total_rounds ?? 5
+  const minutes = Math.floor((session?.time_remaining_seconds ?? 0) / 60)
+  const seconds = (session?.time_remaining_seconds ?? 0) % 60
+  const timeDisplay = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+
   return (
     <div style={wrapStyle}>
+      {/* ── Header ── */}
       <header style={headerStyle}>
         <div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Game Lobby</div>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>Code: {join_code}</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, letterSpacing: 1 }}>GAME LOBBY</div>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>
+            Game Code: <span style={{ color: 'var(--accent-primary)' }}>{join_code}</span>
+          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>
-            Round {session?.current_round ?? 1}/{session?.total_rounds ?? 5}
+          <div style={{ color: 'var(--accent-primary)', fontWeight: 700, fontSize: 16 }}>
+            Round {round}/{totalRounds}
           </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {session?.participant_count ?? 0} players · {session?.token_count ?? 0} words
-          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>⏱ {timeDisplay}</div>
         </div>
       </header>
 
-      <section style={panelStyle}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Live leaderboard</div>
-        {(session?.leaderboard ?? []).slice(0, 8).map((entry) => (
-          <div key={entry.participant_id} style={rowStyle}>
-            <span style={{ minWidth: 24, color: 'var(--text-secondary)' }}>{entry.rank}</span>
-            <span style={{ flex: 1 }}>{entry.display_name}</span>
-            <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
-          </div>
-        ))}
-      </section>
+      {/* ── Stats row ── */}
+      <div style={statsRowStyle}>
+        <StatChip label="Players" value={String(session?.participant_count ?? 0)} icon="👥" />
+        <StatChip label="Words" value={String(session?.token_count ?? 0)} icon="💬" />
+        <StatChip label="Status" value={session?.status === 'open' ? 'In Progress' : (session?.status ?? '—')} icon="📍" />
+      </div>
 
-      <section style={panelStyle}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Live Word Feed</div>
-        {liveFeed.length === 0 && (
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Waiting for submissions…</div>
-        )}
-        {liveFeed.map((token) => (
-          <div key={token.token_id} style={rowStyle}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700 }}>{token.text}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
+      {/* ── Main two-column body ── */}
+      <div style={bodyStyle}>
+        {/* Live Word Feed */}
+        <section style={panelStyle}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Live Word Feed</div>
+          {liveFeed.length === 0 && (
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Waiting for submissions…</div>
+          )}
+          {liveFeed.map((token) => (
+            <div key={token.token_id} style={rowStyle}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700 }}>{token.text}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
+              </div>
+              <span style={{ color: 'var(--gold)', fontWeight: 700 }}>+{token.xp_awarded ?? 10} ⭐</span>
             </div>
-            <span style={{ color: 'var(--gold)' }}>+{token.xp_awarded ?? 10}</span>
-          </div>
-        ))}
-      </section>
+          ))}
+        </section>
+
+        {/* Leaderboard */}
+        <section style={panelStyle}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Players</div>
+          {(session?.leaderboard ?? []).slice(0, 8).map((entry) => (
+            <div key={entry.participant_id} style={rowStyle}>
+              <span style={{ minWidth: 22, color: 'var(--text-secondary)' }}>{entry.rank}</span>
+              <span style={{ flex: 1 }}>{entry.display_name}</span>
+              <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
+            </div>
+          ))}
+        </section>
+      </div>
 
       <AiGuidePanel compact />
 
       {error && <div style={errorStyle}>Connection issue — retrying.</div>}
-      <button type="button" onClick={onEndCollection} style={endBtnStyle}>End Round / Start QC</button>
+
+      {/* ── Teacher action buttons ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {onNextRound && (
+          <button type="button" onClick={onNextRound} style={nextRoundBtnStyle}>
+            Next Round
+          </button>
+        )}
+        <button type="button" onClick={onEndCollection} style={endBtnStyle}>
+          End Game / Start QC
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function StatChip({ label, value, icon }: { label: string; value: string; icon: string }) {
+  return (
+    <div style={{
+      flex: 1, background: 'var(--card)', border: '1px solid var(--border)',
+      borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', gap: 2,
+    }}>
+      <div style={{ fontSize: 18 }}>{icon}</div>
+      <div style={{ fontWeight: 700 }}>{value}</div>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{label}</div>
     </div>
   )
 }
@@ -106,6 +151,17 @@ const headerStyle: React.CSSProperties = {
   gap: 10,
 }
 
+const statsRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+}
+
+const bodyStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 12,
+}
+
 const panelStyle: React.CSSProperties = {
   borderRadius: 14,
   border: '1px solid var(--border)',
@@ -125,6 +181,17 @@ const rowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
+}
+
+const nextRoundBtnStyle: React.CSSProperties = {
+  minHeight: 52,
+  borderRadius: 12,
+  border: 'none',
+  background: 'var(--accent-secondary)',
+  color: 'var(--text-primary)',
+  fontSize: 17,
+  fontWeight: 700,
+  cursor: 'pointer',
 }
 
 const endBtnStyle: React.CSSProperties = {

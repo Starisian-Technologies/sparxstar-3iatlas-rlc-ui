@@ -1,3 +1,4 @@
+import { Fireworks } from '@/components/Fireworks'
 import type { RoundCompleteSummary } from '@/types'
 
 interface RoundCompleteScreenProps {
@@ -9,6 +10,7 @@ interface RoundCompleteScreenProps {
 export function RoundCompleteScreen({ summary, onNextRound, onBackToLobby }: RoundCompleteScreenProps) {
   return (
     <div style={wrapStyle}>
+      <Fireworks />
       <header style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 32, fontWeight: 800 }}>Round Complete! 🎉</div>
         <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>You collected</div>

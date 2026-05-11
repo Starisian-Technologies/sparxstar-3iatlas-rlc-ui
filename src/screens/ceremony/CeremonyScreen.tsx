@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api/client'
 import { Fireworks } from '@/components/Fireworks'
-import type { AwardsResponse, Star } from '@/types'
+import type { AwardsResponse, LeaderboardEntry, Star } from '@/types'
 
 interface CeremonyScreenProps {
   session_id: string
@@ -19,7 +19,17 @@ const STAR_ORDER = [
 ] as const
 
 const STAR_REVEAL_INTERVAL_MS = 2000
-const FIREWORKS_DURATION_MS = 3000
+const FIREWORKS_DURATION_MS = 4000
+
+const AWARD_EMOJI: Record<string, string> = {
+  'Most Words / Sentences': '👑',
+  'Best Accuracy': '🌊',
+  'Discovery Star': '💎',
+  'Speed Star': '⚡',
+  'Audio Star': '🎙️',
+  "Teacher's Star": '🏆',
+  'Teacher Award': '🏆',
+}
 
 export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps) {
   const [awards, setAwards] = useState<AwardsResponse | null>(null)
@@ -56,7 +66,20 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
       const star = awards.stars.find((item) => item.category === label || item.label === label)
       if (star) sorted.push(star)
     }
+    // Append any remaining stars not in the canonical order
+    for (const star of awards.stars) {
+      if (!sorted.some((s) => s.participant_id === star.participant_id && s.category === star.category)) {
+        sorted.push(star)
+      }
+    }
     return sorted
+  }, [awards])
+
+  const top3 = useMemo((): LeaderboardEntry[] => {
+    if (!awards) return []
+    return [...awards.leaderboard]
+      .filter((e) => e.rank >= 1 && e.rank <= 3)
+      .sort((a, b) => a.rank - b.rank)
   }, [awards])
 
   useEffect(() => {
@@ -83,7 +106,7 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
   }, [awards, orderedStars.length, revealedCount])
 
   if (loading) {
-    return <FullScreenMessage title="Loading ceremony..." subtitle="Gathering class results." />
+    return <FullScreenMessage title="Loading ceremony…" subtitle="Gathering class results." />
   }
   if (!awards) {
     return <FullScreenMessage title="Ceremony unavailable" subtitle={error ?? 'No awards data received.'} />
@@ -94,64 +117,146 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
 
   return (
     <div style={wrapStyle}>
-      <div style={headerStyle}>
-        <div style={{ fontSize: 24, fontWeight: 700 }}>Awards Ceremony</div>
-        <div style={{ fontSize: 14, opacity: 0.85 }}>Session results</div>
-      </div>
+      {showFireworks && <Fireworks />}
 
-      <section style={sectionStyle}>
-        <h2 style={sectionHeadingStyle}>Results summary</h2>
-        <Row label="Total words / sentences" value={String(awards.total_tokens)} />
-        <Row label="Discovery count" value={String(awards.discovery_count)} />
-        <Row label="Class total participants" value={String(awards.leaderboard.length)} />
+      {/* ── Hero header ── */}
+      <header style={heroStyle}>
+        <div style={{ fontSize: 13, letterSpacing: 2, color: 'var(--accent-primary)', fontWeight: 700 }}>
+          AWARDS CEREMONY
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 800 }}>Great game!</div>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 15 }}>Here are your champions</div>
+      </header>
+
+      {/* ── Podium top-3 ── */}
+      {top3.length > 0 && <PodiumSection top3={top3} />}
+
+      {/* ── Session stats ── */}
+      <section style={panelStyle}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <StatChip icon="💬" label="Words Collected" value={String(awards.total_tokens)} />
+          <StatChip icon="🎯" label="Discoveries" value={String(awards.discovery_count)} />
+          <StatChip icon="👥" label="Players" value={String(awards.leaderboard.length)} />
+        </div>
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={sectionHeadingStyle}>Star announcements</h2>
-        {revealedStars.map((star) => (
-          <div key={`${star.category}-${star.participant_id}`} style={starCardStyle}>
-            <div style={{ fontSize: 14, color: '#1B3A6B', fontWeight: 700 }}>{star.category}</div>
-            <div style={winnerStyle}>{star.display_name}</div>
-            <div style={{ fontSize: 14, color: '#555' }}>+{star.gold_bonus} Gold</div>
+      {/* ── Star announcements ── */}
+      {revealedStars.length > 0 && (
+        <section style={panelStyle}>
+          <div style={sectionTitleStyle}>🏅 Award Announcements</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {revealedStars.map((star) => (
+              <StarCard key={`${star.category}-${star.participant_id}`} star={star} />
+            ))}
           </div>
-        ))}
-      </section>
+        </section>
+      )}
 
-      {starsDone && (
-        <section style={sectionStyle}>
-          <h2 style={sectionHeadingStyle}>Final leaderboard</h2>
+      {/* ── Final leaderboard (after all stars revealed) ── */}
+      {starsDone && awards.leaderboard.length > 0 && (
+        <section style={panelStyle}>
+          <div style={sectionTitleStyle}>Final Leaderboard</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {awards.leaderboard.map((entry) => (
-              <div key={entry.participant_id} style={leaderRowStyle}>
-                <span style={{ minWidth: 28, fontWeight: 700 }}>{entry.rank}</span>
-                <span style={{ flex: 1 }}>{entry.display_name}</span>
-                <span>{entry.xp} XP</span>
-                <span>{entry.gold} Gold</span>
+              <div key={entry.participant_id} style={leaderRowStyle(entry.rank === 1)}>
+                <span style={{ minWidth: 28, fontWeight: 700, color: rankColor(entry.rank) }}>
+                  {rankIcon(entry.rank)}
+                </span>
+                <span style={{ flex: 1, fontWeight: entry.rank === 1 ? 700 : 400 }}>{entry.display_name}</span>
+                <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {showFireworks && <Fireworks />}
-
       {starsDone && (
-        <section style={sectionStyle}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#1B3A6B' }}>Session complete</div>
-          <button type="button" onClick={onPlayAgain} style={playAgainButtonStyle}>
-            Play again
-          </button>
-        </section>
+        <button type="button" onClick={onPlayAgain} style={playAgainBtnStyle}>
+          Play again
+        </button>
       )}
     </div>
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function PodiumSection({ top3 }: { top3: LeaderboardEntry[] }) {
+  const first = top3.find((e) => e.rank === 1)
+  const second = top3.find((e) => e.rank === 2)
+  const third = top3.find((e) => e.rank === 3)
+
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 16 }}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <section style={{ ...panelStyle, alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 10, width: '100%' }}>
+        {/* 2nd */}
+        {second && <PodiumBlock entry={second} height={88} crown="🥈" />}
+        {/* 1st */}
+        {first && <PodiumBlock entry={first} height={110} crown="👑" highlight />}
+        {/* 3rd */}
+        {third && <PodiumBlock entry={third} height={72} crown="🥉" />}
+      </div>
+    </section>
+  )
+}
+
+function PodiumBlock({
+  entry, height, crown, highlight = false,
+}: {
+  entry: LeaderboardEntry
+  height: number
+  crown: string
+  highlight?: boolean
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1 }}>
+      <div style={{ fontSize: 20 }}>{crown}</div>
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        background: highlight ? 'rgba(255,45,120,0.35)' : 'rgba(168,85,247,0.2)',
+        border: `2px solid ${highlight ? 'var(--accent-primary)' : 'var(--accent-secondary)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22,
+      }}>👤</div>
+      <div style={{ fontWeight: 700, fontSize: 13, textAlign: 'center', maxWidth: 80, wordBreak: 'break-word' }}>
+        {entry.display_name}
+      </div>
+      <div style={{ color: 'var(--gold)', fontSize: 13, fontWeight: 700 }}>{entry.xp} ⭐</div>
+      <div style={{
+        width: '100%', height, borderRadius: '10px 10px 0 0',
+        background: highlight
+          ? 'linear-gradient(180deg, rgba(255,45,120,0.4) 0%, rgba(255,45,120,0.1) 100%)'
+          : 'rgba(255,255,255,0.06)',
+        border: '1px solid var(--border)',
+      }} />
+    </div>
+  )
+}
+
+function StarCard({ star }: { star: Star }) {
+  const emoji = AWARD_EMOJI[star.category] ?? '⭐'
+  return (
+    <div style={starCardStyle}>
+      <div style={{ fontSize: 28 }}>{emoji}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}>{star.category}</div>
+        <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)' }}>{star.display_name}</div>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>+{star.gold_bonus} Gold</div>
+      </div>
+    </div>
+  )
+}
+
+function StatChip({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+      borderRadius: 10, padding: '10px 8px', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', gap: 4,
+    }}>
+      <div style={{ fontSize: 20 }}>{icon}</div>
+      <div style={{ fontWeight: 800, fontSize: 22 }}>{value}</div>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 11, textAlign: 'center' }}>{label}</div>
     </div>
   )
 }
@@ -159,77 +264,93 @@ function Row({ label, value }: { label: string; value: string }) {
 function FullScreenMessage({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div style={messageWrapStyle}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: '#1B3A6B' }}>{title}</div>
-      <div style={{ fontSize: 16, color: '#666' }}>{subtitle}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 15, color: 'var(--text-secondary)' }}>{subtitle}</div>
     </div>
   )
 }
 
+function rankColor(rank: number) {
+  if (rank === 1) return '#FFD700'
+  if (rank === 2) return '#C0C0C0'
+  if (rank === 3) return '#CD7F32'
+  return 'var(--text-secondary)'
+}
+
+function rankIcon(rank: number) {
+  if (rank === 1) return '👑'
+  if (rank === 2) return '🥈'
+  if (rank === 3) return '🥉'
+  return String(rank)
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const wrapStyle: React.CSSProperties = {
   minHeight: '100dvh',
   padding: 16,
-  background: '#f4f4f4',
+  background: 'var(--bg)',
+  color: 'var(--text-primary)',
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
   position: 'relative',
 }
 
-const headerStyle: React.CSSProperties = {
-  borderRadius: 12,
-  padding: 14,
-  background: '#1B3A6B',
-  color: '#fff',
+const heroStyle: React.CSSProperties = {
+  borderRadius: 14,
+  padding: '18px 16px',
+  background: 'linear-gradient(135deg, rgba(255,45,120,0.18) 0%, rgba(168,85,247,0.12) 100%)',
+  border: '1px solid var(--border)',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 4,
+  textAlign: 'center',
 }
 
-const sectionStyle: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 12,
+const panelStyle: React.CSSProperties = {
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 14,
   padding: 14,
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
 }
 
-const sectionHeadingStyle: React.CSSProperties = {
-  fontSize: 18,
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 16,
   fontWeight: 700,
-  color: '#1B3A6B',
 }
 
 const starCardStyle: React.CSSProperties = {
-  borderRadius: 10,
-  border: '1px solid #e5ddc3',
-  padding: 12,
-  background: '#fff9e8',
+  borderRadius: 12,
+  border: '1px solid rgba(245,158,11,0.35)',
+  background: 'rgba(245,158,11,0.08)',
+  padding: '10px 14px',
   display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
+  alignItems: 'center',
+  gap: 12,
 }
 
-const winnerStyle: React.CSSProperties = {
-  fontSize: 20,
-  fontWeight: 800,
-  color: '#C9A84C',
-  transform: 'scale(1.03)',
-}
-
-const leaderRowStyle: React.CSSProperties = {
-  borderRadius: 8,
-  border: '1px solid #ddd',
+const leaderRowStyle = (isFirst: boolean): React.CSSProperties => ({
+  minHeight: 44,
+  borderRadius: 10,
+  border: `1px solid ${isFirst ? 'rgba(255,215,0,0.4)' : 'var(--border)'}`,
+  background: isFirst ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.03)',
   padding: '8px 10px',
   display: 'flex',
   alignItems: 'center',
-  gap: 10,
-  fontSize: 15,
-}
+  gap: 8,
+})
 
-const playAgainButtonStyle: React.CSSProperties = {
+const playAgainBtnStyle: React.CSSProperties = {
   minHeight: 52,
-  borderRadius: 10,
+  borderRadius: 12,
   border: 'none',
-  background: '#1B3A6B',
-  color: '#fff',
+  background: 'var(--accent-primary)',
+  color: 'var(--text-primary)',
   fontSize: 18,
   fontWeight: 700,
   cursor: 'pointer',
@@ -243,6 +364,6 @@ const messageWrapStyle: React.CSSProperties = {
   justifyContent: 'center',
   gap: 8,
   textAlign: 'center',
-  background: '#f4f4f4',
+  background: 'var(--bg)',
   padding: 16,
 }
