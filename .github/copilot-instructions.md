@@ -4,6 +4,7 @@ The instructions also tell Copilot exactly what Phase 1 and 2 already built so i
 The build order within each phase prevents Copilot from jumping ahead to the ceremony before QC works.
 
 - This is your instructions - [Copilot Repo Instructions](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/new/main#:~:text=3iatlas%2Drlc%2Dui%2D-,technical,-%2Dspec.md)
+- https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/AIWA-RWC-RSC-Technical-Specification-v1.0.md
 - This provides [background and overview of what we are building](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/new/main#:~:text=Spec%2Dv2.0%20(2).-,md,-index.html)  
 - This repo is the REACT UI only for this language collection game.
 
