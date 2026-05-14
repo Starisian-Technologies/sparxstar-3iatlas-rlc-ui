@@ -18,7 +18,7 @@ export interface AbilityResult {
 }
 
 function assertNever(value: never): never {
-  throw new Error(`Unhandled ability: ${String(value)}`)
+  throw new Error(`Unhandled ability payload: ${JSON.stringify(value)}`)
 }
 
 export async function invokeAbility(

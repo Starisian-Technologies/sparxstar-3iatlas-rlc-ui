@@ -13,6 +13,8 @@ import { api } from '@/api/client'
 import { emitRuntimeEvent } from '@/runtime/events'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
 
+const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
+
 type Screen =
   | 'landing'
   | 'teacher_setup'
@@ -96,7 +98,7 @@ export function App() {
           }))
           emitRuntimeEvent('SESSION_JOINED', {
             sessionId: result.session_id,
-            participantId: 'teacher',
+            participantId: state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
             mode: result.mode,
             screen: 'teacher_monitor',
             metadata: {
@@ -257,7 +259,7 @@ export function App() {
           onGoCeremony={() => {
             emitRuntimeEvent('CEREMONY_ENTERED', {
               sessionId: state.session_id,
-              participantId: state.participant_id ?? 'teacher',
+              participantId: state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
               mode: state.mode,
               screen: 'ceremony',
             })

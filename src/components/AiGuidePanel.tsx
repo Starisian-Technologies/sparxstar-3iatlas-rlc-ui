@@ -17,20 +17,23 @@ export function AiGuidePanel({ compact = false, context }: AiGuidePanelProps) {
   const [activeAbility, setActiveAbility] = useState<AbilityName | null>(null)
   const [result, setResult] = useState<AbilityResult | null>(null)
 
-  const handleAbility = async (ability: AbilityName) => {
+  const handleAbility = (ability: AbilityName) => {
     setActiveAbility(ability)
-    try {
-      const nextResult = await invokeAbility(ability, context)
-      setResult(nextResult)
-    } catch {
-      setResult({
-        ability,
-        title: 'Ability unavailable',
-        summary: 'The runtime boundary is ready, but this ability could not be completed right now.',
+    void invokeAbility(ability, context)
+      .then((nextResult) => {
+        setResult(nextResult)
       })
-    } finally {
-      setActiveAbility(null)
-    }
+      .catch((error: unknown) => {
+        console.warn(`Guide ability invocation failed for ${ability}.`, error)
+        setResult({
+          ability,
+          title: 'Ability unavailable',
+          summary: 'The runtime boundary is ready, but this ability could not be completed right now.',
+        })
+      })
+      .finally(() => {
+        setActiveAbility(null)
+      })
   }
 
   return (
@@ -54,11 +57,7 @@ export function AiGuidePanel({ compact = false, context }: AiGuidePanelProps) {
               <button
                 key={ability.name}
                 type="button"
-                onClick={() => {
-                  handleAbility(ability.name).catch((error: unknown) => {
-                    console.warn(`Guide ability invocation failed unexpectedly for ${ability.name}.`, error)
-                  })
-                }}
+                onClick={() => handleAbility(ability.name)}
                 disabled={activeAbility !== null}
                 style={abilityButtonStyle(activeAbility === ability.name)}
               >
