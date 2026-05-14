@@ -97,6 +97,10 @@ export function RwcCollectionScreen({
   const trimmedTranslation = translation.trim()
   const canSubmit = trimmedWord.length > 0 && (!needsTranslation || trimmedTranslation.length > 0)
 
+  const handleInputFocus = (field: 'word' | 'translation') => {
+    lastFocusedInputRef.current = field
+  }
+
   const insertChar = (char: string) => {
     const target = lastFocusedInputRef.current
     const el = target === 'translation' ? translationInputRef.current : wordInputRef.current
@@ -182,9 +186,7 @@ export function RwcCollectionScreen({
             ref={wordInputRef}
             value={word}
             onChange={(event) => setWord(event.target.value)}
-            onFocus={() => {
-              lastFocusedInputRef.current = 'word'
-            }}
+            onFocus={() => handleInputFocus('word')}
             placeholder={`Type a word in ${language}`}
             style={inputStyle}
             aria-label="Word input"
@@ -198,9 +200,7 @@ export function RwcCollectionScreen({
             ref={translationInputRef}
             value={translation}
             onChange={(event) => setTranslation(event.target.value)}
-            onFocus={() => {
-              lastFocusedInputRef.current = 'translation'
-            }}
+            onFocus={() => handleInputFocus('translation')}
             placeholder="Type translation"
             style={inputStyle}
             aria-label="Translation input"
