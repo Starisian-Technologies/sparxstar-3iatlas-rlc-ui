@@ -6,7 +6,7 @@ import type { AwardsResponse, LeaderboardEntry, Star } from '@/types'
 
 interface CeremonyScreenProps {
   session_id: string
-  onPlayAgain: () => void
+  onReturnToSession: () => void
 }
 
 const STAR_ORDER = [
@@ -32,7 +32,7 @@ const AWARD_EMOJI: Record<string, string> = {
   'Teacher Award': '🏆',
 }
 
-export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps) {
+export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreenProps) {
   const [awards, setAwards] = useState<AwardsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -187,8 +187,8 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
       )}
 
       {starsDone && (
-        <button type="button" onClick={onPlayAgain} style={playAgainBtnStyle}>
-          Play again
+        <button type="button" onClick={onReturnToSession} style={playAgainBtnStyle}>
+          Return to session
         </button>
       )}
     </div>

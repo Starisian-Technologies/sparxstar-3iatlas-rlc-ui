@@ -293,7 +293,7 @@ export function App() {
     return (
       <CeremonyScreen
         session_id={state.session_id}
-        onPlayAgain={() => setScreen('landing')}
+        onReturnToSession={() => setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')}
       />
     )
   }
