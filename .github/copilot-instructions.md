@@ -4,6 +4,7 @@ The instructions also tell Copilot exactly what Phase 1 and 2 already built so i
 The build order within each phase prevents Copilot from jumping ahead to the ceremony before QC works.
 
 - This is the most currect [Technical Spec](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/Sparxstar%203iatlas%20rlc%20spec%20v2.1%20.md).
+- - [Architecture Specification](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/edit/main/.github/copilot-instructions.md#:~:text=3IATLAS%2DSUITE%2D-,ARCHITECTURE,-%2Dv1.0.md)
 
 - This is your instructions - [Copilot Repo Instructions](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/new/main#:~:text=3iatlas%2Drlc%2Dui%2D-,technical,-%2Dspec.md)
 - https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/AIWA-RWC-RSC-Technical-Specification-v1.0.md
