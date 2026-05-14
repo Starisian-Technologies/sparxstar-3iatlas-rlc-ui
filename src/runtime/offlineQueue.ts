@@ -260,7 +260,10 @@ async function updateEventStatus(eventIds: string[], status: QueuedStatus): Prom
       const getReq = store.get(id)
       getReq.onsuccess = () => {
         const item = getReq.result as QueuedEvent | undefined
-        if (!item) return
+        if (!item) {
+          tx.abort()
+          return
+        }
         store.put({ ...item, status } as QueuedEvent)
       }
       getReq.onerror = () => tx.abort()
