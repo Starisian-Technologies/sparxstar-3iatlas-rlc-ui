@@ -3,6 +3,8 @@ name: Repository Health
 on:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   metadata:
     runs-on: ubuntu-latest
