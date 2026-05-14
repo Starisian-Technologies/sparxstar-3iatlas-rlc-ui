@@ -121,7 +121,7 @@ export function RwcCollectionScreen({
         session_id,
         participant_id,
         text: trimmedWord,
-        translation: needsTranslation ? trimmedTranslation : undefined,
+        translation: needsTranslation && trimmedTranslation.length > 0 ? trimmedTranslation : undefined,
         collection_mode: 'rwc',
       })
       emitRuntimeEvent('WORD_SUBMITTED', {
@@ -139,7 +139,7 @@ export function RwcCollectionScreen({
       const item: SubmittedWord = {
         id: result.token_id,
         word: trimmedWord,
-        translation: needsTranslation ? trimmedTranslation : undefined,
+        translation: needsTranslation && trimmedTranslation.length > 0 ? trimmedTranslation : undefined,
         xp_awarded: result.xp_awarded,
       }
       setSubmittedWords((prev) => [item, ...prev].slice(0, 20))
