@@ -2,7 +2,7 @@
 
 export type CollectionMode = 'rwc' | 'rsc'
 export type CollectionDepth = 'full' | 'translation_only' | 'basic'
-export type SessionStatus = 'open' | 'qc' | 'ceremony' | 'closed'
+export type SessionStatus = 'open' | 'closed' | 'archived' | 'qc' | 'ceremony'
 
 export interface Session {
   session_id: string
@@ -17,7 +17,13 @@ export interface Session {
   participant_count: number
   token_count: number
   time_remaining_seconds: number
+  current_round?: number
+  total_rounds?: number
+  round_status?: 'waiting' | 'active' | 'complete'
+  round_goal?: number
+  next_round_starts_in_seconds?: number
   leaderboard: LeaderboardEntry[]
+  participants?: Participant[]
 }
 
 export interface CreateSessionPayload {
@@ -37,6 +43,7 @@ export interface CreateSessionResponse {
 export interface JoinSessionResponse {
   session_id: string
   participant_id: string
+  display_name?: string
   language: string
   mode: CollectionMode
   collection_depth: CollectionDepth
@@ -68,17 +75,22 @@ export interface QcToken {
   token_id: string
   text: string
   translation?: string
+  xp_awarded?: number
+  created_at?: number
   corrected_text?: string
   spelling_signal: SpellingSignal
   spelling_score: number
-  vote_spelling: { yes: number; no: number }
-  vote_meaning: { yes: number; no: number }
+  vote_orthography: { yes: number; no: number }
+  vote_semantics: { yes: number; no: number }
+  vote_audio: { yes: number; no: number }
   qc_translations: Array<{ participant_id: string; translation: string }>
   submitter_id: string
+  collection_mode?: CollectionMode
+  grammar_domain?: string
 }
 
 export interface VotePayload {
-  dimension: 'spelling' | 'meaning'
+  dimension: 'orthography' | 'semantics' | 'audio'
   vote_yes: boolean
 }
 
@@ -167,4 +179,23 @@ export interface AppState {
   mode: CollectionMode | null
   collection_depth: CollectionDepth | null
   language: string | null
+}
+
+export interface SubmittedWord {
+  id: string
+  word: string
+  translation?: string
+  xp_awarded: number
+}
+
+export interface RoundCompleteSummary {
+  round: number
+  total_rounds: number
+  words_collected: number
+  points_earned: number
+  stars_earned: number
+  top_words: SubmittedWord[]
+  player_score: number
+  player_rank: number
+  total_players: number
 }

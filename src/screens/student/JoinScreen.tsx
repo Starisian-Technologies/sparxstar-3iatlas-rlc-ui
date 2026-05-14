@@ -29,7 +29,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     setError(null)
     try {
       const result = await api.session.join(code, name.trim())
-      onJoined({ ...result, display_name: name.trim() })
+      onJoined({ ...result, display_name: result.display_name ?? name.trim() })
     } catch {
       setError('Could not join. Check your code and try again.')
     } finally {

@@ -25,7 +25,7 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   const [language, setLanguage] = useState('mandinka')
   const [domain, setDomain] = useState('6.2')
   const [duration, setDuration] = useState(15)
-  const [depth, setDepth] = useState<CollectionDepth>('full')
+  const [depth, setDepth] = useState<CollectionDepth>('translation_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,15 +108,16 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
       <Field label="Collection depth">
         <SegmentedControl
           options={[
-            { value: 'full', label: 'Full' },
             { value: 'translation_only', label: 'Translation' },
             { value: 'basic', label: 'Basic' },
           ]}
           value={depth}
           onChange={(v) => setDepth(v as CollectionDepth)}
         />
+        <div style={{ fontSize: 12, color: 'var(--accent-secondary)', marginTop: 6 }}>
+          Audio recording (full depth) is not enabled in this sprint.
+        </div>
         <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
-          {depth === 'full' && 'Word + translation + audio recording'}
           {depth === 'translation_only' && 'Word + translation, no recording'}
           {depth === 'basic' && 'Word only'}
         </div>

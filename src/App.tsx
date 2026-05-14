@@ -1,23 +1,35 @@
 import { useState } from 'react'
 import { JoinScreen } from '@/screens/student/JoinScreen'
+import { LobbyScreen } from '@/screens/student/LobbyScreen'
+import { RoundCompleteScreen } from '@/screens/student/RoundCompleteScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
+import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
+import { QcScreen } from '@/screens/qc/QcScreen'
+import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
+import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
-import type { AppState, CollectionMode, CollectionDepth } from '@/types'
+import { emitRuntimeEvent } from '@/runtime/events'
+import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
+
+const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
 
 type Screen =
   | 'landing'
   | 'teacher_setup'
   | 'teacher_monitor'
   | 'student_join'
+  | 'student_lobby'
   | 'student_rwc_collection'
   | 'student_rsc_collection'
+  | 'student_round_complete'
   | 'qc'
   | 'ceremony'
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('landing')
+  const [roundSummary, setRoundSummary] = useState<RoundCompleteSummary | null>(null)
   const [state, setState] = useState<AppState>({
     role: 'none',
     session_id: null,
@@ -84,6 +96,16 @@ export function App() {
             collection_depth: result.collection_depth,
             language: result.language,
           }))
+          emitRuntimeEvent('SESSION_JOINED', {
+            sessionId: result.session_id,
+            participantId: state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
+            mode: result.mode,
+            screen: 'teacher_monitor',
+            metadata: {
+              joinCode: result.join_code,
+              origin: 'session_created',
+            },
+          })
           setScreen('teacher_monitor')
         }}
       />
@@ -119,7 +141,36 @@ export function App() {
             collection_depth: result.collection_depth as CollectionDepth,
             language: result.language,
           }))
-          setScreen(result.mode === 'rwc' ? 'student_rwc_collection' : 'student_rsc_collection')
+          emitRuntimeEvent('SESSION_JOINED', {
+            sessionId: result.session_id,
+            participantId: result.participant_id,
+            mode: result.mode,
+            screen: 'student_lobby',
+            metadata: {
+              displayName: result.display_name ?? null,
+            },
+          })
+          setScreen('student_lobby')
+        }}
+      />
+    )
+  }
+
+  // ── Student lobby ────────────────────────────────────────────────────────────
+  if (screen === 'student_lobby' && state.session_id && state.display_name) {
+    return (
+      <LobbyScreen
+        session_id={state.session_id}
+        display_name={state.display_name}
+        onEnterRound={() => {
+          const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
+          emitRuntimeEvent('ROUND_STARTED', {
+            sessionId: state.session_id,
+            participantId: state.participant_id,
+            mode: state.mode,
+            screen: nextScreen,
+          })
+          setScreen(nextScreen)
         }}
       />
     )
@@ -137,39 +188,115 @@ export function App() {
         participant_id={state.participant_id}
         collection_depth={state.collection_depth}
         language={state.language}
+        display_name={state.display_name ?? 'You'}
         onSubmitted={() => {
           // Stay on collection screen — student keeps submitting until timer ends
         }}
+        onRoundComplete={(summary) => {
+          setRoundSummary(summary)
+          setScreen('student_round_complete')
+        }}
+        onClose={() => setScreen('student_lobby')}
+        onCollectionEnded={() => setScreen('qc')}
       />
     )
   }
 
-  // ── Placeholder screens (QC, Ceremony, RSC) ───────────────────────────────
-  return (
-    <div style={{
-      minHeight: '100dvh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', flexDirection: 'column', gap: 16,
-      background: '#f4f4f4', padding: 24, textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#1B3A6B' }}>
-        {screen === 'qc' && 'QC Phase'}
-        {screen === 'ceremony' && 'Awards Ceremony'}
-        {screen === 'student_rsc_collection' && 'RSC Collection'}
-      </div>
-      <div style={{ fontSize: 14, color: '#888' }}>
-        Phase {screen === 'student_rsc_collection' ? '4' : screen === 'qc' ? '5' : '6'} — coming next
-      </div>
-      <button
-        type="button"
-        onClick={() => setScreen('landing')}
-        style={{
-          padding: '12px 24px', fontSize: 16, fontWeight: 600,
-          background: '#1B3A6B', color: '#fff',
-          border: 'none', borderRadius: 10, cursor: 'pointer',
+  // ── Student RSC collection ─────────────────────────────────────────────────
+  if (
+    screen === 'student_rsc_collection' &&
+    state.session_id && state.participant_id &&
+    state.collection_depth && state.language
+  ) {
+    return (
+      <RscCollectionScreen
+        session_id={state.session_id}
+        participant_id={state.participant_id}
+        collection_depth={state.collection_depth}
+        language={state.language}
+        onSubmitted={() => {
+          // Stay on collection screen until all 12 domains are complete.
         }}
-      >
-        Back to start
-      </button>
-    </div>
-  )
+        onCollectionCompleted={() => {
+          // Student has submitted all 12 domains and now waits.
+        }}
+        onCollectionEnded={() => setScreen('qc')}
+      />
+    )
+  }
+
+  // ── Student round complete ───────────────────────────────────────────────────
+  if (screen === 'student_round_complete' && roundSummary) {
+    return (
+      <RoundCompleteScreen
+        summary={roundSummary}
+        onNextRound={() => {
+          const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
+          emitRuntimeEvent('ROUND_STARTED', {
+            sessionId: state.session_id,
+            participantId: state.participant_id,
+            mode: state.mode,
+            screen: nextScreen,
+            metadata: {
+              source: 'round_complete',
+            },
+          })
+          setScreen(nextScreen)
+        }}
+        onBackToLobby={() => setScreen('student_lobby')}
+      />
+    )
+  }
+
+  // ── QC phase ────────────────────────────────────────────────────────────────
+  if (screen === 'qc' && state.session_id) {
+    if (state.role === 'teacher') {
+      return (
+        <QcTeacherScreen
+          session_id={state.session_id}
+          participant_id={state.participant_id ?? 'teacher'}
+          mode={state.mode ?? 'rwc'}
+          onGoCeremony={() => {
+            emitRuntimeEvent('CEREMONY_ENTERED', {
+              sessionId: state.session_id,
+              participantId: state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
+              mode: state.mode,
+              screen: 'ceremony',
+            })
+            setScreen('ceremony')
+          }}
+        />
+      )
+    }
+    if (state.participant_id && state.mode) {
+      return (
+        <QcScreen
+          session_id={state.session_id}
+          participant_id={state.participant_id}
+          mode={state.mode}
+          isTeacher={false}
+          onGoCeremony={() => {
+            emitRuntimeEvent('CEREMONY_ENTERED', {
+              sessionId: state.session_id,
+              participantId: state.participant_id,
+              mode: state.mode,
+              screen: 'ceremony',
+            })
+            setScreen('ceremony')
+          }}
+        />
+      )
+    }
+  }
+
+  if (screen === 'ceremony' && state.session_id) {
+    return (
+      <CeremonyScreen
+        session_id={state.session_id}
+        onReturnToSession={() => setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')}
+      />
+    )
+  }
+
+  return null
 }
