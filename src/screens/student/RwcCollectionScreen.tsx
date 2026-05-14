@@ -201,7 +201,7 @@ export function RwcCollectionScreen({
             value={translation}
             onChange={(event) => setTranslation(event.target.value)}
             onFocus={() => handleInputFocus('translation')}
-            placeholder="Type translation"
+            placeholder="Type translation (required)"
             style={inputStyle}
             aria-label="Translation input"
           />
