@@ -17,6 +17,10 @@ export interface AbilityResult {
   summary: string
 }
 
+function assertNever(value: never): never {
+  throw new Error(`Unhandled ability: ${String(value)}`)
+}
+
 export async function invokeAbility(
   ability: AbilityName,
   context: AbilityContext = {},
@@ -52,11 +56,7 @@ export async function invokeAbility(
         title: 'Semantic hint boundary ready',
         summary: `This hook can surface semantic clustering and duplicate-awareness cues for ${sourceLabel}.`,
       }
-    default:
-      return {
-        ability,
-        title: 'Ability ready',
-        summary: 'The runtime ability boundary is available.',
-      }
   }
+
+  return assertNever(ability)
 }

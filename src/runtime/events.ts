@@ -1,4 +1,5 @@
 export const SPX_RUNTIME_EVENT = 'spx:runtime-event'
+const MAX_RUNTIME_EVENTS = 50
 
 export type RuntimeEventType =
   | 'SESSION_JOINED'
@@ -39,8 +40,8 @@ export function emitRuntimeEvent(
   if (typeof window !== 'undefined') {
     const previousEvents = window.__SPX_RUNTIME_EVENTS__ ?? []
     previousEvents.push(payload)
-    if (previousEvents.length > 50) {
-      previousEvents.splice(0, previousEvents.length - 50)
+    if (previousEvents.length > MAX_RUNTIME_EVENTS) {
+      previousEvents.splice(0, previousEvents.length - MAX_RUNTIME_EVENTS)
     }
     window.__SPX_RUNTIME_EVENTS__ = previousEvents
     window.dispatchEvent(new CustomEvent<RuntimeEventDetail>(SPX_RUNTIME_EVENT, { detail: payload }))
