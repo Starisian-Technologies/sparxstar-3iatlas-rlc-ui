@@ -111,7 +111,7 @@ export function QcScreen({
       setHasVotedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
       setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: response.vote_counts }))
       // Only a strict "no" majority triggers shared correction state; tied votes
-      // continue to translation while the submitter remains unchanged.
+      // continue to translation for all participants.
       const correctionRequired = response.vote_counts.no > response.vote_counts.yes
       setStep(correctionRequired ? 'correction' : 'translation')
       await refreshStatus()
