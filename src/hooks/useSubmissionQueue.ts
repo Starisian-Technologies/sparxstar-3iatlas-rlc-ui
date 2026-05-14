@@ -49,6 +49,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
   const [pendingCount, setPendingCount] = useState(0)
   const [syncedSubmissions, setSyncedSubmissions] = useState<SyncedSubmissionReceipt[]>([])
   const isFlushingRef = useRef(false)
+  const isFlushingEventsRef = useRef(false)
 
   const refreshPendingCount = useCallback(async (): Promise<number> => {
     const remaining = await getPendingSubmissions(sessionId)
@@ -58,25 +59,31 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
 
   const flushPendingEvents = useCallback(async () => {
     if (!isOnline) return
-    const pendingEvents = await getPendingEvents(sessionId)
-    if (pendingEvents.length === 0) return
-
-    const eventIds = pendingEvents.map((event) => event.event_id)
-    const eventsPayload = pendingEvents.map((event) => {
-      const { status, ...payload } = event
-      void status
-      return payload
-    })
-
+    if (isFlushingEventsRef.current) return
+    isFlushingEventsRef.current = true
     try {
-      const result = await api.events.batchFlush(eventsPayload)
-      if (result.failed === 0) {
-        await markEventsSynced(eventIds)
-      } else {
+      const pendingEvents = await getPendingEvents(sessionId)
+      if (pendingEvents.length === 0) return
+
+      const eventIds = pendingEvents.map((event) => event.event_id)
+      const eventsPayload = pendingEvents.map((event) => {
+        const { status, ...payload } = event
+        void status
+        return payload
+      })
+
+      try {
+        const result = await api.events.batchFlush(eventsPayload)
+        if (result.failed === 0) {
+          await markEventsSynced(eventIds)
+        } else {
+          await markEventsFailed(eventIds)
+        }
+      } catch {
         await markEventsFailed(eventIds)
       }
-    } catch {
-      await markEventsFailed(eventIds)
+    } finally {
+      isFlushingEventsRef.current = false
     }
   }, [isOnline, sessionId])
 
@@ -158,40 +165,27 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     const queued = await queueSubmission(payload)
 
     const pending = await getPendingSubmissions(sessionId)
+    const queuedEventIds = pending.map((item) => item.id)
     await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
-      local_id:    queued.id,
-      queue_depth: pending.length,
+      queued_event_ids: queuedEventIds,
+      queue_depth:      pending.length,
     })
 
     setPendingCount(pending.length)
     setSyncState(isOnline ? 'syncing' : 'offline')
 
-    // 2. Attempt immediate flush.
-    try {
-      const result = await api.token.save(payload)
-      await markSubmissionSynced(queued.id, result)
-      await queueEvent(RlcEventType.RLC_SYNC_COMPLETE, sessionId, participantId, {
-        local_id: queued.id,
-        token_id: result.token_id,
-      })
-      setSyncedSubmissions([{ localId: queued.id, result }])
-      const remaining = await refreshPendingCount()
-      setSyncState(!isOnline ? 'offline' : remaining === 0 ? 'online' : 'syncing')
-      void flushPendingEvents()
-      return { localId: queued.id, result, status: 'synced' }
-    } catch {
-      // 3. Leave in queue. Student's submission is NOT lost.
+    // 2. If offline, skip immediate flush and rely on reconnect flusher.
+    if (!isOnline) {
       await markSubmissionFailed(queued.id)
-      await queueEvent(RlcEventType.RLC_SYNC_FAILED, sessionId, participantId, {
-        local_id: queued.id,
-        reason:   'network_error',
-      })
-      const remaining = await refreshPendingCount()
-      setSyncState(!isOnline ? 'offline' : remaining === 0 ? 'online' : 'syncing')
-      void flushPendingEvents()
       return { localId: queued.id, result: null, status: 'failed' }
     }
-  }, [sessionId, participantId, isOnline, refreshPendingCount, flushPendingEvents])
+
+    // 3. Trigger background flush instead of direct POST to avoid race with interval flusher.
+    void flushPending()
+    
+    // Return immediately with queued status — the flusher will handle sync.
+    return { localId: queued.id, result: null, status: 'queued' }
+  }, [sessionId, participantId, isOnline, flushPending])
 
   return { submit, syncState, pendingCount, syncedSubmissions, flushPending }
 }

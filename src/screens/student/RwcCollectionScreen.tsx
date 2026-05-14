@@ -163,8 +163,21 @@ export function RwcCollectionScreen({
     // 1. Show submission immediately (offline-first UX).
     setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
 
+    // 2. Emit RLC_WORD_CAPTURED immediately (spec §13.4: events at moment of action).
+    emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
+      text:               wordValue,
+      language,
+      ...(session?.semantic_domain_id ? { semantic_domain_id: session.semantic_domain_id } : {}),
+    })
+    if (hasTranslation && translationValue) {
+      emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
+        translation:     translationValue,
+        language_target: 'en',
+      })
+    }
+
     try {
-      const { localId, result, status } = await submit({
+      const { localId, result } = await submit({
         session_id,
         participant_id,
         text:            wordValue,
@@ -172,14 +185,17 @@ export function RwcCollectionScreen({
         collection_mode: 'rwc',
       })
 
+      // 3. Update UI with stable queue ID.
+      setSubmittedWords((prev) => prev.map((item) =>
+        item.id === placeholderId ? { ...item, id: localId } : item,
+      ))
+
       if (result) {
-        // 2a. Update the list entry with server-confirmed data.
-        //     Keep `id` stable (= localId from queue) to avoid React key churn.
+        // 4a. Server confirmed — update with server data.
         setSubmittedWords((prev) => prev.map((item) =>
-          item.id === placeholderId
+          item.id === localId
             ? {
                 ...item,
-                id:              localId,
                 token_id:        result.token_id,
                 xp_awarded:      result.xp_awarded,
                 syncStatus:      'synced',
@@ -190,22 +206,11 @@ export function RwcCollectionScreen({
         setLastResult(result)
         onSubmitted(result)
 
-        emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
-          text:               wordValue,
-          language,
-          ...(session?.semantic_domain_id ? { semantic_domain_id: session.semantic_domain_id } : {}),
-        })
+        // Emit save confirmation event.
         emitRlcEvent(RlcEventType.RLC_SUBMISSION_SAVED, session_id, participant_id, {
           token_id:        result.token_id,
           spelling_signal: result.spelling_signal,
         })
-        if (hasTranslation && translationValue) {
-          emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
-            token_id:        result.token_id,
-            translation:     translationValue,
-            language_target: 'en',
-          })
-        }
 
         emitRuntimeEvent('WORD_SUBMITTED', {
           sessionId:     session_id,
@@ -217,11 +222,8 @@ export function RwcCollectionScreen({
             hasTranslation,
           },
         })
-      } else if (status === 'failed') {
-        // 2b. Submission is queued — swap placeholder ID with stable queue ID.
-        setSubmittedWords((prev) => prev.map((item) =>
-          item.id === placeholderId ? { ...item, id: localId } : item,
-        ))
+      } else {
+        // 4b. Submission is queued (offline or will be flushed later).
         setLastResult(null)
       }
     } catch {

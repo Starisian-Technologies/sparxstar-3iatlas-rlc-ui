@@ -97,11 +97,28 @@ export function RscCollectionScreen({
         })
       }
 
-      const { result, status } = await submit({
+      const sentenceValue = sentence.trim()
+      const translationValue = needsTranslation ? translation.trim() : undefined
+
+      // Emit RLC_SENTENCE_CAPTURED immediately (spec §13.4: events at moment of action).
+      emitRlcEvent(RlcEventType.RLC_SENTENCE_CAPTURED, session_id, participant_id, {
+        text:               sentenceValue,
+        language,
+        grammar_domain:     currentDomain.slug,
+        grammar_domain_idx: currentDomain.index,
+      })
+      if (translationValue) {
+        emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
+          translation:     translationValue,
+          language_target: 'en',
+        })
+      }
+
+      const { result } = await submit({
         session_id,
         participant_id,
-        text:            sentence.trim(),
-        translation:     needsTranslation ? translation.trim() : undefined,
+        text:            sentenceValue,
+        translation:     translationValue,
         collection_mode: 'rsc',
         grammar_domain:  currentDomain.slug,
       })
@@ -110,23 +127,11 @@ export function RscCollectionScreen({
         setLastResult(result)
         onSubmitted(result)
 
-        emitRlcEvent(RlcEventType.RLC_SENTENCE_CAPTURED, session_id, participant_id, {
-          text:               sentence.trim(),
-          language,
-          grammar_domain:     currentDomain.slug,
-          grammar_domain_idx: currentDomain.index,
-        })
+        // Emit save confirmation event.
         emitRlcEvent(RlcEventType.RLC_SUBMISSION_SAVED, session_id, participant_id, {
           token_id:        result.token_id,
           spelling_signal: result.spelling_signal,
         })
-        if (needsTranslation && translation.trim()) {
-          emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
-            token_id:        result.token_id,
-            translation:     translation.trim(),
-            language_target: 'en',
-          })
-        }
 
         emitRuntimeEvent('WORD_SUBMITTED', {
           sessionId:     session_id,
@@ -139,7 +144,7 @@ export function RscCollectionScreen({
             hasTranslation: needsTranslation,
           },
         })
-      } else if (status === 'failed') {
+      } else {
         // Submission is queued offline — advance to next domain anyway
         // so the student can keep working.
         setLastResult(null)

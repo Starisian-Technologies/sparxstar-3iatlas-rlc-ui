@@ -8,8 +8,11 @@
  *
  * Schema:
  *   DB: spx-rlc-queue  v1
- *   Store: submissions  — token save payloads waiting to flush
- *   Store: rlc_events   — RlcEvent objects waiting to flush via POST /events/batch
+ *   Store: submissions  — QueuedSubmission objects (SaveTokenPayload + queue metadata)
+ *   Store: rlc_events   — QueuedEvent objects (RlcEvent + status field for flush tracking)
+ *
+ * Note: Both stores persist queue metadata alongside the payload/event.
+ *       The `status` field is mutated via markSubmissionSynced/markEventsSynced.
  */
 
 import type { SaveTokenPayload, SaveTokenResponse, SpellingSignal, SaturationSignal } from '@/types'
