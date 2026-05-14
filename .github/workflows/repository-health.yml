@@ -1,0 +1,11 @@
+name: Repository Health
+
+on:
+  workflow_dispatch:
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm workflow availability
+        run: echo "Repository workflow scaffold is available."
