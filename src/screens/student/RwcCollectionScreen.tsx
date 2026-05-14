@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
-import { emitRuntimeEvent } from '@/runtime/events'
-import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SubmittedWord } from '@/types'
+import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
+import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
+import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SpellingSignal, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
   session_id: string
@@ -39,6 +40,7 @@ export function RwcCollectionScreen({
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
+  const { submit, syncState, pendingCount } = useSubmissionQueue(session_id, participant_id)
   const wordInputRef = useRef<HTMLInputElement>(null)
   const translationInputRef = useRef<HTMLInputElement>(null)
   const lastFocusedInputRef = useRef<'word' | 'translation'>('word')
@@ -120,35 +122,82 @@ export function RwcCollectionScreen({
     if (!canSubmit) return
     setLoading(true)
     setError(null)
+
+    const localId  = crypto.randomUUID()
+    const hasTranslation = needsTranslation && trimmedTranslation.length > 0
+
+    // 1. Show the submission immediately with 'queued' status (offline-first UX).
+    const tempItem: SubmittedWord = {
+      id:          localId,
+      word:        trimmedWord,
+      translation: hasTranslation ? trimmedTranslation : undefined,
+      xp_awarded:  0,
+      syncStatus:  'queued',
+    }
+    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
+
+    // 2. Clear fields immediately so the student can start the next word.
+    setWord('')
+    setTranslation('')
+
     try {
-      const result = await api.token.save({
+      const { result, status } = await submit({
         session_id,
         participant_id,
-        text: trimmedWord,
-        translation: needsTranslation && trimmedTranslation.length > 0 ? trimmedTranslation : undefined,
+        text:            trimmedWord,
+        translation:     hasTranslation ? trimmedTranslation : undefined,
         collection_mode: 'rwc',
       })
-      emitRuntimeEvent('WORD_SUBMITTED', {
-        sessionId: session_id,
-        participantId: participant_id,
-        mode: 'rwc',
-        screen: 'student_rwc_collection',
-        metadata: {
-          tokenId: result.token_id,
-          hasTranslation: needsTranslation && trimmedTranslation.length > 0,
-        },
-      })
-      setLastResult(result)
-      onSubmitted(result)
-      const item: SubmittedWord = {
-        id: result.token_id,
-        word: trimmedWord,
-        translation: needsTranslation && trimmedTranslation.length > 0 ? trimmedTranslation : undefined,
-        xp_awarded: result.xp_awarded,
+
+      if (result) {
+        // 3a. Update the list entry with server-confirmed data.
+        setSubmittedWords((prev) => prev.map((item) =>
+          item.id === localId
+            ? {
+                ...item,
+                id:              result.token_id,
+                token_id:        result.token_id,
+                xp_awarded:      result.xp_awarded,
+                syncStatus:      'synced',
+                spelling_signal: result.spelling_signal,
+              }
+            : item,
+        ))
+        setLastResult(result)
+        onSubmitted(result)
+
+        emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
+          text:               trimmedWord,
+          language,
+          semantic_domain_id: session?.semantic_domain_id ?? '',
+        })
+        emitRlcEvent(RlcEventType.RLC_SUBMISSION_SAVED, session_id, participant_id, {
+          token_id:        result.token_id,
+          spelling_signal: result.spelling_signal,
+        })
+        if (hasTranslation) {
+          emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
+            token_id:        result.token_id,
+            translation:     trimmedTranslation,
+            language_target: 'en',
+          })
+        }
+
+        emitRuntimeEvent('WORD_SUBMITTED', {
+          sessionId:     session_id,
+          participantId: participant_id,
+          mode:          'rwc',
+          screen:        'student_rwc_collection',
+          metadata: {
+            tokenId:        result.token_id,
+            hasTranslation,
+          },
+        })
+      } else if (status === 'failed') {
+        // 3b. Submission queued but not yet confirmed — badge stays.
+        // No error shown; the student already sees the 'queued' badge.
+        setLastResult(null)
       }
-      setSubmittedWords((prev) => [item, ...prev].slice(0, 20))
-      setWord('')
-      setTranslation('')
     } catch {
       setError('Could not submit. Try again.')
     } finally {
@@ -163,6 +212,7 @@ export function RwcCollectionScreen({
         <div style={chipStyle}>🕘 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</div>
         <div style={chipStyle}>👥 {session?.participant_count ?? 0}</div>
         <div style={chipStyle}>⭐ {myLeaderboard?.xp ?? 0}</div>
+        <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} />
       </header>
 
       <ContinuityBanner
@@ -221,10 +271,16 @@ export function RwcCollectionScreen({
           {submittedWords.map((entry) => (
             <div key={entry.id} style={rowStyle}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{entry.word}</div>
+                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {entry.word}
+                  <SpellingSignalDot signal={entry.spelling_signal} />
+                </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{entry.translation ?? 'No translation'}</div>
               </div>
-            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
+              {entry.syncStatus === 'queued'
+                ? <span style={queuedBadgeStyle}>queued</span>
+                : <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
+              }
             </div>
           ))}
           {submittedWords.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No words yet.</div>}
@@ -263,6 +319,22 @@ export function RwcCollectionScreen({
       <AiGuidePanel compact context={{ language, mode: 'rwc', sourceText: word || promptWord }} />
       <AccessoryBar onInsert={insertChar} />
     </div>
+  )
+}
+
+/** Confidence dot — spec §6.3 UI Overlay Rules. confirmed=green, variant=amber, discovery=gold star */
+function SpellingSignalDot({ signal }: { signal?: SpellingSignal }) {
+  if (!signal) return null
+  const DOT: Record<SpellingSignal, { char: string; color: string; label: string }> = {
+    confirmed: { char: '●', color: '#22c55e', label: 'Confirmed spelling'  },
+    variant:   { char: '●', color: '#F59E0B', label: 'Spelling variant'    },
+    discovery: { char: '★', color: '#FFD700', label: 'New word — discovery' },
+  }
+  const d = DOT[signal]
+  return (
+    <span aria-label={d.label} title={d.label} style={{ fontSize: 10, color: d.color }}>
+      {d.char}
+    </span>
   )
 }
 
@@ -311,7 +383,7 @@ const wrapStyle: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '44px 1fr 1fr 1fr',
+  gridTemplateColumns: '44px 1fr 1fr 1fr 44px',
   gap: 8,
 }
 
@@ -433,4 +505,15 @@ const errorStyle: React.CSSProperties = {
   alignItems: 'center',
   padding: '0 12px',
   fontSize: 14,
+}
+
+const queuedBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: '#F59E0B',
+  background: 'rgba(245,158,11,0.15)',
+  border: '1px solid rgba(245,158,11,0.4)',
+  borderRadius: 999,
+  padding: '2px 8px',
+  whiteSpace: 'nowrap',
 }

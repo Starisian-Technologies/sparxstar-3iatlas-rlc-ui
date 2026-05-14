@@ -1,3 +1,9 @@
+import { queueEvent } from './offlineQueue'
+import { RlcEventType } from './rlcEventTypes'
+
+export { RlcEventType }
+export type { RlcEvent } from './rlcEventTypes'
+
 export const SPX_RUNTIME_EVENT = 'spx:runtime-event'
 const MAX_RUNTIME_EVENTS = 50
 
@@ -48,4 +54,21 @@ export function emitRuntimeEvent(
   }
 
   return payload
+}
+
+/**
+ * Emit a canonical RLC runtime event (spec §13) and queue it in IndexedDB
+ * for eventual flush to the server via POST /events/batch (spec §7.4).
+ *
+ * This is separate from `emitRuntimeEvent` which is an internal UI bus.
+ * Use this for all domain events that must reach the server event log.
+ */
+export function emitRlcEvent(
+  eventType:     RlcEventType,
+  sessionId:     string,
+  participantId: string,
+  payload:       Record<string, unknown> = {},
+): void {
+  // Fire-and-forget — failures are silent; the queue retries on reconnect.
+  void queueEvent(eventType, sessionId, participantId, payload)
 }

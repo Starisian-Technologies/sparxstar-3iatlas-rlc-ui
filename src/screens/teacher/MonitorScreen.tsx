@@ -4,7 +4,7 @@ import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
-import type { QcToken } from '@/types'
+import type { QcToken, SpellingSignal } from '@/types'
 
 interface MonitorScreenProps {
   session_id: string
@@ -81,7 +81,13 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
           {liveFeed.map((token) => (
             <div key={token.token_id} style={rowStyle}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{token.text}</div>
+                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {token.text}
+                  <SpellingSignalDot signal={token.spelling_signal} />
+                  {token.speaker_affirmed && (
+                    <span title="Speaker affirmed — recorded and QC vote passed" aria-label="Speaker affirmed" style={{ fontSize: 12 }}>🎙✓</span>
+                  )}
+                </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
               </div>
               <span style={{ color: 'var(--gold)', fontWeight: 700 }}>+{token.xp_awarded ?? 10} ⭐</span>
@@ -123,6 +129,20 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
         </button>
       </div>
     </div>
+  )
+}
+
+/** Confidence dot — spec §6.3 UI Overlay Rules. No text label; icon is enough. */
+function SpellingSignalDot({ signal }: { signal?: SpellingSignal }) {
+  if (!signal) return null
+  const DOT: Record<SpellingSignal, { char: string; color: string; label: string }> = {
+    confirmed: { char: '●', color: '#22c55e', label: 'Confirmed spelling'  },
+    variant:   { char: '●', color: '#F59E0B', label: 'Spelling variant'    },
+    discovery: { char: '★', color: '#FFD700', label: 'New word — discovery' },
+  }
+  const d = DOT[signal]
+  return (
+    <span aria-label={d.label} title={d.label} style={{ fontSize: 10, color: d.color }}>{d.char}</span>
   )
 }
 
