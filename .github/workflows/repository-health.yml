@@ -5,6 +5,8 @@ on:
 
 permissions: {}
 
+permissions: {}
+
 jobs:
   metadata:
     runs-on: ubuntu-latest
