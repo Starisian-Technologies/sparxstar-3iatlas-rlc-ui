@@ -22,6 +22,12 @@ export function AiGuidePanel({ compact = false, context }: AiGuidePanelProps) {
     try {
       const nextResult = await invokeAbility(ability, context)
       setResult(nextResult)
+    } catch {
+      setResult({
+        ability,
+        title: 'Ability unavailable',
+        summary: 'The runtime boundary is ready, but this ability could not be completed right now.',
+      })
     } finally {
       setActiveAbility(null)
     }
@@ -48,7 +54,9 @@ export function AiGuidePanel({ compact = false, context }: AiGuidePanelProps) {
               <button
                 key={ability.name}
                 type="button"
-                onClick={() => void handleAbility(ability.name)}
+                onClick={() => {
+                  handleAbility(ability.name).catch(() => {})
+                }}
                 disabled={activeAbility !== null}
                 style={abilityButtonStyle(activeAbility === ability.name)}
               >
