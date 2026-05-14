@@ -3,8 +3,9 @@ import { api } from '@/api/client'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
-import type { QcToken, SpellingSignal } from '@/types'
+import type { QcToken } from '@/types'
 
 interface MonitorScreenProps {
   session_id: string
@@ -129,20 +130,6 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
         </button>
       </div>
     </div>
-  )
-}
-
-/** Confidence dot — spec §6.3 UI Overlay Rules. No text label; icon is enough. */
-function SpellingSignalDot({ signal }: { signal?: SpellingSignal }) {
-  if (!signal) return null
-  const DOT: Record<SpellingSignal, { char: string; color: string; label: string }> = {
-    confirmed: { char: '●', color: '#22c55e', label: 'Confirmed spelling'  },
-    variant:   { char: '●', color: '#F59E0B', label: 'Spelling variant'    },
-    discovery: { char: '★', color: '#FFD700', label: 'New word — discovery' },
-  }
-  const d = DOT[signal]
-  return (
-    <span aria-label={d.label} title={d.label} style={{ fontSize: 10, color: d.color }}>{d.char}</span>
   )
 }
 

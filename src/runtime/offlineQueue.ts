@@ -81,15 +81,38 @@ function getDb(): Promise<IDBDatabase> {
 
 const _seq = new Map<string, number>()
 
-function nextSequence(participantId: string, sessionId: string): number {
+async function deriveMaxSequenceFromDb(
+  db: IDBDatabase,
+  participantId: string,
+  sessionId: string,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction(STORE_EVENTS, 'readonly')
+    const req = tx.objectStore(STORE_EVENTS).index('session_id').getAll(sessionId)
+    req.onsuccess = () => {
+      const all = req.result as QueuedEvent[]
+      const max = all
+        .filter((event) => event.participant_id === participantId)
+        .reduce((highest, event) => Math.max(highest, event.sequence), 0)
+      resolve(max)
+    }
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function nextSequence(
+  db: IDBDatabase,
+  participantId: string,
+  sessionId: string,
+): Promise<number> {
   const key = `${sessionId}::${participantId}`
+  if (!_seq.has(key)) {
+    const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
+    _seq.set(key, maxStored)
+  }
   const next = (_seq.get(key) ?? 0) + 1
   _seq.set(key, next)
   return next
-}
-
-export function resetSequence(participantId: string, sessionId: string): void {
-  _seq.delete(`${sessionId}::${participantId}`)
 }
 
 // ── Submission queue ──────────────────────────────────────────────────────────
@@ -182,13 +205,14 @@ export async function queueEvent(
   payload:       Record<string, unknown>,
 ): Promise<void> {
   const db = await getDb()
+  const sequence = await nextSequence(db, participantId, sessionId)
   const event: QueuedEvent = {
     event_id:       crypto.randomUUID(),
     event_type:     eventType,
     session_id:     sessionId,
     participant_id: participantId,
     emitted_at:     Date.now(),
-    sequence:       nextSequence(participantId, sessionId),
+    sequence,
     payload,
     status:         'queued',
   }
@@ -214,27 +238,32 @@ export async function getPendingEvents(sessionId: string): Promise<QueuedEvent[]
 }
 
 export async function markEventsSynced(eventIds: string[]): Promise<void> {
+  return updateEventStatus(eventIds, 'synced')
+}
+
+export async function markEventsFailed(eventIds: string[]): Promise<void> {
+  return updateEventStatus(eventIds, 'failed')
+}
+
+async function updateEventStatus(eventIds: string[], status: QueuedStatus): Promise<void> {
   if (eventIds.length === 0) return
   const db = await getDb()
   return new Promise((resolve, reject) => {
     const tx    = db.transaction(STORE_EVENTS, 'readwrite')
     const store = tx.objectStore(STORE_EVENTS)
-    let pending = eventIds.length
-    let rejected = false
 
-    const done = () => { if (--pending === 0 && !rejected) resolve() }
-    const fail = (err: unknown) => {
-      if (!rejected) { rejected = true; reject(err) }
-    }
+    tx.oncomplete = () => resolve()
+    tx.onabort = () => reject(tx.error ?? new Error('Failed to update queued event status'))
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to update queued event status'))
 
     for (const id of eventIds) {
       const getReq = store.get(id)
       getReq.onsuccess = () => {
         const item = getReq.result as QueuedEvent | undefined
-        if (item) store.put({ ...item, status: 'synced' } as QueuedEvent)
-        done()
+        if (!item) return
+        store.put({ ...item, status } as QueuedEvent)
       }
-      getReq.onerror = () => fail(getReq.error)
+      getReq.onerror = () => tx.abort()
     }
   })
 }

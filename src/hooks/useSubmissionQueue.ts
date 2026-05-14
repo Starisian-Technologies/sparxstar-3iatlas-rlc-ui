@@ -11,13 +11,16 @@
  *   'offline' — device is disconnected (navigator.onLine = false)
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import {
   queueSubmission,
   markSubmissionSynced,
   markSubmissionFailed,
   getPendingSubmissions,
+  getPendingEvents,
+  markEventsSynced,
+  markEventsFailed,
   queueEvent,
   RlcEventType,
 } from '@/runtime/offlineQueue'
@@ -35,53 +38,116 @@ export interface SubmitResult {
   status: QueuedSubmission['status']
 }
 
+export interface SyncedSubmissionReceipt {
+  localId: string
+  result: SaveTokenResponse
+}
+
 export function useSubmissionQueue(sessionId: string, participantId: string) {
   const { isOnline } = useNetworkStatus()
   const [syncState, setSyncState] = useState<SyncState>('online')
   const [pendingCount, setPendingCount] = useState(0)
+  const [syncedSubmissions, setSyncedSubmissions] = useState<SyncedSubmissionReceipt[]>([])
+  const isFlushingRef = useRef(false)
+
+  const refreshPendingCount = useCallback(async (): Promise<number> => {
+    const remaining = await getPendingSubmissions(sessionId)
+    setPendingCount(remaining.length)
+    return remaining.length
+  }, [sessionId])
+
+  const flushPendingEvents = useCallback(async () => {
+    if (!isOnline) return
+    const pendingEvents = await getPendingEvents(sessionId)
+    if (pendingEvents.length === 0) return
+
+    const eventIds = pendingEvents.map((event) => event.event_id)
+    const eventsPayload = pendingEvents.map((event) => {
+      const { status, ...payload } = event
+      void status
+      return payload
+    })
+
+    try {
+      const result = await api.events.batchFlush(eventsPayload)
+      if (result.failed === 0) {
+        await markEventsSynced(eventIds)
+      } else {
+        await markEventsFailed(eventIds)
+      }
+    } catch {
+      await markEventsFailed(eventIds)
+    }
+  }, [isOnline, sessionId])
 
   // ── Flush all pending items for this session ──────────────────────────────
 
   const flushPending = useCallback(async () => {
-    const pending = await getPendingSubmissions(sessionId)
-    if (pending.length === 0) {
-      setSyncState(isOnline ? 'online' : 'offline')
-      return
-    }
-
-    setSyncState('syncing')
-
-    for (const item of pending) {
-      try {
-        const result = await api.token.save(item.payload)
-        await markSubmissionSynced(item.id, result)
-        await queueEvent(RlcEventType.RLC_SYNC_COMPLETE, sessionId, participantId, {
-          local_id:  item.id,
-          token_id:  result.token_id,
-        })
-      } catch {
-        await markSubmissionFailed(item.id)
-        await queueEvent(RlcEventType.RLC_SYNC_FAILED, sessionId, participantId, {
-          local_id: item.id,
-          reason:   'network_error',
-        })
+    if (isFlushingRef.current) return
+    isFlushingRef.current = true
+    try {
+      if (!isOnline) {
+        await refreshPendingCount()
+        setSyncState('offline')
+        return
       }
-    }
 
-    const remaining = await getPendingSubmissions(sessionId)
-    setPendingCount(remaining.length)
-    setSyncState(isOnline && remaining.length === 0 ? 'online' : 'offline')
-  }, [sessionId, participantId, isOnline])
+      const pending = await getPendingSubmissions(sessionId)
+      if (pending.length === 0) {
+        setPendingCount(0)
+        setSyncState('online')
+        await flushPendingEvents()
+        return
+      }
+
+      setSyncState('syncing')
+      const receipts: SyncedSubmissionReceipt[] = []
+
+      for (const item of pending) {
+        try {
+          const result = await api.token.save(item.payload)
+          await markSubmissionSynced(item.id, result)
+          receipts.push({ localId: item.id, result })
+          await queueEvent(RlcEventType.RLC_SYNC_COMPLETE, sessionId, participantId, {
+            local_id:  item.id,
+            token_id:  result.token_id,
+          })
+        } catch {
+          await markSubmissionFailed(item.id)
+          await queueEvent(RlcEventType.RLC_SYNC_FAILED, sessionId, participantId, {
+            local_id: item.id,
+            reason:   'network_error',
+          })
+        }
+      }
+
+      if (receipts.length > 0) {
+        setSyncedSubmissions(receipts)
+      }
+
+      const remaining = await refreshPendingCount()
+      setSyncState(remaining === 0 ? 'online' : 'syncing')
+      await flushPendingEvents()
+    } finally {
+      isFlushingRef.current = false
+    }
+  }, [sessionId, participantId, isOnline, refreshPendingCount, flushPendingEvents])
 
   // ── Re-flush when the device comes back online ────────────────────────────
 
   useEffect(() => {
-    if (isOnline) {
-      void flushPending()
-    } else {
+    if (!isOnline) {
       setSyncState('offline')
+      void refreshPendingCount()
+      return
     }
-  }, [isOnline, flushPending])
+
+    void flushPending()
+    const interval = setInterval(() => {
+      void flushPending()
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [isOnline, flushPending, refreshPendingCount])
 
   // ── Primary submit function ───────────────────────────────────────────────
 
@@ -97,8 +163,8 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       queue_depth: pending.length,
     })
 
-    setSyncState('syncing')
-    setPendingCount((n) => n + 1)
+    setPendingCount(pending.length)
+    setSyncState(isOnline ? 'syncing' : 'offline')
 
     // 2. Attempt immediate flush.
     try {
@@ -108,8 +174,10 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
         local_id: queued.id,
         token_id: result.token_id,
       })
-      setPendingCount((n) => Math.max(0, n - 1))
-      setSyncState(isOnline ? 'online' : 'offline')
+      setSyncedSubmissions([{ localId: queued.id, result }])
+      const remaining = await refreshPendingCount()
+      setSyncState(!isOnline ? 'offline' : remaining === 0 ? 'online' : 'syncing')
+      void flushPendingEvents()
       return { localId: queued.id, result, status: 'synced' }
     } catch {
       // 3. Leave in queue. Student's submission is NOT lost.
@@ -118,10 +186,12 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
         local_id: queued.id,
         reason:   'network_error',
       })
-      setSyncState('offline')
+      const remaining = await refreshPendingCount()
+      setSyncState(!isOnline ? 'offline' : remaining === 0 ? 'online' : 'syncing')
+      void flushPendingEvents()
       return { localId: queued.id, result: null, status: 'failed' }
     }
-  }, [sessionId, participantId, isOnline])
+  }, [sessionId, participantId, isOnline, refreshPendingCount, flushPendingEvents])
 
-  return { submit, syncState, pendingCount, flushPending }
+  return { submit, syncState, pendingCount, syncedSubmissions, flushPending }
 }

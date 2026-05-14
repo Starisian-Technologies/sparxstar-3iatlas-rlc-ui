@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
-import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SpellingSignal, SubmittedWord } from '@/types'
+import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
   session_id: string
@@ -40,7 +41,7 @@ export function RwcCollectionScreen({
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
-  const { submit, syncState, pendingCount } = useSubmissionQueue(session_id, participant_id)
+  const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
   const wordInputRef = useRef<HTMLInputElement>(null)
   const translationInputRef = useRef<HTMLInputElement>(null)
   const lastFocusedInputRef = useRef<'word' | 'translation'>('word')
@@ -87,6 +88,22 @@ export function RwcCollectionScreen({
     roundRef.current = session.current_round
     roundEndedRef.current = false
   }, [display_name, onRoundComplete, participant_id, session, submittedWords, totalRounds])
+
+  useEffect(() => {
+    if (syncedSubmissions.length === 0) return
+    const synced = new Map(syncedSubmissions.map((receipt) => [receipt.localId, receipt.result]))
+    setSubmittedWords((prev) => prev.map((item) => {
+      const result = synced.get(item.id)
+      if (!result) return item
+      return {
+        ...item,
+        syncStatus:      'synced',
+        token_id:        result.token_id,
+        xp_awarded:      result.xp_awarded,
+        spelling_signal: result.spelling_signal,
+      }
+    }))
+  }, [syncedSubmissions])
 
   const myLeaderboard = useMemo(
     () => session?.leaderboard.find((entry) => entry.participant_id === participant_id || entry.display_name === display_name),
@@ -176,7 +193,7 @@ export function RwcCollectionScreen({
         emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
           text:               wordValue,
           language,
-          semantic_domain_id: session?.semantic_domain_id ?? '',
+          ...(session?.semantic_domain_id ? { semantic_domain_id: session.semantic_domain_id } : {}),
         })
         emitRlcEvent(RlcEventType.RLC_SUBMISSION_SAVED, session_id, participant_id, {
           token_id:        result.token_id,
@@ -328,22 +345,6 @@ export function RwcCollectionScreen({
       <AiGuidePanel compact context={{ language, mode: 'rwc', sourceText: word || promptWord }} />
       <AccessoryBar onInsert={insertChar} />
     </div>
-  )
-}
-
-/** Confidence dot — spec §6.3 UI Overlay Rules. confirmed=green, variant=amber, discovery=gold star */
-function SpellingSignalDot({ signal }: { signal?: SpellingSignal }) {
-  if (!signal) return null
-  const DOT: Record<SpellingSignal, { char: string; color: string; label: string }> = {
-    confirmed: { char: '●', color: '#22c55e', label: 'Confirmed spelling'  },
-    variant:   { char: '●', color: '#F59E0B', label: 'Spelling variant'    },
-    discovery: { char: '★', color: '#FFD700', label: 'New word — discovery' },
-  }
-  const d = DOT[signal]
-  return (
-    <span aria-label={d.label} title={d.label} style={{ fontSize: 10, color: d.color }}>
-      {d.char}
-    </span>
   )
 }
 
