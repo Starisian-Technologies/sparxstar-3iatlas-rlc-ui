@@ -220,8 +220,12 @@ export async function markEventsSynced(eventIds: string[]): Promise<void> {
     const tx    = db.transaction(STORE_EVENTS, 'readwrite')
     const store = tx.objectStore(STORE_EVENTS)
     let pending = eventIds.length
+    let rejected = false
 
-    const done = () => { if (--pending === 0) resolve() }
+    const done = () => { if (--pending === 0 && !rejected) resolve() }
+    const fail = (err: unknown) => {
+      if (!rejected) { rejected = true; reject(err) }
+    }
 
     for (const id of eventIds) {
       const getReq = store.get(id)
@@ -230,7 +234,7 @@ export async function markEventsSynced(eventIds: string[]): Promise<void> {
         if (item) store.put({ ...item, status: 'synced' } as QueuedEvent)
         done()
       }
-      getReq.onerror = () => reject(getReq.error)
+      getReq.onerror = () => fail(getReq.error)
     }
   })
 }

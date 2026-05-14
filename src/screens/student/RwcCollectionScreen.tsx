@@ -123,39 +123,46 @@ export function RwcCollectionScreen({
     setLoading(true)
     setError(null)
 
-    const localId  = crypto.randomUUID()
     const hasTranslation = needsTranslation && trimmedTranslation.length > 0
 
-    // 1. Show the submission immediately with 'queued' status (offline-first UX).
-    const tempItem: SubmittedWord = {
-      id:          localId,
-      word:        trimmedWord,
-      translation: hasTranslation ? trimmedTranslation : undefined,
-      xp_awarded:  0,
-      syncStatus:  'queued',
-    }
-    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
+    // Capture values before clearing fields.
+    const wordValue        = trimmedWord
+    const translationValue = hasTranslation ? trimmedTranslation : undefined
 
-    // 2. Clear fields immediately so the student can start the next word.
+    // Clear fields immediately so the student can start the next word.
     setWord('')
     setTranslation('')
 
+    // Use a stable placeholder key until `submit()` resolves with the queue ID.
+    const placeholderId = crypto.randomUUID()
+    const tempItem: SubmittedWord = {
+      id:          placeholderId,
+      word:        wordValue,
+      translation: translationValue,
+      xp_awarded:  0,
+      syncStatus:  'queued',
+    }
+
+    // 1. Show submission immediately (offline-first UX).
+    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
+
     try {
-      const { result, status } = await submit({
+      const { localId, result, status } = await submit({
         session_id,
         participant_id,
-        text:            trimmedWord,
-        translation:     hasTranslation ? trimmedTranslation : undefined,
+        text:            wordValue,
+        translation:     translationValue,
         collection_mode: 'rwc',
       })
 
       if (result) {
-        // 3a. Update the list entry with server-confirmed data.
+        // 2a. Update the list entry with server-confirmed data.
+        //     Keep `id` stable (= localId from queue) to avoid React key churn.
         setSubmittedWords((prev) => prev.map((item) =>
-          item.id === localId
+          item.id === placeholderId
             ? {
                 ...item,
-                id:              result.token_id,
+                id:              localId,
                 token_id:        result.token_id,
                 xp_awarded:      result.xp_awarded,
                 syncStatus:      'synced',
@@ -167,7 +174,7 @@ export function RwcCollectionScreen({
         onSubmitted(result)
 
         emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
-          text:               trimmedWord,
+          text:               wordValue,
           language,
           semantic_domain_id: session?.semantic_domain_id ?? '',
         })
@@ -175,10 +182,10 @@ export function RwcCollectionScreen({
           token_id:        result.token_id,
           spelling_signal: result.spelling_signal,
         })
-        if (hasTranslation) {
+        if (hasTranslation && translationValue) {
           emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
             token_id:        result.token_id,
-            translation:     trimmedTranslation,
+            translation:     translationValue,
             language_target: 'en',
           })
         }
@@ -194,8 +201,10 @@ export function RwcCollectionScreen({
           },
         })
       } else if (status === 'failed') {
-        // 3b. Submission queued but not yet confirmed — badge stays.
-        // No error shown; the student already sees the 'queued' badge.
+        // 2b. Submission is queued — swap placeholder ID with stable queue ID.
+        setSubmittedWords((prev) => prev.map((item) =>
+          item.id === placeholderId ? { ...item, id: localId } : item,
+        ))
         setLastResult(null)
       }
     } catch {

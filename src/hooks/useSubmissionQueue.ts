@@ -91,9 +91,10 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     // 1. Append to IndexedDB — always, regardless of connectivity.
     const queued = await queueSubmission(payload)
 
+    const pending = await getPendingSubmissions(sessionId)
     await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
       local_id:    queued.id,
-      queue_depth: pendingCount + 1,
+      queue_depth: pending.length,
     })
 
     setSyncState('syncing')
@@ -120,7 +121,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       setSyncState('offline')
       return { localId: queued.id, result: null, status: 'failed' }
     }
-  }, [sessionId, participantId, isOnline, pendingCount])
+  }, [sessionId, participantId, isOnline])
 
   return { submit, syncState, pendingCount, flushPending }
 }
