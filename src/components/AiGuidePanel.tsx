@@ -55,7 +55,9 @@ export function AiGuidePanel({ compact = false, context }: AiGuidePanelProps) {
                 key={ability.name}
                 type="button"
                 onClick={() => {
-                  handleAbility(ability.name).catch(() => {})
+                  handleAbility(ability.name).catch((error: unknown) => {
+                    console.warn('Guide ability invocation failed unexpectedly.', error)
+                  })
                 }}
                 disabled={activeAbility !== null}
                 style={abilityButtonStyle(activeAbility === ability.name)}

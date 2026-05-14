@@ -38,7 +38,11 @@ export function emitRuntimeEvent(
 
   if (typeof window !== 'undefined') {
     const previousEvents = window.__SPX_RUNTIME_EVENTS__ ?? []
-    window.__SPX_RUNTIME_EVENTS__ = [...previousEvents, payload].slice(-50)
+    previousEvents.push(payload)
+    if (previousEvents.length > 50) {
+      previousEvents.splice(0, previousEvents.length - 50)
+    }
+    window.__SPX_RUNTIME_EVENTS__ = previousEvents
     window.dispatchEvent(new CustomEvent<RuntimeEventDetail>(SPX_RUNTIME_EVENT, { detail: payload }))
   }
 

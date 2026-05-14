@@ -99,7 +99,7 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
   }, [orderedStars])
 
   useEffect(() => {
-    if (revealedCount === 0) return
+    if (revealedCount <= 0) return
     const revealedStar = orderedStars[revealedCount - 1]
     if (!revealedStar) return
     emitRuntimeEvent('AWARD_REVEALED', {
