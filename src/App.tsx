@@ -8,7 +8,9 @@ import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
 import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
 import { QcScreen } from '@/screens/qc/QcScreen'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
+import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
+import { emitRuntimeEvent } from '@/runtime/events'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
 
 type Screen =
@@ -21,6 +23,7 @@ type Screen =
   | 'student_rsc_collection'
   | 'student_round_complete'
   | 'qc'
+  | 'ceremony'
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('landing')
@@ -91,6 +94,16 @@ export function App() {
             collection_depth: result.collection_depth,
             language: result.language,
           }))
+          emitRuntimeEvent('SESSION_JOINED', {
+            sessionId: result.session_id,
+            participantId: 'teacher',
+            mode: result.mode,
+            screen: 'teacher_monitor',
+            metadata: {
+              joinCode: result.join_code,
+              origin: 'session_created',
+            },
+          })
           setScreen('teacher_monitor')
         }}
       />
@@ -126,6 +139,15 @@ export function App() {
             collection_depth: result.collection_depth as CollectionDepth,
             language: result.language,
           }))
+          emitRuntimeEvent('SESSION_JOINED', {
+            sessionId: result.session_id,
+            participantId: result.participant_id,
+            mode: result.mode,
+            screen: 'student_lobby',
+            metadata: {
+              displayName: result.display_name ?? null,
+            },
+          })
           setScreen('student_lobby')
         }}
       />
@@ -138,7 +160,16 @@ export function App() {
       <LobbyScreen
         session_id={state.session_id}
         display_name={state.display_name}
-        onEnterRound={() => setScreen(state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection')}
+        onEnterRound={() => {
+          const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
+          emitRuntimeEvent('ROUND_STARTED', {
+            sessionId: state.session_id,
+            participantId: state.participant_id,
+            mode: state.mode,
+            screen: nextScreen,
+          })
+          setScreen(nextScreen)
+        }}
       />
     )
   }
@@ -197,7 +228,19 @@ export function App() {
     return (
       <RoundCompleteScreen
         summary={roundSummary}
-        onNextRound={() => setScreen(state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection')}
+        onNextRound={() => {
+          const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
+          emitRuntimeEvent('ROUND_STARTED', {
+            sessionId: state.session_id,
+            participantId: state.participant_id,
+            mode: state.mode,
+            screen: nextScreen,
+            metadata: {
+              source: 'round_complete',
+            },
+          })
+          setScreen(nextScreen)
+        }}
         onBackToLobby={() => setScreen('student_lobby')}
       />
     )
@@ -211,7 +254,15 @@ export function App() {
           session_id={state.session_id}
           participant_id={state.participant_id ?? 'teacher'}
           mode={state.mode ?? 'rwc'}
-          onGoCeremony={() => setScreen('landing')}
+          onGoCeremony={() => {
+            emitRuntimeEvent('CEREMONY_ENTERED', {
+              sessionId: state.session_id,
+              participantId: state.participant_id ?? 'teacher',
+              mode: state.mode,
+              screen: 'ceremony',
+            })
+            setScreen('ceremony')
+          }}
         />
       )
     }
@@ -222,10 +273,27 @@ export function App() {
           participant_id={state.participant_id}
           mode={state.mode}
           isTeacher={false}
-          onGoCeremony={() => setScreen('landing')}
+          onGoCeremony={() => {
+            emitRuntimeEvent('CEREMONY_ENTERED', {
+              sessionId: state.session_id,
+              participantId: state.participant_id,
+              mode: state.mode,
+              screen: 'ceremony',
+            })
+            setScreen('ceremony')
+          }}
         />
       )
     }
+  }
+
+  if (screen === 'ceremony' && state.session_id) {
+    return (
+      <CeremonyScreen
+        session_id={state.session_id}
+        onPlayAgain={() => setScreen('landing')}
+      />
+    )
   }
 
   return null

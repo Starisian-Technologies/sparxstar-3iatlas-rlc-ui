@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
+import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 
 const LEVEL_XP_REQUIREMENT = 1200
 const MIN_PROGRESS_PERCENT = 8
@@ -13,9 +15,10 @@ interface LobbyScreenProps {
 }
 
 export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScreenProps) {
-  const { session } = useSessionPoll(session_id, true)
+  const { session, error } = useSessionPoll(session_id, true)
+  const { isOnline } = useNetworkStatus()
   const seconds = session?.next_round_starts_in_seconds ?? session?.time_remaining_seconds ?? 0
-  const canEnterRound = (session?.round_status ?? 'active') === 'active'
+  const canEnterRound = session?.round_status === 'active'
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
 
@@ -38,6 +41,8 @@ export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScr
           <option value="fula">Fula</option>
         </select>
       </header>
+
+      <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
 
       <section style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -94,7 +99,7 @@ export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScr
         </div>
       </section>
 
-      <AiGuidePanel compact />
+      <AiGuidePanel compact context={{ language: session?.language }} />
 
       <nav style={bottomNavStyle} aria-label="Bottom navigation">
         {['Lobby', 'Games', 'Progress', 'Awards', 'Profile'].map((item) => (

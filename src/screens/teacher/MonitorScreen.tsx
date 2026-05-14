@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { api } from '@/api/client'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
+import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import type { QcToken } from '@/types'
 
 interface MonitorScreenProps {
@@ -13,6 +15,7 @@ interface MonitorScreenProps {
 
 export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRound }: MonitorScreenProps) {
   const { session, error } = useSessionPoll(session_id, true)
+  const { isOnline } = useNetworkStatus()
   const [liveFeed, setLiveFeed] = useState<QcToken[]>([])
 
   useEffect(() => {
@@ -58,6 +61,8 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
         </div>
       </header>
 
+      <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
+
       {/* ── Stats row ── */}
       <div style={statsRowStyle}>
         <StatChip label="Players" value={String(session?.participant_count ?? 0)} icon="👥" />
@@ -97,7 +102,7 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
         </section>
       </div>
 
-      <AiGuidePanel compact />
+      <AiGuidePanel compact context={{ language: session?.language, mode: session?.mode }} />
 
       {error && <div style={errorStyle}>Connection issue — retrying.</div>}
 

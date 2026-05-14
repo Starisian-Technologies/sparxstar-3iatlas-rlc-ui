@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
+import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { emitRuntimeEvent } from '@/runtime/events'
 import { GRAMMAR_DOMAINS } from '@/types'
 import type { CollectionDepth, SaveTokenResponse } from '@/types'
 
@@ -36,7 +39,8 @@ export function RscCollectionScreen({
   const sentenceRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
   const hasCollectionEndedRef = useRef(false)
-  const { session } = useSessionPoll(session_id, true)
+  const { session, error: pollError } = useSessionPoll(session_id, true)
+  const { isOnline } = useNetworkStatus()
 
   useEffect(() => {
     if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
@@ -85,6 +89,17 @@ export function RscCollectionScreen({
         translation: needsTranslation ? translation.trim() : undefined,
         collection_mode: 'rsc',
         grammar_domain: currentDomain.slug,
+      })
+      emitRuntimeEvent('WORD_SUBMITTED', {
+        sessionId: session_id,
+        participantId: participant_id,
+        mode: 'rsc',
+        screen: 'student_rsc_collection',
+        metadata: {
+          tokenId: result.token_id,
+          grammarDomain: currentDomain.slug,
+          hasTranslation: needsTranslation,
+        },
       })
       setLastResult(result)
       onSubmitted(result)
@@ -157,6 +172,11 @@ export function RscCollectionScreen({
       )}
 
       <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <ContinuityBanner
+          isOnline={isOnline}
+          hasConnectionIssue={Boolean(pollError)}
+          hasDraft={Boolean(sentence.trim() || translation.trim())}
+        />
         <div style={{ fontSize: 15, color: '#555' }}>Current domain</div>
         <div style={{ fontSize: 20, color: '#1B3A6B', fontWeight: 700 }}>{currentDomain.label}</div>
         <div style={{ fontSize: 16, color: '#1a1a1a' }}>{currentDomain.prompt}</div>

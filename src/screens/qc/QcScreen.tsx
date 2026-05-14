@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api/client'
+import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useQcSession } from '@/hooks/useQcSession'
+import { emitRuntimeEvent } from '@/runtime/events'
 import type { CollectionMode, LeaderboardEntry, VotePayload } from '@/types'
 
 interface QcScreenProps {
@@ -32,6 +35,7 @@ export function QcScreen({
     setCurrentIndex,
     refreshStatus,
   } = useQcSession(session_id)
+  const { isOnline } = useNetworkStatus()
 
   const [step, setStep] = useState<QcStep>('audio')
   const [hasVotedByToken, setHasVotedByToken] = useState<Record<string, boolean>>({})
@@ -94,6 +98,17 @@ export function QcScreen({
         dimension: voteDimension,
         vote_yes,
       })
+      emitRuntimeEvent('QC_REVIEWED', {
+        sessionId: session_id,
+        participantId: participant_id,
+        mode,
+        screen: 'qc',
+        metadata: {
+          tokenId: currentToken.token_id,
+          dimension: voteDimension,
+          voteYes: vote_yes,
+        },
+      })
       setHasVotedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
       setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: response.vote_counts }))
       setStep(majorityNo && isSubmitter ? 'correction' : 'translation')
@@ -150,6 +165,8 @@ export function QcScreen({
         </div>
         <div style={{ fontSize: 22, fontWeight: 700 }}>{currentToken.text}</div>
       </div>
+
+      <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
 
       <div style={panelStyle}>
         {step === 'audio' && (
@@ -259,7 +276,6 @@ export function QcScreen({
         )}
 
         {actionError && <div role="alert" style={errorStyle}>{actionError}</div>}
-        {error && <div role="alert" style={errorStyle}>Connection issue — retrying every 2 seconds.</div>}
       </div>
 
       {isTeacher && (

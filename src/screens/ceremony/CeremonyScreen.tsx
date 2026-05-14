@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api/client'
 import { Fireworks } from '@/components/Fireworks'
+import { emitRuntimeEvent } from '@/runtime/events'
 import type { AwardsResponse, LeaderboardEntry, Star } from '@/types'
 
 interface CeremonyScreenProps {
@@ -96,6 +97,21 @@ export function CeremonyScreen({ session_id, onPlayAgain }: CeremonyScreenProps)
     }, STAR_REVEAL_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [orderedStars])
+
+  useEffect(() => {
+    if (revealedCount === 0) return
+    const revealedStar = orderedStars[revealedCount - 1]
+    if (!revealedStar) return
+    emitRuntimeEvent('AWARD_REVEALED', {
+      sessionId: session_id,
+      screen: 'ceremony',
+      metadata: {
+        category: revealedStar.category,
+        participantId: revealedStar.participant_id,
+        displayName: revealedStar.display_name,
+      },
+    })
+  }, [orderedStars, revealedCount, session_id])
 
   useEffect(() => {
     if (!awards) return

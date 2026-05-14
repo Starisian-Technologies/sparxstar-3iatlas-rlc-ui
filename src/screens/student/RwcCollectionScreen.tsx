@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
+import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { emitRuntimeEvent } from '@/runtime/events'
 import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
@@ -35,7 +38,8 @@ export function RwcCollectionScreen({
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
-  const { session } = useSessionPoll(session_id, true)
+  const { session, error: pollError } = useSessionPoll(session_id, true)
+  const { isOnline } = useNetworkStatus()
   const inputRef = useRef<HTMLInputElement>(null)
   const roundRef = useRef<number | null>(null)
   const roundEndedRef = useRef(false)
@@ -114,6 +118,16 @@ export function RwcCollectionScreen({
         translation: needsTranslation ? translation.trim() || undefined : undefined,
         collection_mode: 'rwc',
       })
+      emitRuntimeEvent('WORD_SUBMITTED', {
+        sessionId: session_id,
+        participantId: participant_id,
+        mode: 'rwc',
+        screen: 'student_rwc_collection',
+        metadata: {
+          tokenId: result.token_id,
+          hasTranslation: needsTranslation && translation.trim().length > 0,
+        },
+      })
       setLastResult(result)
       onSubmitted(result)
       const item: SubmittedWord = {
@@ -140,6 +154,12 @@ export function RwcCollectionScreen({
         <div style={chipStyle}>👥 {session?.participant_count ?? 0}</div>
         <div style={chipStyle}>⭐ {myLeaderboard?.xp ?? 0}</div>
       </header>
+
+      <ContinuityBanner
+        isOnline={isOnline}
+        hasConnectionIssue={Boolean(pollError)}
+        hasDraft={Boolean(word.trim() || translation.trim())}
+      />
 
       <section style={mainCardStyle}>
         <div style={roundLabelStyle}>ROUND {currentRound} / {totalRounds}</div>
@@ -232,7 +252,7 @@ export function RwcCollectionScreen({
 
       {error && <div role="alert" style={errorStyle}>{error}</div>}
 
-      <AiGuidePanel compact />
+      <AiGuidePanel compact context={{ language, mode: 'rwc', sourceText: word || promptWord }} />
       <AccessoryBar onInsert={insertChar} />
     </div>
   )
