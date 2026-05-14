@@ -264,7 +264,7 @@ async function updateEventStatus(eventIds: string[], status: QueuedStatus): Prom
       getReq.onsuccess = () => {
         const item = getReq.result as QueuedEvent | undefined
         if (!item) {
-          tx.abort()
+          // Skip missing IDs — already cleaned up or duplicate flush
           return
         }
         store.put({ ...item, status } as QueuedEvent)

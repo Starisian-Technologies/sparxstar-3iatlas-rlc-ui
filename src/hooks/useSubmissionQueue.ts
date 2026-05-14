@@ -176,8 +176,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
 
     // 2. If offline, skip immediate flush and rely on reconnect flusher.
     if (!isOnline) {
-      await markSubmissionFailed(queued.id)
-      return { localId: queued.id, result: null, status: 'failed' }
+      return { localId: queued.id, result: null, status: 'queued' }
     }
 
     // 3. Trigger background flush instead of direct POST to avoid race with interval flusher.
