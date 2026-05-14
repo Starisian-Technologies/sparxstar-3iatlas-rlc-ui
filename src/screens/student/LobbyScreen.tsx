@@ -18,7 +18,7 @@ export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScr
   const { session, error } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
   const seconds = session?.next_round_starts_in_seconds ?? session?.time_remaining_seconds ?? 0
-  const canEnterRound = (session?.round_status ?? 'active') === 'active'
+  const canEnterRound = session?.round_status === 'active'
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
 
@@ -60,7 +60,12 @@ export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScr
 
       <section style={cardStyle}>
         <div style={sectionTitleStyle}>Play Game</div>
-        <ActionCard title="Join a Game" subtitle="Play with a group" enabled onClick={onEnterRound} />
+        <ActionCard
+          title="Join a Game"
+          subtitle={canEnterRound ? 'Play with a group' : 'Waiting for the teacher to start the round'}
+          enabled={canEnterRound}
+          onClick={onEnterRound}
+        />
         <ActionCard title="Solo Mode" subtitle="Coming soon" />
         <ActionCard title="Practice" subtitle="Coming soon" />
       </section>

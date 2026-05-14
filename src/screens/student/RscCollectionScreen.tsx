@@ -82,6 +82,18 @@ export function RscCollectionScreen({
     setLoading(true)
     setError(null)
     try {
+      if (needsRecording && step === 'recording') {
+        emitRuntimeEvent('AUDIO_CAPTURED', {
+          sessionId: session_id,
+          participantId: participant_id,
+          mode: 'rsc',
+          screen: 'student_rsc_collection',
+          metadata: {
+            grammarDomain: currentDomain.slug,
+            placeholder: true,
+          },
+        })
+      }
       const result = await api.token.save({
         session_id,
         participant_id,

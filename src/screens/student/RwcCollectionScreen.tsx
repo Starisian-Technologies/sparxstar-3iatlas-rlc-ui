@@ -33,14 +33,15 @@ export function RwcCollectionScreen({
 }: RwcCollectionScreenProps) {
   const [word, setWord] = useState('')
   const [translation, setTranslation] = useState('')
-  const [showTranslationField, setShowTranslationField] = useState(collection_depth !== 'basic')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
-  const inputRef = useRef<HTMLInputElement>(null)
+  const wordInputRef = useRef<HTMLInputElement>(null)
+  const translationInputRef = useRef<HTMLInputElement>(null)
+  const lastFocusedInputRef = useRef<'word' | 'translation'>('word')
   const roundRef = useRef<number | null>(null)
   const roundEndedRef = useRef(false)
   const sessionEndedRef = useRef(false)
@@ -92,14 +93,19 @@ export function RwcCollectionScreen({
 
   const progressCount = submittedWords.length
   const progressPct = Math.min(100, (progressCount / roundGoal) * 100)
+  const trimmedWord = word.trim()
+  const trimmedTranslation = translation.trim()
+  const canSubmit = trimmedWord.length > 0 && (!needsTranslation || trimmedTranslation.length > 0)
 
   const insertChar = (char: string) => {
-    const el = inputRef.current
+    const target = lastFocusedInputRef.current
+    const el = target === 'translation' ? translationInputRef.current : wordInputRef.current
     if (!el) return
     const start = el.selectionStart ?? el.value.length
     const end = el.selectionEnd ?? el.value.length
     const newVal = el.value.slice(0, start) + char + el.value.slice(end)
-    setWord(newVal)
+    if (target === 'translation') setTranslation(newVal)
+    else setWord(newVal)
     requestAnimationFrame(() => {
       el.selectionStart = el.selectionEnd = start + char.length
       el.focus()
@@ -107,15 +113,15 @@ export function RwcCollectionScreen({
   }
 
   const submitWord = async () => {
-    if (!word.trim()) return
+    if (!canSubmit) return
     setLoading(true)
     setError(null)
     try {
       const result = await api.token.save({
         session_id,
         participant_id,
-        text: word.trim(),
-        translation: needsTranslation ? translation.trim() || undefined : undefined,
+        text: trimmedWord,
+        translation: needsTranslation ? trimmedTranslation : undefined,
         collection_mode: 'rwc',
       })
       emitRuntimeEvent('WORD_SUBMITTED', {
@@ -125,15 +131,15 @@ export function RwcCollectionScreen({
         screen: 'student_rwc_collection',
         metadata: {
           tokenId: result.token_id,
-          hasTranslation: needsTranslation && translation.trim().length > 0,
+          hasTranslation: needsTranslation && trimmedTranslation.length > 0,
         },
       })
       setLastResult(result)
       onSubmitted(result)
       const item: SubmittedWord = {
         id: result.token_id,
-        word: word.trim(),
-        translation: needsTranslation ? translation.trim() || undefined : undefined,
+        word: trimmedWord,
+        translation: needsTranslation ? trimmedTranslation : undefined,
         xp_awarded: result.xp_awarded,
       }
       setSubmittedWords((prev) => [item, ...prev].slice(0, 20))
@@ -173,30 +179,32 @@ export function RwcCollectionScreen({
       <section style={inputWrapStyle}>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
-            ref={inputRef}
+            ref={wordInputRef}
             value={word}
             onChange={(event) => setWord(event.target.value)}
+            onFocus={() => {
+              lastFocusedInputRef.current = 'word'
+            }}
             placeholder={`Type a word in ${language}`}
             style={inputStyle}
             aria-label="Word input"
           />
-          <button type="button" onClick={() => void submitWord()} disabled={!word.trim() || loading} style={sendBtnStyle}>
+          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle}>
             ➤
           </button>
         </div>
-        {needsTranslation && showTranslationField && (
+        {needsTranslation && (
           <input
+            ref={translationInputRef}
             value={translation}
             onChange={(event) => setTranslation(event.target.value)}
-            placeholder="Optional translation"
+            onFocus={() => {
+              lastFocusedInputRef.current = 'translation'
+            }}
+            placeholder="Type translation"
             style={inputStyle}
             aria-label="Translation input"
           />
-        )}
-        {needsTranslation && (
-          <button type="button" onClick={() => setShowTranslationField((value) => !value)} style={ghostBtnStyle}>
-            {showTranslationField ? 'Hide translation field' : 'Add translation'}
-          </button>
         )}
         {lastResult && (
           <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -387,16 +395,6 @@ const sendBtnStyle: React.CSSProperties = {
   background: 'var(--accent-primary)',
   color: 'var(--text-primary)',
   fontWeight: 800,
-  cursor: 'pointer',
-}
-
-const ghostBtnStyle: React.CSSProperties = {
-  minHeight: 44,
-  width: '100%',
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'transparent',
-  color: 'var(--text-secondary)',
   cursor: 'pointer',
 }
 

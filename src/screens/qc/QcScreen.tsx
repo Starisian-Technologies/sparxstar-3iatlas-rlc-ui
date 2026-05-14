@@ -85,7 +85,6 @@ export function QcScreen({
   const voteDimension: VotePayload['dimension'] = mode === 'rsc' ? 'semantics' : 'orthography'
   const hasVoted = hasVotedByToken[currentToken.token_id] === true
   const voteCounts = voteCountsByToken[currentToken.token_id] ?? getDefaultCounts(currentToken, voteDimension)
-  const majorityNo = voteCounts.no > voteCounts.yes
   const isSubmitter = currentToken.submitter_id === participant_id
   const translationSubmitted = translationSubmittedByToken[currentToken.token_id] === true
   const isLastToken = currentIndex === qcWords.length - 1
@@ -111,7 +110,8 @@ export function QcScreen({
       })
       setHasVotedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
       setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: response.vote_counts }))
-      setStep(majorityNo && isSubmitter ? 'correction' : 'translation')
+      const correctionRequired = response.vote_counts.no > response.vote_counts.yes
+      setStep(correctionRequired ? 'correction' : 'translation')
       await refreshStatus()
     } catch {
       setActionError('Could not submit vote. Please try again.')
