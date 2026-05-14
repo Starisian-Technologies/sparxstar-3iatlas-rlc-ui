@@ -3,6 +3,8 @@ Every class name, constant, and hook name is taken from the actual PHP source â€
 The instructions also tell Copilot exactly what Phase 1 and 2 already built so it does not rebuild it. The recorder placeholder rule is explicit so Copilot does not attempt to implement audio. The polling strategy is locked so Copilot does not introduce socket.io.
 The build order within each phase prevents Copilot from jumping ahead to the ceremony before QC works.
 
+- This is the most currect [Technical Spec](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/Sparxstar%203iatlas%20rlc%20spec%20v2.1%20.md).
+
 - This is your instructions - [Copilot Repo Instructions](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/new/main#:~:text=3iatlas%2Drlc%2Dui%2D-,technical,-%2Dspec.md)
 - https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/AIWA-RWC-RSC-Technical-Specification-v1.0.md
 - This provides [background and overview of what we are building](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/new/main#:~:text=Spec%2Dv2.0%20(2).-,md,-index.html)  
