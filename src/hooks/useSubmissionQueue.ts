@@ -171,7 +171,13 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     const queued = await queueSubmission(payload)
 
     const pending = await getPendingSubmissions(sessionId)
-    const queuedEventIds = pending.map((item) => item.id)
+    await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
+      queued_event_ids: [],
+      queue_depth:      pending.length,
+    })
+    const pendingEvents = await getPendingEvents(sessionId)
+    const queuedEventIds = pendingEvents.map((item) => item.id)
+
     await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
       queued_event_ids: queuedEventIds,
       queue_depth:      pending.length,
