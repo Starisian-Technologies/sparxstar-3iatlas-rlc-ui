@@ -63,8 +63,10 @@ export function RscCollectionScreen({
   // Drive onSubmitted and the result banner from server-confirmation receipts (spec §12.5).
   useEffect(() => {
     if (syncedSubmissions.length === 0) return
+    const myReceipts = syncedSubmissions.filter((r) => r.participantId === participant_id)
+    if (myReceipts.length === 0) return
     let latestResult: SaveTokenResponse | null = null
-    for (const receipt of syncedSubmissions) {
+    for (const receipt of myReceipts) {
       onSubmitted(receipt.result)
       latestResult = receipt.result
       emitRuntimeEvent('WORD_SUBMITTED', {

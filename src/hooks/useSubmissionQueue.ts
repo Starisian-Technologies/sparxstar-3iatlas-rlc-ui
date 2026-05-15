@@ -40,6 +40,8 @@ export interface SubmitResult {
 
 export interface SyncedSubmissionReceipt {
   localId: string
+  /** participant_id this receipt belongs to — screens must filter to their own participant */
+  participantId: string
   result: SaveTokenResponse
 }
 
@@ -110,7 +112,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
           try {
             const result = await api.token.save(item.payload)
             await markSubmissionSynced(item.id, result)
-            receipts.push({ localId: item.id, result })
+            receipts.push({ localId: item.id, participantId: item.participant_id, result })
             // Emit RLC_SUBMISSION_SAVED at server confirmation (spec §13.4).
             // Use item.participant_id to correctly scope events per participant.
             await queueEvent(RlcEventType.RLC_SUBMISSION_SAVED, sessionId, item.participant_id, {
@@ -191,7 +193,8 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     }
 
     // 3. Trigger background flush instead of direct POST to avoid race with interval flusher.
-    void flushPending()
+    // Defer one tick so the caller can swap placeholderId → localId before any sync receipt arrives.
+    setTimeout(() => void flushPending(), 0)
     
     // Return immediately with queued status — the flusher will handle sync.
     return { localId: queued.id, result: null, status: 'queued' }

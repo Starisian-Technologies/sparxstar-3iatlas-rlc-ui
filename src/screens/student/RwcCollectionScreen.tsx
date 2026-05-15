@@ -95,7 +95,9 @@ export function RwcCollectionScreen({
 
   useEffect(() => {
     if (syncedSubmissions.length === 0) return
-    const synced = new Map(syncedSubmissions.map((receipt) => [receipt.localId, receipt.result]))
+    const myReceipts = syncedSubmissions.filter((r) => r.participantId === participant_id)
+    if (myReceipts.length === 0) return
+    const synced = new Map(myReceipts.map((receipt) => [receipt.localId, receipt.result]))
     setSubmittedWords((prev) => prev.map((item) => {
       const result = synced.get(item.id)
       if (!result) return item
@@ -111,7 +113,7 @@ export function RwcCollectionScreen({
     // Notify parent and emit runtime events for newly confirmed submissions.
     // processedReceiptsRef prevents duplicate calls across re-renders.
     let latestResult: SaveTokenResponse | null = null
-    for (const receipt of syncedSubmissions) {
+    for (const receipt of myReceipts) {
       if (processedReceiptsRef.current.has(receipt.localId)) continue
       processedReceiptsRef.current.add(receipt.localId)
       const meta = submissionMetaRef.current.get(receipt.localId)
