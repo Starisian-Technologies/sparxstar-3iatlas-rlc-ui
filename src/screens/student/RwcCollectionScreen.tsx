@@ -178,10 +178,10 @@ export function RwcCollectionScreen({
     setWord('')
     setTranslation('')
 
-    // Use a stable placeholder key until `submit()` resolves with the queue ID.
-    const placeholderId = crypto.randomUUID()
+    // Generate the queue ID upfront and use it directly — no placeholder swap needed.
+    const localId = crypto.randomUUID()
     const tempItem: SubmittedWord = {
-      id:          placeholderId,
+      id:          localId,
       word:        wordValue,
       translation: translationValue,
       xp_awarded:  0,
@@ -205,18 +205,15 @@ export function RwcCollectionScreen({
     }
 
     try {
-      const { localId } = await submit({
+      // 3. Queue submission with the same ID — receipt will match the already-inserted row.
+      await submit({
         session_id,
         participant_id,
         text:            wordValue,
         translation:     translationValue,
         collection_mode: 'rwc',
-      })
+      }, localId)
 
-      // 3. Update UI with stable queue ID (server confirmation handled by syncedSubmissions effect).
-      setSubmittedWords((prev) => prev.map((item) =>
-        item.id === placeholderId ? { ...item, id: localId } : item,
-      ))
       // Store metadata for WORD_SUBMITTED event (used when the sync receipt arrives).
       submissionMetaRef.current.set(localId, { hasTranslation })
     } catch {

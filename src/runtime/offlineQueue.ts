@@ -122,10 +122,13 @@ async function nextSequence(
 
 export async function queueSubmission(
   payload: SaveTokenPayload,
+  /** Caller-provided ID — if omitted a new UUID is generated. Pass the same UUID
+   *  used for the optimistic UI row to avoid a placeholder→localId swap. */
+  id?: string,
 ): Promise<QueuedSubmission> {
   const db = await getDb()
   const item: QueuedSubmission = {
-    id:             crypto.randomUUID(),
+    id:             id ?? crypto.randomUUID(),
     session_id:     payload.session_id,
     participant_id: payload.participant_id,
     payload,
@@ -271,6 +274,61 @@ async function updateEventStatus(eventIds: string[], status: QueuedStatus): Prom
       }
       getReq.onerror = () => tx.abort()
     }
+  })
+}
+
+// ── Cleanup ───────────────────────────────────────────────────────────────────
+
+/**
+ * Delete all `status: 'synced'` records for the given session from both stores.
+ * Call on session end to keep IDB storage bounded (spec §12.5 guidance on GC).
+ *
+ * Reads are done in separate readonly transactions first; deletions are batched
+ * into a single readwrite transaction to avoid IDB auto-commit edge cases.
+ */
+export async function cleanupSyncedRecords(sessionId: string): Promise<void> {
+  const db = await getDb()
+
+  // Phase 1 — collect IDs to delete (readonly, parallel).
+  const [syncedSubIds, syncedEventIds] = await Promise.all([
+    new Promise<string[]>((resolve, reject) => {
+      const tx  = db.transaction(STORE_SUBMISSIONS, 'readonly')
+      const req = tx.objectStore(STORE_SUBMISSIONS).index('session_id').getAll(sessionId)
+      req.onsuccess = () => {
+        const ids: string[] = []
+        for (const i of req.result as QueuedSubmission[]) {
+          if (i.status === 'synced') ids.push(i.id)
+        }
+        resolve(ids)
+      }
+      req.onerror = () => reject(req.error)
+    }),
+    new Promise<string[]>((resolve, reject) => {
+      const tx  = db.transaction(STORE_EVENTS, 'readonly')
+      const req = tx.objectStore(STORE_EVENTS).index('session_id').getAll(sessionId)
+      req.onsuccess = () => {
+        const ids: string[] = []
+        for (const i of req.result as QueuedEvent[]) {
+          if (i.status === 'synced') ids.push(i.event_id)
+        }
+        resolve(ids)
+      }
+      req.onerror = () => reject(req.error)
+    }),
+  ])
+
+  if (syncedSubIds.length === 0 && syncedEventIds.length === 0) return
+
+  // Phase 2 — batch delete (readwrite, single transaction).
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_SUBMISSIONS, STORE_EVENTS], 'readwrite')
+    tx.oncomplete = () => resolve()
+    tx.onabort = () => reject(tx.error ?? new Error('cleanupSyncedRecords aborted'))
+    tx.onerror = () => reject(tx.error ?? new Error('cleanupSyncedRecords failed'))
+    const subStore = tx.objectStore(STORE_SUBMISSIONS)
+    for (const id of syncedSubIds) subStore.delete(id)
+    const evtStore = tx.objectStore(STORE_EVENTS)
+    for (const id of syncedEventIds) evtStore.delete(id)
   })
 }
 

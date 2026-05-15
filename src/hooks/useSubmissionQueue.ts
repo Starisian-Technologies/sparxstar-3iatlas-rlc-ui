@@ -22,6 +22,7 @@ import {
   markEventsSynced,
   markEventsFailed,
   queueEvent,
+  cleanupSyncedRecords,
   RlcEventType,
 } from '@/runtime/offlineQueue'
 import { useNetworkStatus } from './useNetworkStatus'
@@ -168,9 +169,12 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
 
   const submit = useCallback(async (
     payload: SaveTokenPayload,
+    /** Caller-provided ID — use the same UUID as the optimistic UI row to avoid
+     *  a placeholder→localId swap and the associated receipt-miss race. */
+    callerProvidedId?: string,
   ): Promise<SubmitResult> => {
     // 1. Append to IndexedDB — always, regardless of connectivity.
-    const queued = await queueSubmission(payload)
+    const queued = await queueSubmission(payload, callerProvidedId)
 
     const pending = await getPendingSubmissions(sessionId)
     // Derive queued_event_ids from pending RLC events (spec §13.3) — event IDs, not submission IDs.
@@ -193,12 +197,13 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     }
 
     // 3. Trigger background flush instead of direct POST to avoid race with interval flusher.
-    // Defer one tick so the caller can swap placeholderId → localId before any sync receipt arrives.
-    setTimeout(() => void flushPending(), 0)
+    void flushPending()
     
     // Return immediately with queued status — the flusher will handle sync.
     return { localId: queued.id, result: null, status: 'queued' }
   }, [sessionId, participantId, isOnline, flushPending])
 
-  return { submit, syncState, pendingCount, syncedSubmissions, flushPending }
+  const cleanupSession = useCallback(() => cleanupSyncedRecords(sessionId), [sessionId])
+
+  return { submit, syncState, pendingCount, syncedSubmissions, flushPending, cleanupSession }
 }
