@@ -171,15 +171,14 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     const queued = await queueSubmission(payload)
 
     const pending = await getPendingSubmissions(sessionId)
-    await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
-      queued_event_ids: [],
-      queue_depth:      pending.length,
-    })
+    // Derive queued_event_ids from pending RLC events (spec §13.3) — event IDs, not submission IDs.
+    // Scope to this participant to avoid cross-participant event attribution.
     const pendingEvents = await getPendingEvents(sessionId)
-    const queuedEventIds = pendingEvents.map((item) => item.id)
-
+    const participantPendingEventIds = pendingEvents
+      .filter((e) => e.participant_id === participantId)
+      .map((e) => e.event_id)
     await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
-      queued_event_ids: queuedEventIds,
+      queued_event_ids: participantPendingEventIds,
       queue_depth:      pending.length,
     })
 
