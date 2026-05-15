@@ -100,45 +100,51 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       }
 
       const pending = await getPendingSubmissions(sessionId)
-      if (pending.length === 0) {
-        setPendingCount(0)
-        setSyncState('online')
-        await flushPendingEvents()
-        return
-      }
+      setPendingCount(pending.length)
 
-      setSyncState('syncing')
-      const receipts: SyncedSubmissionReceipt[] = []
+      if (pending.length > 0) {
+        setSyncState('syncing')
+        const receipts: SyncedSubmissionReceipt[] = []
 
-      for (const item of pending) {
-        try {
-          const result = await api.token.save(item.payload)
-          await markSubmissionSynced(item.id, result)
-          receipts.push({ localId: item.id, result })
-          await queueEvent(RlcEventType.RLC_SYNC_COMPLETE, sessionId, participantId, {
-            local_id:  item.id,
-            token_id:  result.token_id,
-          })
-        } catch {
-          await markSubmissionFailed(item.id)
-          await queueEvent(RlcEventType.RLC_SYNC_FAILED, sessionId, participantId, {
-            local_id: item.id,
-            reason:   'network_error',
-          })
+        for (const item of pending) {
+          try {
+            const result = await api.token.save(item.payload)
+            await markSubmissionSynced(item.id, result)
+            receipts.push({ localId: item.id, result })
+            // Emit RLC_SUBMISSION_SAVED at server confirmation (spec §13.4).
+            // Use item.participant_id to correctly scope events per participant.
+            await queueEvent(RlcEventType.RLC_SUBMISSION_SAVED, sessionId, item.participant_id, {
+              token_id:        result.token_id,
+              spelling_signal: result.spelling_signal,
+            })
+            await queueEvent(RlcEventType.RLC_SYNC_COMPLETE, sessionId, item.participant_id, {
+              local_id:  item.id,
+              token_id:  result.token_id,
+            })
+          } catch {
+            await markSubmissionFailed(item.id)
+            await queueEvent(RlcEventType.RLC_SYNC_FAILED, sessionId, item.participant_id, {
+              local_id: item.id,
+              reason:   'network_error',
+            })
+          }
+        }
+
+        if (receipts.length > 0) {
+          setSyncedSubmissions(receipts)
         }
       }
 
-      if (receipts.length > 0) {
-        setSyncedSubmissions(receipts)
-      }
-
-      const remaining = await refreshPendingCount()
-      setSyncState(remaining === 0 ? 'online' : 'syncing')
+      // Keep 'syncing' while events are being flushed; only set 'online' when both queues are empty.
+      const remainingSubs = await refreshPendingCount()
+      setSyncState('syncing')
       await flushPendingEvents()
+      const remainingEvents = await getPendingEvents(sessionId)
+      setSyncState(remainingSubs === 0 && remainingEvents.length === 0 ? 'online' : 'syncing')
     } finally {
       isFlushingRef.current = false
     }
-  }, [sessionId, participantId, isOnline, refreshPendingCount, flushPendingEvents])
+  }, [sessionId, isOnline, refreshPendingCount, flushPendingEvents])
 
   // ── Re-flush when the device comes back online ────────────────────────────
 

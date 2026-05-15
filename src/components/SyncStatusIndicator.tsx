@@ -84,18 +84,6 @@ export function SyncStatusIndicator({
           {pendingCount}
         </span>
       )}
-
-      {/* Inline keyframes for the syncing animation */}
-      {isSyncing && (
-        <style>{`
-          @media (prefers-reduced-motion: no-preference) {
-            @keyframes spx-sync-pulse {
-              0%, 100% { opacity: 1; transform: translateY(0); }
-              50%       { opacity: 0.5; transform: translateY(-2px); }
-            }
-          }
-        `}</style>
-      )}
     </div>
   )
 }

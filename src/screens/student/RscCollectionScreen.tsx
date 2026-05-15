@@ -42,7 +42,7 @@ export function RscCollectionScreen({
   const hasCollectionEndedRef = useRef(false)
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
-  const { submit, syncState, pendingCount } = useSubmissionQueue(session_id, participant_id)
+  const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
 
   useEffect(() => {
     if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
@@ -59,6 +59,27 @@ export function RscCollectionScreen({
     () => GRAMMAR_DOMAINS.find((domain) => !completedDomains.has(domain.index)) ?? null,
     [completedDomains],
   )
+
+  // Drive onSubmitted and the result banner from server-confirmation receipts (spec §12.5).
+  useEffect(() => {
+    if (syncedSubmissions.length === 0) return
+    let latestResult = null as (typeof syncedSubmissions[0]['result']) | null
+    for (const receipt of syncedSubmissions) {
+      onSubmitted(receipt.result)
+      latestResult = receipt.result
+      emitRuntimeEvent('WORD_SUBMITTED', {
+        sessionId:     session_id,
+        participantId: participant_id,
+        mode:          'rsc',
+        screen:        'student_rsc_collection',
+        metadata: {
+          tokenId:        receipt.result.token_id,
+          hasTranslation: needsTranslation,
+        },
+      })
+    }
+    if (latestResult) setLastResult(latestResult)
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id, needsTranslation])
 
   const canProceedFromSentence = sentence.trim().length > 0
   const canProceedFromTranslation = translation.trim().length > 0
@@ -114,7 +135,7 @@ export function RscCollectionScreen({
         })
       }
 
-      const { result } = await submit({
+      await submit({
         session_id,
         participant_id,
         text:            sentenceValue,
@@ -123,34 +144,8 @@ export function RscCollectionScreen({
         grammar_domain:  currentDomain.slug,
       })
 
-      if (result) {
-        setLastResult(result)
-        onSubmitted(result)
-
-        // Emit save confirmation event.
-        emitRlcEvent(RlcEventType.RLC_SUBMISSION_SAVED, session_id, participant_id, {
-          token_id:        result.token_id,
-          spelling_signal: result.spelling_signal,
-        })
-
-        emitRuntimeEvent('WORD_SUBMITTED', {
-          sessionId:     session_id,
-          participantId: participant_id,
-          mode:          'rsc',
-          screen:        'student_rsc_collection',
-          metadata: {
-            tokenId:       result.token_id,
-            grammarDomain: currentDomain.slug,
-            hasTranslation: needsTranslation,
-          },
-        })
-      } else {
-        // Submission is queued offline — advance to next domain anyway
-        // so the student can keep working.
-        setLastResult(null)
-      }
-
       // Advance domain regardless of sync state (offline-first UX).
+      // onSubmitted / lastResult are driven by the syncedSubmissions effect when the server confirms.
       const nextCompleted = new Set(completedDomains)
       nextCompleted.add(currentDomain.index)
       setCompletedDomains(nextCompleted)

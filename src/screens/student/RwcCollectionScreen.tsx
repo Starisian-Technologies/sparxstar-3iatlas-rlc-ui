@@ -103,7 +103,28 @@ export function RwcCollectionScreen({
         spelling_signal: result.spelling_signal,
       }
     }))
-  }, [syncedSubmissions])
+
+    // Notify parent and emit runtime events for newly confirmed submissions.
+    // Guard: skip words already marked synced to prevent duplicate calls on re-render.
+    let latestResult = null as (typeof syncedSubmissions[0]['result']) | null
+    for (const receipt of syncedSubmissions) {
+      const word = submittedWords.find((w) => w.id === receipt.localId)
+      if (word?.syncStatus === 'synced') continue
+      onSubmitted(receipt.result)
+      latestResult = receipt.result
+      emitRuntimeEvent('WORD_SUBMITTED', {
+        sessionId:     session_id,
+        participantId: participant_id,
+        mode:          'rwc',
+        screen:        'student_rwc_collection',
+        metadata: {
+          tokenId:        receipt.result.token_id,
+          hasTranslation: Boolean(word?.translation),
+        },
+      })
+    }
+    if (latestResult) setLastResult(latestResult)
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id, submittedWords])
 
   const myLeaderboard = useMemo(
     () => session?.leaderboard.find((entry) => entry.participant_id === participant_id || entry.display_name === display_name),
@@ -177,7 +198,7 @@ export function RwcCollectionScreen({
     }
 
     try {
-      const { localId, result } = await submit({
+      const { localId } = await submit({
         session_id,
         participant_id,
         text:            wordValue,
@@ -185,47 +206,10 @@ export function RwcCollectionScreen({
         collection_mode: 'rwc',
       })
 
-      // 3. Update UI with stable queue ID.
+      // 3. Update UI with stable queue ID (server confirmation handled by syncedSubmissions effect).
       setSubmittedWords((prev) => prev.map((item) =>
         item.id === placeholderId ? { ...item, id: localId } : item,
       ))
-
-      if (result) {
-        // 4a. Server confirmed — update with server data.
-        setSubmittedWords((prev) => prev.map((item) =>
-          item.id === localId
-            ? {
-                ...item,
-                token_id:        result.token_id,
-                xp_awarded:      result.xp_awarded,
-                syncStatus:      'synced',
-                spelling_signal: result.spelling_signal,
-              }
-            : item,
-        ))
-        setLastResult(result)
-        onSubmitted(result)
-
-        // Emit save confirmation event.
-        emitRlcEvent(RlcEventType.RLC_SUBMISSION_SAVED, session_id, participant_id, {
-          token_id:        result.token_id,
-          spelling_signal: result.spelling_signal,
-        })
-
-        emitRuntimeEvent('WORD_SUBMITTED', {
-          sessionId:     session_id,
-          participantId: participant_id,
-          mode:          'rwc',
-          screen:        'student_rwc_collection',
-          metadata: {
-            tokenId:        result.token_id,
-            hasTranslation,
-          },
-        })
-      } else {
-        // 4b. Submission is queued (offline or will be flushed later).
-        setLastResult(null)
-      }
     } catch {
       setError('Could not submit. Try again.')
     } finally {
