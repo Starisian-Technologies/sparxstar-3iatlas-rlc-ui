@@ -48,6 +48,10 @@ export function RwcCollectionScreen({
   const roundRef = useRef<number | null>(null)
   const roundEndedRef = useRef(false)
   const sessionEndedRef = useRef(false)
+  // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
+  const processedReceiptsRef = useRef<Set<string>>(new Set())
+  // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event.
+  const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean }>>(new Map())
 
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
@@ -105,11 +109,12 @@ export function RwcCollectionScreen({
     }))
 
     // Notify parent and emit runtime events for newly confirmed submissions.
-    // Guard: skip words already marked synced to prevent duplicate calls on re-render.
-    let latestResult = null as (typeof syncedSubmissions[0]['result']) | null
+    // processedReceiptsRef prevents duplicate calls across re-renders.
+    let latestResult: SaveTokenResponse | null = null
     for (const receipt of syncedSubmissions) {
-      const word = submittedWords.find((w) => w.id === receipt.localId)
-      if (word?.syncStatus === 'synced') continue
+      if (processedReceiptsRef.current.has(receipt.localId)) continue
+      processedReceiptsRef.current.add(receipt.localId)
+      const meta = submissionMetaRef.current.get(receipt.localId)
       onSubmitted(receipt.result)
       latestResult = receipt.result
       emitRuntimeEvent('WORD_SUBMITTED', {
@@ -119,12 +124,12 @@ export function RwcCollectionScreen({
         screen:        'student_rwc_collection',
         metadata: {
           tokenId:        receipt.result.token_id,
-          hasTranslation: Boolean(word?.translation),
+          hasTranslation: meta?.hasTranslation ?? false,
         },
       })
     }
     if (latestResult) setLastResult(latestResult)
-  }, [syncedSubmissions, onSubmitted, session_id, participant_id, submittedWords])
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id])
 
   const myLeaderboard = useMemo(
     () => session?.leaderboard.find((entry) => entry.participant_id === participant_id || entry.display_name === display_name),
@@ -210,6 +215,8 @@ export function RwcCollectionScreen({
       setSubmittedWords((prev) => prev.map((item) =>
         item.id === placeholderId ? { ...item, id: localId } : item,
       ))
+      // Store metadata for WORD_SUBMITTED event (used when the sync receipt arrives).
+      submissionMetaRef.current.set(localId, { hasTranslation })
     } catch {
       setError('Could not submit. Try again.')
     } finally {

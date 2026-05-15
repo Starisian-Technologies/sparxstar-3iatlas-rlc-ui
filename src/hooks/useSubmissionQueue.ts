@@ -136,8 +136,8 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       }
 
       // Keep 'syncing' while events are being flushed; only set 'online' when both queues are empty.
+      // participantId is intentionally omitted from deps — it is stable for the lifetime of a session.
       const remainingSubs = await refreshPendingCount()
-      setSyncState('syncing')
       await flushPendingEvents()
       const remainingEvents = await getPendingEvents(sessionId)
       setSyncState(remainingSubs === 0 && remainingEvents.length === 0 ? 'online' : 'syncing')

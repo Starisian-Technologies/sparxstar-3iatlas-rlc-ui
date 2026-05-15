@@ -63,7 +63,7 @@ export function RscCollectionScreen({
   // Drive onSubmitted and the result banner from server-confirmation receipts (spec §12.5).
   useEffect(() => {
     if (syncedSubmissions.length === 0) return
-    let latestResult = null as (typeof syncedSubmissions[0]['result']) | null
+    let latestResult: SaveTokenResponse | null = null
     for (const receipt of syncedSubmissions) {
       onSubmitted(receipt.result)
       latestResult = receipt.result
