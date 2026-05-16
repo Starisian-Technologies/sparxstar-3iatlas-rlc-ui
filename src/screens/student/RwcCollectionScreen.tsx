@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { SpellingSignalDot } from '@/components/SpellingSignalDot'
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
-import { emitRuntimeEvent } from '@/runtime/events'
+import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
+import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
@@ -39,12 +41,17 @@ export function RwcCollectionScreen({
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
+  const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
   const wordInputRef = useRef<HTMLInputElement>(null)
   const translationInputRef = useRef<HTMLInputElement>(null)
   const lastFocusedInputRef = useRef<'word' | 'translation'>('word')
   const roundRef = useRef<number | null>(null)
   const roundEndedRef = useRef(false)
   const sessionEndedRef = useRef(false)
+  // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
+  const processedReceiptsRef = useRef<Set<string>>(new Set())
+  // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event.
+  const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean }>>(new Map())
 
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
@@ -86,6 +93,46 @@ export function RwcCollectionScreen({
     roundEndedRef.current = false
   }, [display_name, onRoundComplete, participant_id, session, submittedWords, totalRounds])
 
+  useEffect(() => {
+    if (syncedSubmissions.length === 0) return
+    const myReceipts = syncedSubmissions.filter((r) => r.participantId === participant_id)
+    if (myReceipts.length === 0) return
+    const synced = new Map(myReceipts.map((receipt) => [receipt.localId, receipt.result]))
+    setSubmittedWords((prev) => prev.map((item) => {
+      const result = synced.get(item.id)
+      if (!result) return item
+      return {
+        ...item,
+        syncStatus:      'synced',
+        token_id:        result.token_id,
+        xp_awarded:      result.xp_awarded,
+        spelling_signal: result.spelling_signal,
+      }
+    }))
+
+    // Notify parent and emit runtime events for newly confirmed submissions.
+    // processedReceiptsRef prevents duplicate calls across re-renders.
+    let latestResult: SaveTokenResponse | null = null
+    for (const receipt of myReceipts) {
+      if (processedReceiptsRef.current.has(receipt.localId)) continue
+      processedReceiptsRef.current.add(receipt.localId)
+      const meta = submissionMetaRef.current.get(receipt.localId)
+      onSubmitted(receipt.result)
+      latestResult = receipt.result
+      emitRuntimeEvent('WORD_SUBMITTED', {
+        sessionId:     session_id,
+        participantId: participant_id,
+        mode:          'rwc',
+        screen:        'student_rwc_collection',
+        metadata: {
+          tokenId:        receipt.result.token_id,
+          hasTranslation: meta?.hasTranslation ?? false,
+        },
+      })
+    }
+    if (latestResult) setLastResult(latestResult)
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id])
+
   const myLeaderboard = useMemo(
     () => session?.leaderboard.find((entry) => entry.participant_id === participant_id || entry.display_name === display_name),
     [display_name, participant_id, session?.leaderboard],
@@ -120,35 +167,55 @@ export function RwcCollectionScreen({
     if (!canSubmit) return
     setLoading(true)
     setError(null)
+
+    const hasTranslation = needsTranslation && trimmedTranslation.length > 0
+
+    // Capture values before clearing fields.
+    const wordValue        = trimmedWord
+    const translationValue = hasTranslation ? trimmedTranslation : undefined
+
+    // Clear fields immediately so the student can start the next word.
+    setWord('')
+    setTranslation('')
+
+    // Generate the queue ID upfront and use it directly — no placeholder swap needed.
+    const localId = crypto.randomUUID()
+    const tempItem: SubmittedWord = {
+      id:          localId,
+      word:        wordValue,
+      translation: translationValue,
+      xp_awarded:  0,
+      syncStatus:  'queued',
+    }
+
+    // 1. Show submission immediately (offline-first UX).
+    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
+
+    // 2. Emit RLC_WORD_CAPTURED immediately (spec §13.4: events at moment of action).
+    emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
+      text:               wordValue,
+      language,
+      ...(session?.semantic_domain_id ? { semantic_domain_id: session.semantic_domain_id } : {}),
+    })
+    if (hasTranslation && translationValue) {
+      emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
+        translation:     translationValue,
+        language_target: 'en',
+      })
+    }
+
     try {
-      const result = await api.token.save({
+      // 3. Queue submission with the same ID — receipt will match the already-inserted row.
+      await submit({
         session_id,
         participant_id,
-        text: trimmedWord,
-        translation: needsTranslation && trimmedTranslation.length > 0 ? trimmedTranslation : undefined,
+        text:            wordValue,
+        translation:     translationValue,
         collection_mode: 'rwc',
-      })
-      emitRuntimeEvent('WORD_SUBMITTED', {
-        sessionId: session_id,
-        participantId: participant_id,
-        mode: 'rwc',
-        screen: 'student_rwc_collection',
-        metadata: {
-          tokenId: result.token_id,
-          hasTranslation: needsTranslation && trimmedTranslation.length > 0,
-        },
-      })
-      setLastResult(result)
-      onSubmitted(result)
-      const item: SubmittedWord = {
-        id: result.token_id,
-        word: trimmedWord,
-        translation: needsTranslation && trimmedTranslation.length > 0 ? trimmedTranslation : undefined,
-        xp_awarded: result.xp_awarded,
-      }
-      setSubmittedWords((prev) => [item, ...prev].slice(0, 20))
-      setWord('')
-      setTranslation('')
+      }, localId)
+
+      // Store metadata for WORD_SUBMITTED event (used when the sync receipt arrives).
+      submissionMetaRef.current.set(localId, { hasTranslation })
     } catch {
       setError('Could not submit. Try again.')
     } finally {
@@ -163,6 +230,7 @@ export function RwcCollectionScreen({
         <div style={chipStyle}>🕘 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</div>
         <div style={chipStyle}>👥 {session?.participant_count ?? 0}</div>
         <div style={chipStyle}>⭐ {myLeaderboard?.xp ?? 0}</div>
+        <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} />
       </header>
 
       <ContinuityBanner
@@ -221,10 +289,16 @@ export function RwcCollectionScreen({
           {submittedWords.map((entry) => (
             <div key={entry.id} style={rowStyle}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{entry.word}</div>
+                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {entry.word}
+                  <SpellingSignalDot signal={entry.spelling_signal} />
+                </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{entry.translation ?? 'No translation'}</div>
               </div>
-            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
+              {entry.syncStatus === 'queued'
+                ? <span style={queuedBadgeStyle}>queued</span>
+                : <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
+              }
             </div>
           ))}
           {submittedWords.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No words yet.</div>}
@@ -311,7 +385,7 @@ const wrapStyle: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '44px 1fr 1fr 1fr',
+  gridTemplateColumns: '44px 1fr 1fr 1fr 44px',
   gap: 8,
 }
 
@@ -433,4 +507,15 @@ const errorStyle: React.CSSProperties = {
   alignItems: 'center',
   padding: '0 12px',
   fontSize: 14,
+}
+
+const queuedBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: '#F59E0B',
+  background: 'rgba(245,158,11,0.15)',
+  border: '1px solid rgba(245,158,11,0.4)',
+  borderRadius: 999,
+  padding: '2px 8px',
+  whiteSpace: 'nowrap',
 }

@@ -3,6 +3,7 @@ import { api } from '@/api/client'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import type { QcToken } from '@/types'
 
@@ -81,7 +82,13 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
           {liveFeed.map((token) => (
             <div key={token.token_id} style={rowStyle}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{token.text}</div>
+                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {token.text}
+                  <SpellingSignalDot signal={token.spelling_signal} />
+                  {token.speaker_affirmed && (
+                    <span title="Speaker affirmed — recorded and QC vote passed" aria-label="Speaker affirmed" style={{ fontSize: 12 }}>🎙✓</span>
+                  )}
+                </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
               </div>
               <span style={{ color: 'var(--gold)', fontWeight: 700 }}>+{token.xp_awarded ?? 10} ⭐</span>

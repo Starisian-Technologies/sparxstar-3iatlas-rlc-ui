@@ -87,6 +87,8 @@ export interface QcToken {
   submitter_id: string
   collection_mode?: CollectionMode
   grammar_domain?: string
+  /** True when submission has audio AND passed the QC vote — spec §8.2 */
+  speaker_affirmed?: boolean
 }
 
 export interface VotePayload {
@@ -186,6 +188,12 @@ export interface SubmittedWord {
   word: string
   translation?: string
   xp_awarded: number
+  /** Queue sync state — 'queued' until server confirms, then 'synced' */
+  syncStatus: 'queued' | 'synced'
+  /** Set when the server responds with the canonical token ID */
+  token_id?: string
+  /** Confidence signal from the server spelling check */
+  spelling_signal?: SpellingSignal
 }
 
 export interface RoundCompleteSummary {

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '@/api/client'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
-import { emitRuntimeEvent } from '@/runtime/events'
+import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
+import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import { GRAMMAR_DOMAINS } from '@/types'
 import type { CollectionDepth, SaveTokenResponse } from '@/types'
 
@@ -39,8 +40,11 @@ export function RscCollectionScreen({
   const sentenceRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
   const hasCollectionEndedRef = useRef(false)
+  // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
+  const processedReceiptsRef = useRef<Set<string>>(new Set())
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
+  const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
 
   useEffect(() => {
     if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
@@ -57,6 +61,33 @@ export function RscCollectionScreen({
     () => GRAMMAR_DOMAINS.find((domain) => !completedDomains.has(domain.index)) ?? null,
     [completedDomains],
   )
+
+  // Drive onSubmitted and the result banner from server-confirmation receipts (spec §12.5).
+  // processedReceiptsRef prevents duplicate onSubmitted calls if flushPending re-runs and
+  // setSyncedSubmissions is called with a new array reference containing the same receipts.
+  useEffect(() => {
+    if (syncedSubmissions.length === 0) return
+    const myReceipts = syncedSubmissions.filter((r) => r.participantId === participant_id)
+    if (myReceipts.length === 0) return
+    let latestResult: SaveTokenResponse | null = null
+    for (const receipt of myReceipts) {
+      if (processedReceiptsRef.current.has(receipt.localId)) continue
+      processedReceiptsRef.current.add(receipt.localId)
+      onSubmitted(receipt.result)
+      latestResult = receipt.result
+      emitRuntimeEvent('WORD_SUBMITTED', {
+        sessionId:     session_id,
+        participantId: participant_id,
+        mode:          'rsc',
+        screen:        'student_rsc_collection',
+        metadata: {
+          tokenId:        receipt.result.token_id,
+          hasTranslation: needsTranslation,
+        },
+      })
+    }
+    if (latestResult) setLastResult(latestResult)
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id, needsTranslation])
 
   const canProceedFromSentence = sentence.trim().length > 0
   const canProceedFromTranslation = translation.trim().length > 0
@@ -84,37 +115,45 @@ export function RscCollectionScreen({
     try {
       if (needsRecording && step === 'recording') {
         emitRuntimeEvent('AUDIO_CAPTURED', {
-          sessionId: session_id,
+          sessionId:     session_id,
           participantId: participant_id,
-          mode: 'rsc',
-          screen: 'student_rsc_collection',
+          mode:          'rsc',
+          screen:        'student_rsc_collection',
           metadata: {
             grammarDomain: currentDomain.slug,
-            placeholder: true,
+            placeholder:   true,
           },
         })
       }
-      const result = await api.token.save({
+
+      const sentenceValue = sentence.trim()
+      const translationValue = needsTranslation ? translation.trim() : undefined
+
+      // Emit RLC_SENTENCE_CAPTURED immediately (spec §13.4: events at moment of action).
+      emitRlcEvent(RlcEventType.RLC_SENTENCE_CAPTURED, session_id, participant_id, {
+        text:               sentenceValue,
+        language,
+        grammar_domain:     currentDomain.slug,
+        grammar_domain_idx: currentDomain.index,
+      })
+      if (translationValue) {
+        emitRlcEvent(RlcEventType.RLC_TRANSLATION_ADDED, session_id, participant_id, {
+          translation:     translationValue,
+          language_target: 'en',
+        })
+      }
+
+      await submit({
         session_id,
         participant_id,
-        text: sentence.trim(),
-        translation: needsTranslation ? translation.trim() : undefined,
+        text:            sentenceValue,
+        translation:     translationValue,
         collection_mode: 'rsc',
-        grammar_domain: currentDomain.slug,
+        grammar_domain:  currentDomain.slug,
       })
-      emitRuntimeEvent('WORD_SUBMITTED', {
-        sessionId: session_id,
-        participantId: participant_id,
-        mode: 'rsc',
-        screen: 'student_rsc_collection',
-        metadata: {
-          tokenId: result.token_id,
-          grammarDomain: currentDomain.slug,
-          hasTranslation: needsTranslation,
-        },
-      })
-      setLastResult(result)
-      onSubmitted(result)
+
+      // Advance domain regardless of sync state (offline-first UX).
+      // onSubmitted / lastResult are driven by the syncedSubmissions effect when the server confirms.
       const nextCompleted = new Set(completedDomains)
       nextCompleted.add(currentDomain.index)
       setCompletedDomains(nextCompleted)
@@ -143,8 +182,11 @@ export function RscCollectionScreen({
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: '#f4f4f4' }}>
       <div style={{ background: '#1B3A6B', padding: '12px 16px', color: '#fff' }}>
-        <div style={{ fontSize: 14, opacity: 0.85 }}>{completedCount} of {totalDomains} sentences complete</div>
-        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ fontSize: 14, opacity: 0.85 }}>{completedCount} of {totalDomains} sentences complete</div>
+          <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }} />
+        </div>
+        <div style={{ marginTop: 4, display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
           {GRAMMAR_DOMAINS.map((domain) => {
             const done = completedDomains.has(domain.index)
             const active = domain.index === currentDomain.index

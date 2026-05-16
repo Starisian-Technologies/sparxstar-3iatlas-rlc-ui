@@ -19,6 +19,7 @@ import type {
   AwardsResponse,
   Session,
 } from '@/types'
+import type { RlcEvent } from '@/runtime/rlcEventTypes'
 
 // Base URL — injected by WordPress or falls back to Vite proxy
 const BASE =
@@ -110,6 +111,19 @@ export const api = {
       return request(`/token/${token_id}/correct`, {
         method: 'POST',
         body: JSON.stringify({ corrected_text }),
+      })
+    },
+  },
+
+  // ─── Events batch ───────────────────────────────────────────────────────────
+  // POST /events/batch — flush queued runtime events (spec §7.4).
+  // Events are append-only; the server never modifies or deletes them.
+
+  events: {
+    batchFlush(events: RlcEvent[]): Promise<{ accepted: number; failed: number }> {
+      return request('/events/batch', {
+        method: 'POST',
+        body: JSON.stringify({ events }),
       })
     },
   },
