@@ -7,9 +7,12 @@
  *   The UI reflects queue state, not network state.
  *
  * Schema:
- *   DB: spx-rlc-queue  v1
+ *   DB: spx-rlc-queue  v2
  *   Store: submissions  — QueuedSubmission objects (SaveTokenPayload + queue metadata)
  *   Store: rlc_events   — QueuedEvent objects (RlcEvent + status field for flush tracking)
+ *
+ * v1 → v2 migration: adds composite index 'session_participant' on [session_id, participant_id]
+ * to rlc_events. No data migration needed — existing rows are re-indexed automatically.
  *
  * Note: Both stores persist queue metadata alongside the payload/event.
  *       The `status` field is mutated via markSubmissionSynced/markEventsSynced.
@@ -42,7 +45,7 @@ export type QueuedEvent = RlcEvent & { status: QueuedStatus }
 // ── IDB constants ─────────────────────────────────────────────────────────────
 
 const DB_NAME             = 'spx-rlc-queue'
-const DB_VERSION          = 1
+const DB_VERSION          = 2
 const STORE_SUBMISSIONS   = 'submissions'
 const STORE_EVENTS        = 'rlc_events'
 
@@ -56,18 +59,27 @@ function getDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
 
     req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result
+      const db         = (e.target as IDBOpenDBRequest).result
+      const tx         = (e.target as IDBOpenDBRequest).transaction!
+      const oldVersion = e.oldVersion
 
-      if (!db.objectStoreNames.contains(STORE_SUBMISSIONS)) {
-        const s = db.createObjectStore(STORE_SUBMISSIONS, { keyPath: 'id' })
-        s.createIndex('status',     'status',     { unique: false })
-        s.createIndex('session_id', 'session_id', { unique: false })
+      if (oldVersion < 1) {
+        // Fresh install — create both stores with all indexes.
+        const subStore = db.createObjectStore(STORE_SUBMISSIONS, { keyPath: 'id' })
+        subStore.createIndex('status',     'status',     { unique: false })
+        subStore.createIndex('session_id', 'session_id', { unique: false })
+
+        const evtStore = db.createObjectStore(STORE_EVENTS, { keyPath: 'event_id' })
+        evtStore.createIndex('status',              'status',                        { unique: false })
+        evtStore.createIndex('session_id',          'session_id',                    { unique: false })
+        evtStore.createIndex('session_participant', ['session_id', 'participant_id'], { unique: false })
       }
 
-      if (!db.objectStoreNames.contains(STORE_EVENTS)) {
-        const s = db.createObjectStore(STORE_EVENTS, { keyPath: 'event_id' })
-        s.createIndex('status',     'status',     { unique: false })
-        s.createIndex('session_id', 'session_id', { unique: false })
+      if (oldVersion === 1) {
+        // v1 → v2: add composite index to rlc_events. No data migration needed —
+        // IDB re-indexes existing records automatically during the version-change tx.
+        const evtStore = tx.objectStore(STORE_EVENTS)
+        evtStore.createIndex('session_participant', ['session_id', 'participant_id'], { unique: false })
       }
     }
 
@@ -90,13 +102,15 @@ async function deriveMaxSequenceFromDb(
   sessionId: string,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
-    const tx  = db.transaction(STORE_EVENTS, 'readonly')
-    const req = tx.objectStore(STORE_EVENTS).index('session_id').getAll(sessionId)
+    const tx    = db.transaction(STORE_EVENTS, 'readonly')
+    // Use the composite index so only this participant's events are loaded — not the full session.
+    const range = IDBKeyRange.only([sessionId, participantId])
+    const req   = tx.objectStore(STORE_EVENTS)
+                    .index('session_participant')
+                    .getAll(range)
     req.onsuccess = () => {
       const all = req.result as QueuedEvent[]
-      const max = all
-        .filter((event) => event.participant_id === participantId)
-        .reduce((highest, event) => Math.max(highest, event.sequence), 0)
+      const max = all.reduce((highest, event) => Math.max(highest, event.sequence), 0)
       resolve(max)
     }
     req.onerror = () => reject(req.error)
