@@ -105,9 +105,14 @@ export function getSequenceStorageKey(sessionId: string, participantId: string):
   return `${EVENT_SEQUENCE_STORAGE_PREFIX}:${getSequenceMapKey(sessionId, participantId)}`
 }
 
-export function readPersistedSequence(participantId: string, sessionId: string): number | null {
+export function readPersistedSequence(sessionId: string, participantId: string): number | null {
   if (typeof localStorage === 'undefined') return null
-  const raw = localStorage.getItem(getSequenceStorageKey(sessionId, participantId))
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(getSequenceStorageKey(sessionId, participantId))
+  } catch {
+    return null
+  }
   if (!raw) return null
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isFinite(parsed) || parsed < 1) return null
@@ -115,12 +120,16 @@ export function readPersistedSequence(participantId: string, sessionId: string):
 }
 
 export function writePersistedSequence(
-  participantId: string,
   sessionId: string,
+  participantId: string,
   sequence: number,
 ): void {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(getSequenceStorageKey(sessionId, participantId), String(sequence))
+  try {
+    localStorage.setItem(getSequenceStorageKey(sessionId, participantId), String(sequence))
+  } catch {
+    // Ignore storage write errors and continue with in-memory sequence.
+  }
 }
 
 async function deriveMaxSequenceFromDb(
@@ -151,13 +160,13 @@ async function nextSequence(
 ): Promise<number> {
   const key = getSequenceMapKey(sessionId, participantId)
   if (!_seq.has(key)) {
-    const persisted = readPersistedSequence(participantId, sessionId)
+    const persisted = readPersistedSequence(sessionId, participantId)
     const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
     _seq.set(key, Math.max(persisted ?? 0, maxStored))
   }
   const next = (_seq.get(key) ?? 0) + 1
   _seq.set(key, next)
-  writePersistedSequence(participantId, sessionId, next)
+  writePersistedSequence(sessionId, participantId, next)
   return next
 }
 

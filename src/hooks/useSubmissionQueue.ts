@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/api/client'
+import type { EventsBatchFlushResponse } from '@/api/client'
 import {
   queueSubmission,
   markSubmissionSynced,
@@ -33,12 +34,6 @@ import type { QueuedSubmission } from '@/runtime/offlineQueue'
 
 export type SyncState = 'offline' | 'syncing' | 'synced'
 
-type BatchFlushResponse = {
-  accepted: number
-  failed: number
-}
-const ACCEPTED_EVENT_IDS_FIELD = 'accepted_event_ids'
-
 /**
  * Determine which queued event IDs the server confirmed as accepted.
  *
@@ -47,11 +42,11 @@ const ACCEPTED_EVENT_IDS_FIELD = 'accepted_event_ids'
  * Partial acceptance always filters against the queued set to avoid syncing unknown IDs.
  */
 function getAcceptedEventIds(
-  result: BatchFlushResponse,
+  result: EventsBatchFlushResponse,
   queuedEventIds: string[],
-  acceptedEventIdsRaw?: unknown,
 ): string[] {
   if (queuedEventIds.length === 0) return []
+  const acceptedEventIdsRaw = result.accepted_event_ids
   if (Array.isArray(acceptedEventIdsRaw)) {
     if (acceptedEventIdsRaw.length === 0) return []
     if (!acceptedEventIdsRaw.every((id) => typeof id === 'string')) {
@@ -119,8 +114,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
 
       try {
         const result = await api.events.batchFlush(eventsPayload)
-        const acceptedEventIdsRaw = (result as Record<string, unknown>)[ACCEPTED_EVENT_IDS_FIELD]
-        const acceptedEventIds = getAcceptedEventIds(result, eventIds, acceptedEventIdsRaw)
+        const acceptedEventIds = getAcceptedEventIds(result, eventIds)
 
         if (acceptedEventIds.length > 0) {
           await markEventsSynced(acceptedEventIds)
