@@ -38,6 +38,13 @@ type BatchFlushResponse = {
 }
 const ACCEPTED_EVENT_IDS_FIELD = 'accepted_event_ids'
 
+/**
+ * Determine which queued event IDs the server confirmed as accepted.
+ *
+ * Preferred path: server returns `accepted_event_ids` (authoritative IDs).
+ * Fallback path: if IDs are absent but accepted===queued and failed===0, treat whole batch as accepted.
+ * Partial acceptance always filters against the queued set to avoid syncing unknown IDs.
+ */
 function getAcceptedEventIds(
   result: BatchFlushResponse,
   queuedEventIds: string[],

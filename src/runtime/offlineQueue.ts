@@ -97,12 +97,12 @@ function getDb(): Promise<IDBDatabase> {
 const _seq = new Map<string, number>()
 const EVENT_SEQUENCE_STORAGE_PREFIX = 'spx-rlc-event-sequence'
 
-function getSequenceKey(sessionId: string, participantId: string): string {
+function getSequenceMapKey(sessionId: string, participantId: string): string {
   return JSON.stringify([sessionId, participantId])
 }
 
 export function getSequenceStorageKey(sessionId: string, participantId: string): string {
-  return `${EVENT_SEQUENCE_STORAGE_PREFIX}:${getSequenceKey(sessionId, participantId)}`
+  return `${EVENT_SEQUENCE_STORAGE_PREFIX}:${getSequenceMapKey(sessionId, participantId)}`
 }
 
 export function readPersistedSequence(participantId: string, sessionId: string): number | null {
@@ -149,7 +149,7 @@ async function nextSequence(
   participantId: string,
   sessionId: string,
 ): Promise<number> {
-  const key = getSequenceKey(sessionId, participantId)
+  const key = getSequenceMapKey(sessionId, participantId)
   if (!_seq.has(key)) {
     const persisted = readPersistedSequence(participantId, sessionId)
     if (persisted !== null) {
