@@ -35,16 +35,19 @@ export type SyncState = 'offline' | 'syncing' | 'synced'
 type BatchFlushResponse = {
   accepted: number
   failed: number
-  accepted_event_ids?: string[]
 }
 
 function getAcceptedEventIds(
   result: BatchFlushResponse,
   queuedEventIds: string[],
+  acceptedEventIdsRaw?: unknown,
 ): string[] {
-  if (Array.isArray(result.accepted_event_ids)) {
+  if (queuedEventIds.length === 0) return []
+  if (Array.isArray(acceptedEventIdsRaw)) {
+    if (acceptedEventIdsRaw.length === 0) return []
+    if (!acceptedEventIdsRaw.every((id) => typeof id === 'string')) return []
     const queuedSet = new Set(queuedEventIds)
-    return result.accepted_event_ids.filter((id): id is string => typeof id === 'string' && queuedSet.has(id))
+    return acceptedEventIdsRaw.filter((id) => queuedSet.has(id))
   }
 
   if (result.accepted === queuedEventIds.length && result.failed === 0) {
@@ -83,6 +86,10 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     return count
   }, [sessionId])
 
+  /**
+   * Flush queued runtime events.
+   * Returns true when the event batch failed (offline, network error, or server reject); false otherwise.
+   */
   const flushPendingEvents = useCallback(async (): Promise<boolean> => {
     if (!isOnline) return true
     if (isFlushingEventsRef.current) return false
@@ -99,8 +106,9 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       })
 
       try {
-        const result = await api.events.batchFlush(eventsPayload) as BatchFlushResponse
-        const acceptedEventIds = getAcceptedEventIds(result, eventIds)
+        const result = await api.events.batchFlush(eventsPayload)
+        const acceptedEventIdsRaw = (result as Record<string, unknown>).accepted_event_ids
+        const acceptedEventIds = getAcceptedEventIds(result, eventIds, acceptedEventIdsRaw)
 
         if (acceptedEventIds.length > 0) {
           await markEventsSynced(acceptedEventIds)
