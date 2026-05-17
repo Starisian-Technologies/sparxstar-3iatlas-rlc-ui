@@ -21,6 +21,12 @@ import type {
 } from '@/types'
 import type { RlcEvent } from '@/runtime/rlcEventTypes'
 
+export type EventsBatchFlushResponse = {
+  accepted: number
+  failed: number
+  accepted_event_ids?: string[]
+}
+
 // Base URL — injected by WordPress or falls back to Vite proxy
 const BASE =
   (window as unknown as Record<string, string>)['RLC_API_BASE'] ??
@@ -120,7 +126,7 @@ export const api = {
   // Events are append-only; the server never modifies or deletes them.
 
   events: {
-    batchFlush(events: RlcEvent[]): Promise<{ accepted: number; failed: number }> {
+    batchFlush(events: RlcEvent[]): Promise<EventsBatchFlushResponse> {
       return request('/events/batch', {
         method: 'POST',
         body: JSON.stringify({ events }),

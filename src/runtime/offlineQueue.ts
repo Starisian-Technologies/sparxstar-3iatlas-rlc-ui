@@ -95,11 +95,47 @@ function getDb(): Promise<IDBDatabase> {
 // Scoped per participant + session, monotonically increasing (spec §13.4).
 
 const _seq = new Map<string, number>()
+const EVENT_SEQUENCE_STORAGE_PREFIX = 'spx-rlc-event-sequence'
+
+function getSequenceMapKey(sessionId: string, participantId: string): string {
+  return `${encodeURIComponent(sessionId)}::${encodeURIComponent(participantId)}`
+}
+
+export function getSequenceStorageKey(sessionId: string, participantId: string): string {
+  return `${EVENT_SEQUENCE_STORAGE_PREFIX}:${getSequenceMapKey(sessionId, participantId)}`
+}
+
+export function readPersistedSequence(sessionId: string, participantId: string): number | null {
+  if (typeof localStorage === 'undefined') return null
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(getSequenceStorageKey(sessionId, participantId))
+  } catch {
+    return null
+  }
+  if (!raw) return null
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed < 1) return null
+  return parsed
+}
+
+export function writePersistedSequence(
+  sessionId: string,
+  participantId: string,
+  sequence: number,
+): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(getSequenceStorageKey(sessionId, participantId), String(sequence))
+  } catch {
+    // Ignore storage write errors and continue with in-memory sequence.
+  }
+}
 
 async function deriveMaxSequenceFromDb(
   db: IDBDatabase,
-  participantId: string,
   sessionId: string,
+  participantId: string,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     const tx    = db.transaction(STORE_EVENTS, 'readonly')
@@ -119,13 +155,14 @@ async function deriveMaxSequenceFromDb(
 
 async function nextSequence(
   db: IDBDatabase,
-  participantId: string,
   sessionId: string,
+  participantId: string,
 ): Promise<number> {
-  const key = `${sessionId}::${participantId}`
+  const key = getSequenceMapKey(sessionId, participantId)
   if (!_seq.has(key)) {
-    const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
-    _seq.set(key, maxStored)
+    const persisted = readPersistedSequence(sessionId, participantId)
+    const maxStored = await deriveMaxSequenceFromDb(db, sessionId, participantId)
+    _seq.set(key, Math.max(persisted ?? 0, maxStored))
   }
   const next = (_seq.get(key) ?? 0) + 1
   _seq.set(key, next)
@@ -225,7 +262,7 @@ export async function queueEvent(
   payload:       Record<string, unknown>,
 ): Promise<void> {
   const db = await getDb()
-  const sequence = await nextSequence(db, participantId, sessionId)
+  const sequence = await nextSequence(db, sessionId, participantId)
   const event: QueuedEvent = {
     event_id:       crypto.randomUUID(),
     event_type:     eventType,
