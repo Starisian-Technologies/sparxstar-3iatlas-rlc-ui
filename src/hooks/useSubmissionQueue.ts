@@ -53,7 +53,10 @@ function getAcceptedEventIds(
   if (queuedEventIds.length === 0) return []
   if (Array.isArray(acceptedEventIdsRaw)) {
     if (acceptedEventIdsRaw.length === 0) return []
-    if (!acceptedEventIdsRaw.every((id) => typeof id === 'string')) return []
+    if (!acceptedEventIdsRaw.every((id) => typeof id === 'string')) {
+      console.warn('Ignoring malformed accepted_event_ids from /events/batch response')
+      return []
+    }
     const queuedSet = new Set(queuedEventIds)
     return acceptedEventIdsRaw.filter((id) => queuedSet.has(id))
   }

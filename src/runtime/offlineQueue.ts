@@ -98,7 +98,7 @@ const _seq = new Map<string, number>()
 const EVENT_SEQUENCE_STORAGE_PREFIX = 'spx-rlc-event-sequence'
 
 function getSequenceMapKey(sessionId: string, participantId: string): string {
-  return JSON.stringify([sessionId, participantId])
+  return `${encodeURIComponent(sessionId)}::${encodeURIComponent(participantId)}`
 }
 
 export function getSequenceStorageKey(sessionId: string, participantId: string): string {
@@ -110,7 +110,7 @@ export function readPersistedSequence(participantId: string, sessionId: string):
   const raw = localStorage.getItem(getSequenceStorageKey(sessionId, participantId))
   if (!raw) return null
   const parsed = Number.parseInt(raw, 10)
-  if (!Number.isFinite(parsed) || parsed < 0) return null
+  if (!Number.isFinite(parsed) || parsed < 1) return null
   return parsed
 }
 

@@ -17,7 +17,9 @@ export async function derivePendingCount(
 export function buildSyncPayload(payload: SaveTokenPayload): SaveTokenPayload {
   const payloadRecord = payload as SaveTokenPayloadWithSemanticDomain
   const semanticDomain = payloadRecord.semantic_domain_id
-  if (typeof semanticDomain === 'string' && semanticDomain.trim() === '') {
+  const shouldOmit =
+    semanticDomain == null || (typeof semanticDomain === 'string' && semanticDomain.trim() === '')
+  if (shouldOmit) {
     const sanitized = { ...payloadRecord }
     delete sanitized.semantic_domain_id
     return sanitized as SaveTokenPayload
