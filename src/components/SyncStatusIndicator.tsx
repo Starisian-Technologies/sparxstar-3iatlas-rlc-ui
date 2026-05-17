@@ -2,7 +2,7 @@
  * Persistent sync status indicator — spec §6.3 (UI Overlay Rules v2.1).
  *
  * Shown in the header of every student screen. Three states:
- *   online  — cloud icon (green)  — connected, queue empty
+ *   synced  — cloud icon (green)  — connected, queue empty
  *   syncing — animated upload icon — flushing queued submissions
  *   offline — no-connection icon   — device disconnected
  *
@@ -18,19 +18,19 @@ interface SyncStatusIndicatorProps {
 }
 
 const ICONS: Record<SyncState, string> = {
-  online:  '☁',
+  synced:  '☁',
   offline: '⚡',
   syncing: '↑',
 }
 
 const COLORS: Record<SyncState, string> = {
-  online:  '#22c55e',   // green
+  synced:  '#22c55e',   // green
   offline: '#9B8EC4',   // muted purple
   syncing: '#F59E0B',   // amber
 }
 
 const ARIA_LABELS: Record<SyncState, string> = {
-  online:  'Synced',
+  synced:  'Synced',
   offline: 'Offline — submissions queued',
   syncing: 'Syncing…',
 }

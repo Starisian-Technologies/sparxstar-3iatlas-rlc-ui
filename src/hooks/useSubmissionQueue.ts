@@ -6,7 +6,7 @@
  * stays queued and is retried when the device reconnects.
  *
  * The `syncState` returned reflects QUEUE state, not network state:
- *   'online'  — connected and queue is empty
+ *   'synced'  — connected and queue is empty
  *   'syncing' — connected and flushing pending items
  *   'offline' — device is disconnected (navigator.onLine = false)
  */
@@ -29,7 +29,47 @@ import { useNetworkStatus } from './useNetworkStatus'
 import type { SaveTokenPayload, SaveTokenResponse } from '@/types'
 import type { QueuedSubmission } from '@/runtime/offlineQueue'
 
-export type SyncState = 'online' | 'offline' | 'syncing'
+export type SyncState = 'offline' | 'syncing' | 'synced'
+
+type BatchFlushResponse = {
+  accepted: number
+  failed: number
+  accepted_event_ids?: string[]
+}
+
+export async function derivePendingCount(
+  sessionId: string,
+  pendingReader: (value: string) => Promise<QueuedSubmission[]> = getPendingSubmissions,
+): Promise<number> {
+  const remaining = await pendingReader(sessionId)
+  return remaining.length
+}
+
+function getAcceptedEventIds(
+  result: BatchFlushResponse,
+  queuedEventIds: string[],
+): string[] {
+  if (Array.isArray(result.accepted_event_ids)) {
+    const queuedSet = new Set(queuedEventIds)
+    return result.accepted_event_ids.filter((id): id is string => typeof id === 'string' && queuedSet.has(id))
+  }
+
+  if (result.accepted === queuedEventIds.length && result.failed === 0) {
+    return queuedEventIds
+  }
+
+  return []
+}
+
+export function buildSyncPayload(payload: SaveTokenPayload): SaveTokenPayload {
+  const semanticDomain = (payload as SaveTokenPayload & { semantic_domain_id?: unknown }).semantic_domain_id
+  if (typeof semanticDomain === 'string' && semanticDomain.trim() === '') {
+    const { semantic_domain_id, ...rest } = payload as SaveTokenPayload & { semantic_domain_id?: string }
+    void semantic_domain_id
+    return rest as SaveTokenPayload
+  }
+  return payload
+}
 
 export interface SubmitResult {
   /** Local queue ID — stable across queued → synced transition */
@@ -48,25 +88,25 @@ export interface SyncedSubmissionReceipt {
 
 export function useSubmissionQueue(sessionId: string, participantId: string) {
   const { isOnline } = useNetworkStatus()
-  const [syncState, setSyncState] = useState<SyncState>('online')
+  const [syncState, setSyncState] = useState<SyncState>(() => (isOnline ? 'synced' : 'offline'))
   const [pendingCount, setPendingCount] = useState(0)
   const [syncedSubmissions, setSyncedSubmissions] = useState<SyncedSubmissionReceipt[]>([])
   const isFlushingRef = useRef(false)
   const isFlushingEventsRef = useRef(false)
 
   const refreshPendingCount = useCallback(async (): Promise<number> => {
-    const remaining = await getPendingSubmissions(sessionId)
-    setPendingCount(remaining.length)
-    return remaining.length
+    const count = await derivePendingCount(sessionId)
+    setPendingCount(count)
+    return count
   }, [sessionId])
 
-  const flushPendingEvents = useCallback(async () => {
-    if (!isOnline) return
-    if (isFlushingEventsRef.current) return
+  const flushPendingEvents = useCallback(async (): Promise<boolean> => {
+    if (!isOnline) return true
+    if (isFlushingEventsRef.current) return false
     isFlushingEventsRef.current = true
     try {
       const pendingEvents = await getPendingEvents(sessionId)
-      if (pendingEvents.length === 0) return
+      if (pendingEvents.length === 0) return false
 
       const eventIds = pendingEvents.map((event) => event.event_id)
       const eventsPayload = pendingEvents.map((event) => {
@@ -76,19 +116,28 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       })
 
       try {
-        const result = await api.events.batchFlush(eventsPayload)
-        if (result.failed === 0) {
-          await markEventsSynced(eventIds)
-        } else {
-          await markEventsFailed(eventIds)
+        const result = await api.events.batchFlush(eventsPayload) as BatchFlushResponse
+        const acceptedEventIds = getAcceptedEventIds(result, eventIds)
+
+        if (acceptedEventIds.length > 0) {
+          await markEventsSynced(acceptedEventIds)
+          await refreshPendingCount()
         }
+
+        const acceptedSet = new Set(acceptedEventIds)
+        const rejectedEventIds = eventIds.filter((id) => !acceptedSet.has(id))
+        if (rejectedEventIds.length > 0) {
+          await markEventsFailed(rejectedEventIds)
+        }
+
+        return result.failed > 0
       } catch {
-        await markEventsFailed(eventIds)
+        return true
       }
     } finally {
       isFlushingEventsRef.current = false
     }
-  }, [isOnline, sessionId])
+  }, [isOnline, sessionId, refreshPendingCount])
 
   // ── Flush all pending items for this session ──────────────────────────────
 
@@ -104,14 +153,14 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
 
       const pending = await getPendingSubmissions(sessionId)
       setPendingCount(pending.length)
+      setSyncState('syncing')
 
       if (pending.length > 0) {
-        setSyncState('syncing')
         const receipts: SyncedSubmissionReceipt[] = []
 
         for (const item of pending) {
           try {
-            const result = await api.token.save(item.payload)
+            const result = await api.token.save(buildSyncPayload(item.payload))
             await markSubmissionSynced(item.id, result)
             receipts.push({ localId: item.id, participantId: item.participant_id, result })
             // Emit RLC_SUBMISSION_SAVED at server confirmation (spec §13.4).
@@ -138,12 +187,16 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
         }
       }
 
-      // Keep 'syncing' while events are being flushed; only set 'online' when both queues are empty.
+      // Keep 'syncing' while events are being flushed; only set 'synced' when both queues are empty.
       // participantId is intentionally omitted from deps — it is stable for the lifetime of a session.
       const remainingSubs = await refreshPendingCount()
-      await flushPendingEvents()
+      const hadEventSyncError = await flushPendingEvents()
       const remainingEvents = await getPendingEvents(sessionId)
-      setSyncState(remainingSubs === 0 && remainingEvents.length === 0 ? 'online' : 'syncing')
+      if (hadEventSyncError) {
+        setSyncState('offline')
+      } else {
+        setSyncState(remainingSubs === 0 && remainingEvents.length === 0 ? 'synced' : 'syncing')
+      }
     } finally {
       isFlushingRef.current = false
     }

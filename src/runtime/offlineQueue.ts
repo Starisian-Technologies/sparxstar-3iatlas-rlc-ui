@@ -95,6 +95,33 @@ function getDb(): Promise<IDBDatabase> {
 // Scoped per participant + session, monotonically increasing (spec §13.4).
 
 const _seq = new Map<string, number>()
+const EVENT_SEQUENCE_STORAGE_PREFIX = 'spx-rlc-event-sequence'
+
+function getSequenceKey(participantId: string, sessionId: string): string {
+  return `${sessionId}::${participantId}`
+}
+
+export function getSequenceStorageKey(participantId: string, sessionId: string): string {
+  return `${EVENT_SEQUENCE_STORAGE_PREFIX}:${getSequenceKey(participantId, sessionId)}`
+}
+
+export function readPersistedSequence(participantId: string, sessionId: string): number | null {
+  if (typeof localStorage === 'undefined') return null
+  const raw = localStorage.getItem(getSequenceStorageKey(participantId, sessionId))
+  if (!raw) return null
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return parsed
+}
+
+export function writePersistedSequence(
+  participantId: string,
+  sessionId: string,
+  sequence: number,
+): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(getSequenceStorageKey(participantId, sessionId), String(sequence))
+}
 
 async function deriveMaxSequenceFromDb(
   db: IDBDatabase,
@@ -122,13 +149,19 @@ async function nextSequence(
   participantId: string,
   sessionId: string,
 ): Promise<number> {
-  const key = `${sessionId}::${participantId}`
+  const key = getSequenceKey(participantId, sessionId)
   if (!_seq.has(key)) {
-    const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
-    _seq.set(key, maxStored)
+    const persisted = readPersistedSequence(participantId, sessionId)
+    if (persisted !== null) {
+      _seq.set(key, persisted)
+    } else {
+      const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
+      _seq.set(key, maxStored)
+    }
   }
   const next = (_seq.get(key) ?? 0) + 1
   _seq.set(key, next)
+  writePersistedSequence(participantId, sessionId, next)
   return next
 }
 
