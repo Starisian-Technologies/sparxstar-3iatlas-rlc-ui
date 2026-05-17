@@ -2,6 +2,10 @@ import { getPendingSubmissions } from '@/runtime/offlineQueue'
 import type { SaveTokenPayload } from '@/types'
 import type { QueuedSubmission } from '@/runtime/offlineQueue'
 
+type SaveTokenPayloadWithSemanticDomain = SaveTokenPayload & {
+  semantic_domain_id?: unknown
+}
+
 export async function derivePendingCount(
   sessionId: string,
   pendingReader: (value: string) => Promise<QueuedSubmission[]> = getPendingSubmissions,
@@ -11,12 +15,12 @@ export async function derivePendingCount(
 }
 
 export function buildSyncPayload(payload: SaveTokenPayload): SaveTokenPayload {
-  const payloadRecord = payload as unknown as { semantic_domain_id?: unknown }
+  const payloadRecord = payload as SaveTokenPayloadWithSemanticDomain
   const semanticDomain = payloadRecord.semantic_domain_id
   if (typeof semanticDomain === 'string' && semanticDomain.trim() === '') {
-    const sanitized = { ...payload } as SaveTokenPayload & { semantic_domain_id?: string }
+    const sanitized = { ...payloadRecord }
     delete sanitized.semantic_domain_id
-    return sanitized
+    return sanitized as SaveTokenPayload
   }
   return payload
 }

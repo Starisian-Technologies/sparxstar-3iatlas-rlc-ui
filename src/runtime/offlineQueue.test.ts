@@ -27,7 +27,7 @@ describe('offlineQueue sequence persistence', () => {
   })
 
   it('stores sequence values under a stable session+participant key', () => {
-    const key = getSequenceStorageKey('participant-1', 'session-1')
+    const key = getSequenceStorageKey('session-1', 'participant-1')
     expect(key).toContain('session-1')
     expect(key).toContain('participant-1')
   })
@@ -38,7 +38,7 @@ describe('offlineQueue sequence persistence', () => {
   })
 
   it('ignores invalid persisted values', () => {
-    localStorage.setItem(getSequenceStorageKey('participant-1', 'session-1'), 'not-a-number')
+    localStorage.setItem(getSequenceStorageKey('session-1', 'participant-1'), 'not-a-number')
     expect(readPersistedSequence('participant-1', 'session-1')).toBeNull()
   })
 })

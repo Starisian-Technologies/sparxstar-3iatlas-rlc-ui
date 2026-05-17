@@ -101,13 +101,13 @@ function getSequenceKey(sessionId: string, participantId: string): string {
   return JSON.stringify([sessionId, participantId])
 }
 
-export function getSequenceStorageKey(participantId: string, sessionId: string): string {
+export function getSequenceStorageKey(sessionId: string, participantId: string): string {
   return `${EVENT_SEQUENCE_STORAGE_PREFIX}:${getSequenceKey(sessionId, participantId)}`
 }
 
 export function readPersistedSequence(participantId: string, sessionId: string): number | null {
   if (typeof localStorage === 'undefined') return null
-  const raw = localStorage.getItem(getSequenceStorageKey(participantId, sessionId))
+  const raw = localStorage.getItem(getSequenceStorageKey(sessionId, participantId))
   if (!raw) return null
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isFinite(parsed) || parsed < 0) return null
@@ -120,7 +120,7 @@ export function writePersistedSequence(
   sequence: number,
 ): void {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(getSequenceStorageKey(participantId, sessionId), String(sequence))
+  localStorage.setItem(getSequenceStorageKey(sessionId, participantId), String(sequence))
 }
 
 async function deriveMaxSequenceFromDb(

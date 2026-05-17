@@ -36,6 +36,7 @@ type BatchFlushResponse = {
   accepted: number
   failed: number
 }
+const ACCEPTED_EVENT_IDS_FIELD = 'accepted_event_ids'
 
 function getAcceptedEventIds(
   result: BatchFlushResponse,
@@ -107,7 +108,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
 
       try {
         const result = await api.events.batchFlush(eventsPayload)
-        const acceptedEventIdsRaw = (result as Record<string, unknown>).accepted_event_ids
+        const acceptedEventIdsRaw = (result as Record<string, unknown>)[ACCEPTED_EVENT_IDS_FIELD]
         const acceptedEventIds = getAcceptedEventIds(result, eventIds, acceptedEventIdsRaw)
 
         if (acceptedEventIds.length > 0) {
