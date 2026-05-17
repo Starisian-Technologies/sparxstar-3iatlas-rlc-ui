@@ -152,12 +152,8 @@ async function nextSequence(
   const key = getSequenceMapKey(sessionId, participantId)
   if (!_seq.has(key)) {
     const persisted = readPersistedSequence(participantId, sessionId)
-    if (persisted !== null) {
-      _seq.set(key, persisted)
-    } else {
-      const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
-      _seq.set(key, maxStored)
-    }
+    const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
+    _seq.set(key, Math.max(persisted ?? 0, maxStored))
   }
   const next = (_seq.get(key) ?? 0) + 1
   _seq.set(key, next)
