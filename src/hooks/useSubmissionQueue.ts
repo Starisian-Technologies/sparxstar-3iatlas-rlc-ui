@@ -6,9 +6,10 @@
  * stays queued and is retried when the device reconnects.
  *
  * The `syncState` returned reflects QUEUE state, not network state:
- *   'synced'  — connected and queue is empty
- *   'syncing' — connected and flushing pending items
- *   'offline' — device is disconnected (navigator.onLine = false)
+ *   'synced'  — queue is empty and not currently flushing
+ *   'syncing' — flushing pending queued items
+ *   'offline' — queued items remain but sync cannot currently proceed, either because
+ *               the device is offline or because the latest batch flush failed
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
