@@ -134,8 +134,8 @@ export function writePersistedSequence(
 
 async function deriveMaxSequenceFromDb(
   db: IDBDatabase,
-  participantId: string,
   sessionId: string,
+  participantId: string,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     const tx    = db.transaction(STORE_EVENTS, 'readonly')
@@ -155,18 +155,17 @@ async function deriveMaxSequenceFromDb(
 
 async function nextSequence(
   db: IDBDatabase,
-  participantId: string,
   sessionId: string,
+  participantId: string,
 ): Promise<number> {
   const key = getSequenceMapKey(sessionId, participantId)
   if (!_seq.has(key)) {
     const persisted = readPersistedSequence(sessionId, participantId)
-    const maxStored = await deriveMaxSequenceFromDb(db, participantId, sessionId)
+    const maxStored = await deriveMaxSequenceFromDb(db, sessionId, participantId)
     _seq.set(key, Math.max(persisted ?? 0, maxStored))
   }
   const next = (_seq.get(key) ?? 0) + 1
   _seq.set(key, next)
-  writePersistedSequence(sessionId, participantId, next)
   return next
 }
 
@@ -263,7 +262,7 @@ export async function queueEvent(
   payload:       Record<string, unknown>,
 ): Promise<void> {
   const db = await getDb()
-  const sequence = await nextSequence(db, participantId, sessionId)
+  const sequence = await nextSequence(db, sessionId, participantId)
   const event: QueuedEvent = {
     event_id:       crypto.randomUUID(),
     event_type:     eventType,

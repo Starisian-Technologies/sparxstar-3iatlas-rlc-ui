@@ -16,6 +16,9 @@ export async function derivePendingCount(
 
 export function buildSyncPayload(payload: SaveTokenPayload): SaveTokenPayload {
   const payloadRecord = payload as SaveTokenPayloadWithSemanticDomain
+  if (!Object.prototype.hasOwnProperty.call(payloadRecord, 'semantic_domain_id')) {
+    return payload
+  }
   const semanticDomain = payloadRecord.semantic_domain_id
   const shouldOmit =
     semanticDomain == null || (typeof semanticDomain === 'string' && semanticDomain.trim() === '')

@@ -81,7 +81,7 @@ export interface SyncedSubmissionReceipt {
 
 export function useSubmissionQueue(sessionId: string, participantId: string) {
   const { isOnline } = useNetworkStatus()
-  const [syncState, setSyncState] = useState<SyncState>(() => (isOnline ? 'synced' : 'offline'))
+  const [syncState, setSyncState] = useState<SyncState>(() => (isOnline ? 'syncing' : 'offline'))
   const [pendingCount, setPendingCount] = useState(0)
   const [syncedSubmissions, setSyncedSubmissions] = useState<SyncedSubmissionReceipt[]>([])
   const isFlushingRef = useRef(false)

@@ -39,6 +39,10 @@ describe('useSubmissionQueue payload sanitation', () => {
     expect((result as SaveTokenPayloadWithSemanticDomain).semantic_domain_id).toBeUndefined()
   })
 
+  it('returns the original payload when semantic_domain_id is absent', () => {
+    expect(buildSyncPayload(basePayload)).toBe(basePayload)
+  })
+
   it('omits semantic_domain_id when empty string', () => {
     const payload = { ...basePayload, semantic_domain_id: '   ' } as SaveTokenPayloadWithSemanticDomain
     const result = buildSyncPayload(payload)

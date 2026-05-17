@@ -4,7 +4,7 @@
  * Shown in the header of every student screen. Three states:
  *   synced  — cloud icon (green)  — connected, queue empty
  *   syncing — animated upload icon — flushing queued submissions
- *   offline — no-connection icon   — device disconnected
+ *   offline — no-connection icon   — sync unavailable (offline or latest sync failed)
  *
  * Badge shows pending count when > 0. Badge clears when server confirms receipt.
  */
@@ -31,7 +31,7 @@ const COLORS: Record<SyncState, string> = {
 
 const ARIA_LABELS: Record<SyncState, string> = {
   synced:  'Synced',
-  offline: 'Offline — submissions queued',
+  offline: 'Offline — sync unavailable',
   syncing: 'Syncing…',
 }
 
