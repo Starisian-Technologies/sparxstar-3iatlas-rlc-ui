@@ -38,7 +38,7 @@ function useDictionarySetup(selectedLang: string) {
     }
 
     void fetch(`${DICT_BASE}/languages`)
-      .then((r) => (r.ok ? r.json() as Promise<{ data: { languages: DictLanguage[] } }> : Promise.reject()))
+      .then((r) => (r.ok ? r.json() as Promise<{ data: { languages: DictLanguage[] } }> : Promise.reject(new Error(`Languages API failed with status ${r.status}`))))
       .then((data) => setLanguages(data.data.languages.length > 0 ? data.data.languages : FALLBACK_LANGUAGES))
       .catch(() => setLanguages(FALLBACK_LANGUAGES))
       .finally(() => setReady(true))
@@ -48,7 +48,7 @@ function useDictionarySetup(selectedLang: string) {
     if (!DICT_BASE || !selectedLang) return
 
     void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`)
-      .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject()))
+      .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject(new Error(`Domains API failed with status ${r.status}`))))
       .then((data) => setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS))
       .catch(() => setDomains(FALLBACK_DOMAINS))
   }, [selectedLang])
