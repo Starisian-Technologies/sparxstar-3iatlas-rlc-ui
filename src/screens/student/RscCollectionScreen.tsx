@@ -40,7 +40,8 @@ export function RscCollectionScreen({
   const sentenceRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
   const hasCollectionEndedRef = useRef(false)
-  // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
+  // Tracks which synced receipts have already triggered onSubmitted to prevent
+  // duplicate calls on re-render (mirrors the pattern in RwcCollectionScreen).
   const processedReceiptsRef = useRef<Set<string>>(new Set())
   const { session, error: pollError } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
@@ -63,8 +64,8 @@ export function RscCollectionScreen({
   )
 
   // Drive onSubmitted and the result banner from server-confirmation receipts (spec §12.5).
-  // processedReceiptsRef prevents duplicate onSubmitted calls if flushPending re-runs and
-  // setSyncedSubmissions is called with a new array reference containing the same receipts.
+  // processedReceiptsRef prevents duplicate calls if the effect fires with the same
+  // logical receipts across re-renders.
   useEffect(() => {
     if (syncedSubmissions.length === 0) return
     const myReceipts = syncedSubmissions.filter((r) => r.participantId === participant_id)
