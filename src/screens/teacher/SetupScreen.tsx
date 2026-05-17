@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '@/api/client'
 import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/types'
 
@@ -6,15 +6,55 @@ interface SetupScreenProps {
   onCreated: (result: CreateSessionResponse & { mode: CollectionMode; collection_depth: CollectionDepth; language: string }) => void
 }
 
-const LANGUAGES = [
-  { code: 'mandinka', label: 'Mandinka' },
-  { code: 'wolof',    label: 'Wolof' },
-  { code: 'fula',     label: 'Fula / Pulaar' },
-  { code: 'jola',     label: 'Jola' },
-  { code: 'serer',    label: 'Serer' },
+const DICT_BASE: string =
+  (window as unknown as Record<string, string>)['DICT_API_BASE'] ??
+  (import.meta.env['VITE_DICTIONARY_API_URL'] as string | undefined) ??
+  ''
+
+interface DictLanguage { slug: string; name: string; count: number }
+interface DictDomain { slug: string; name: string; code: string; count: number }
+
+const FALLBACK_LANGUAGES: DictLanguage[] = [
+  { slug: 'mandinka', name: 'Mandinka', count: 0 },
+]
+
+const FALLBACK_DOMAINS: DictDomain[] = [
+  { slug: 'agriculture-6.2', name: 'Agriculture', code: '6.2', count: 0 },
 ]
 
 const DURATIONS = [5, 10, 15, 20]
+
+function useDictionarySetup(selectedLang: string) {
+  const [languages, setLanguages] = useState<DictLanguage[]>([])
+  const [domains, setDomains] = useState<DictDomain[]>([])
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    if (!DICT_BASE) {
+      setLanguages(FALLBACK_LANGUAGES)
+      setDomains(FALLBACK_DOMAINS)
+      setReady(true)
+      return
+    }
+
+    void fetch(`${DICT_BASE}/languages`)
+      .then((r) => (r.ok ? r.json() as Promise<{ data: { languages: DictLanguage[] } }> : Promise.reject()))
+      .then((data) => setLanguages(data.data.languages.length > 0 ? data.data.languages : FALLBACK_LANGUAGES))
+      .catch(() => setLanguages(FALLBACK_LANGUAGES))
+      .finally(() => setReady(true))
+  }, [])
+
+  useEffect(() => {
+    if (!DICT_BASE || !selectedLang) return
+
+    void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`)
+      .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject()))
+      .then((data) => setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS))
+      .catch(() => setDomains(FALLBACK_DOMAINS))
+  }, [selectedLang])
+
+  return { languages, domains, ready }
+}
 
 /**
  * T1 — Teacher session setup screen.
@@ -23,11 +63,24 @@ const DURATIONS = [5, 10, 15, 20]
 export function SetupScreen({ onCreated }: SetupScreenProps) {
   const [mode, setMode] = useState<CollectionMode>('rwc')
   const [language, setLanguage] = useState('mandinka')
-  const [domain, setDomain] = useState('6.2')
+  const [domain, setDomain] = useState('agriculture-6.2')
   const [duration, setDuration] = useState(15)
   const [depth, setDepth] = useState<CollectionDepth>('translation_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { languages, domains, ready } = useDictionarySetup(language)
+
+  useEffect(() => {
+    if (languages.length > 0 && !languages.some((l) => l.slug === language)) {
+      setLanguage(languages[0].slug)
+    }
+  }, [languages, language])
+
+  useEffect(() => {
+    if (domains.length > 0) {
+      setDomain(domains[0].slug)
+    }
+  }, [domains])
 
   const handleCreate = async () => {
     setLoading(true)
@@ -76,23 +129,29 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
-          style={selectStyle}
+          disabled={!ready}
+          style={{ minHeight: 44, width: '100%' }}
+          aria-label="Session language"
         >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>{l.label}</option>
+          {languages.map((l) => (
+            <option key={l.slug} value={l.slug}>{l.name}</option>
           ))}
         </select>
       </Field>
 
       {/* Semantic domain */}
       <Field label="Semantic domain">
-        <input
-          type="text"
+        <select
           value={domain}
           onChange={(e) => setDomain(e.target.value)}
-          placeholder="e.g. 6.2 (Agriculture)"
-          style={inputStyle}
-        />
+          disabled={!ready}
+          style={{ minHeight: 44, width: '100%' }}
+          aria-label="Semantic domain"
+        >
+          {domains.map((d) => (
+            <option key={d.slug} value={d.slug}>{d.name}</option>
+          ))}
+        </select>
       </Field>
 
       {/* Duration */}
@@ -135,12 +194,12 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
       <button
         type="button"
         onClick={() => void handleCreate()}
-        disabled={loading}
+        disabled={loading || !ready}
         style={{
           minHeight: 52, fontSize: 18, fontWeight: 700,
-          background: loading ? '#b4b2a9' : '#1B3A6B',
+          background: (loading || !ready) ? '#b4b2a9' : '#1B3A6B',
           color: '#ffffff', border: 'none', borderRadius: 10,
-          cursor: loading ? 'not-allowed' : 'pointer', marginTop: 8,
+          cursor: (loading || !ready) ? 'not-allowed' : 'pointer', marginTop: 8,
         }}
       >
         {loading ? 'Creating…' : 'Create session'}
@@ -187,16 +246,4 @@ function SegmentedControl({
       ))}
     </div>
   )
-}
-
-const selectStyle: React.CSSProperties = {
-  width: '100%', fontSize: 16, padding: '10px 14px',
-  border: '2px solid #b4b2a9', borderRadius: 8,
-  background: '#ffffff', appearance: 'auto',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', fontSize: 16, padding: '10px 14px',
-  border: '2px solid #b4b2a9', borderRadius: 8,
-  boxSizing: 'border-box',
 }
