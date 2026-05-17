@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { derivePendingCount } from './useSubmissionQueue'
+import { derivePendingCount } from './useSubmissionQueue.utils'
 import type { QueuedSubmission } from '@/runtime/offlineQueue'
 
 describe('useSubmissionQueue pending count derivation', () => {

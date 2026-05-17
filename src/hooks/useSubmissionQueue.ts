@@ -26,6 +26,7 @@ import {
   RlcEventType,
 } from '@/runtime/offlineQueue'
 import { useNetworkStatus } from './useNetworkStatus'
+import { buildSyncPayload, derivePendingCount } from './useSubmissionQueue.utils'
 import type { SaveTokenPayload, SaveTokenResponse } from '@/types'
 import type { QueuedSubmission } from '@/runtime/offlineQueue'
 
@@ -35,14 +36,6 @@ type BatchFlushResponse = {
   accepted: number
   failed: number
   accepted_event_ids?: string[]
-}
-
-export async function derivePendingCount(
-  sessionId: string,
-  pendingReader: (value: string) => Promise<QueuedSubmission[]> = getPendingSubmissions,
-): Promise<number> {
-  const remaining = await pendingReader(sessionId)
-  return remaining.length
 }
 
 function getAcceptedEventIds(
@@ -59,16 +52,6 @@ function getAcceptedEventIds(
   }
 
   return []
-}
-
-export function buildSyncPayload(payload: SaveTokenPayload): SaveTokenPayload {
-  const semanticDomain = (payload as SaveTokenPayload & { semantic_domain_id?: unknown }).semantic_domain_id
-  if (typeof semanticDomain === 'string' && semanticDomain.trim() === '') {
-    const { semantic_domain_id, ...rest } = payload as SaveTokenPayload & { semantic_domain_id?: string }
-    void semantic_domain_id
-    return rest as SaveTokenPayload
-  }
-  return payload
 }
 
 export interface SubmitResult {
