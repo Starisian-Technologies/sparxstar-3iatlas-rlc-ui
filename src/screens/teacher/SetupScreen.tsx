@@ -58,7 +58,6 @@ function useDictionarySetup(selectedLang: string) {
       })
       .catch((error: unknown) => {
         if (
-          !controller.signal.aborted &&
           !(error instanceof DOMException && error.name === 'AbortError')
         ) {
           setDomains(FALLBACK_DOMAINS)
