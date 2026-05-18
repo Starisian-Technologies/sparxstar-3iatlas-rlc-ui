@@ -55,9 +55,7 @@ function useDictionarySetup(selectedLang: string) {
         setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
       })
       .catch((error: unknown) => {
-        if (
-          !(error instanceof DOMException && error.name === 'AbortError')
-        ) {
+        if (!(error instanceof Error && error.name === 'AbortError')) {
           setDomains(FALLBACK_DOMAINS)
         }
       })
