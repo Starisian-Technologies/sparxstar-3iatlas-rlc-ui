@@ -27,43 +27,59 @@ const DURATIONS = [5, 10, 15, 20]
 function useDictionarySetup(selectedLang: string) {
   const [languages, setLanguages] = useState<DictLanguage[]>([])
   const [domains, setDomains] = useState<DictDomain[]>([])
-  const [ready, setReady] = useState(false)
+  const [languagesLoaded, setLanguagesLoaded] = useState(false)
+  const [domainsLoaded, setDomainsLoaded] = useState(false)
 
   useEffect(() => {
     if (!DICT_BASE) {
       setLanguages(FALLBACK_LANGUAGES)
       setDomains(FALLBACK_DOMAINS)
-      setReady(true)
+      setLanguagesLoaded(true)
+      setDomainsLoaded(true)
       return
     }
 
+    setLanguagesLoaded(false)
     void fetch(`${DICT_BASE}/languages`)
       .then((r) => (r.ok ? r.json() as Promise<{ data: { languages: DictLanguage[] } }> : Promise.reject(new Error(`Languages API failed with status ${r.status}`))))
       .then((data) => setLanguages(data.data.languages.length > 0 ? data.data.languages : FALLBACK_LANGUAGES))
       .catch(() => setLanguages(FALLBACK_LANGUAGES))
-      .finally(() => setReady(true))
+      .finally(() => setLanguagesLoaded(true))
   }, [])
 
   useEffect(() => {
     if (!DICT_BASE || !selectedLang) return
 
+    let cancelled = false
     const controller = new AbortController()
+    setDomainsLoaded(false)
 
     void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject(new Error(`Domains API failed with status ${r.status}`))))
       .then((data) => {
-        setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
+        if (!cancelled) {
+          setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
+        }
       })
       .catch((error: unknown) => {
-        if (!(error instanceof Error && error.name === 'AbortError')) {
+        if (!cancelled && !(error instanceof Error && error.name === 'AbortError')) {
           setDomains(FALLBACK_DOMAINS)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDomainsLoaded(true)
         }
       })
 
     return () => {
+      cancelled = true
       controller.abort()
     }
   }, [selectedLang])
+
+  const isLanguageValid = languages.some((language) => language.slug === selectedLang)
+  const ready = languagesLoaded && domainsLoaded && isLanguageValid && domains.length > 0
 
   return { languages, domains, ready }
 }
@@ -89,10 +105,10 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   }, [languages, language])
 
   useEffect(() => {
-    if (domains.length > 0) {
+    if (domains.length > 0 && !domains.some((d) => d.slug === domain)) {
       setDomain(domains[0].slug)
     }
-  }, [domains])
+  }, [domains, domain])
 
   const handleCreate = async () => {
     setLoading(true)
