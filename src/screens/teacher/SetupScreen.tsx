@@ -52,9 +52,7 @@ function useDictionarySetup(selectedLang: string) {
     void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject(new Error(`Domains API failed with status ${r.status}`))))
       .then((data) => {
-        if (!controller.signal.aborted) {
-          setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
-        }
+        setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
       })
       .catch((error: unknown) => {
         if (
