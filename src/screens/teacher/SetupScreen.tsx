@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '@/api/client'
 import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/types'
 
@@ -6,15 +6,106 @@ interface SetupScreenProps {
   onCreated: (result: CreateSessionResponse & { mode: CollectionMode; collection_depth: CollectionDepth; language: string }) => void
 }
 
-const LANGUAGES = [
-  { code: 'mandinka', label: 'Mandinka' },
-  { code: 'wolof',    label: 'Wolof' },
-  { code: 'fula',     label: 'Fula / Pulaar' },
-  { code: 'jola',     label: 'Jola' },
-  { code: 'serer',    label: 'Serer' },
+const DICT_BASE: string =
+  (window as unknown as Record<string, string>)['DICT_API_BASE'] ??
+  (import.meta.env['VITE_DICTIONARY_API_URL'] as string | undefined) ??
+  ''
+
+interface DictLanguage { slug: string; name: string; count: number }
+interface DictDomain { slug: string; name: string; code: string; count: number }
+
+const FALLBACK_LANGUAGES: DictLanguage[] = [
+  { slug: 'mandinka', name: 'Mandinka', count: 0 },
+]
+
+const FALLBACK_DOMAINS: DictDomain[] = [
+  { slug: 'agriculture-6.2', name: 'Agriculture', code: '6.2', count: 0 },
 ]
 
 const DURATIONS = [5, 10, 15, 20]
+const DICT_FETCH_TIMEOUT_MS = 8000
+
+function useDictionarySetup(selectedLang: string) {
+  const [languages, setLanguages] = useState<DictLanguage[]>([])
+  const [domains, setDomains] = useState<DictDomain[]>([])
+  const [languagesLoaded, setLanguagesLoaded] = useState(false)
+  const [domainsLoaded, setDomainsLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!DICT_BASE) {
+      setLanguages(FALLBACK_LANGUAGES)
+      setDomains(FALLBACK_DOMAINS)
+      setLanguagesLoaded(true)
+      setDomainsLoaded(true)
+      return
+    }
+
+    let cancelled = false
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), DICT_FETCH_TIMEOUT_MS)
+    setLanguagesLoaded(false)
+    void fetch(`${DICT_BASE}/languages`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() as Promise<{ data: { languages: DictLanguage[] } }> : Promise.reject(new Error(`Languages API failed with status ${r.status}`))))
+      .then((data) => {
+        if (!cancelled) {
+          setLanguages(data.data.languages.length > 0 ? data.data.languages : FALLBACK_LANGUAGES)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLanguages(FALLBACK_LANGUAGES)
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId)
+        if (!cancelled) {
+          setLanguagesLoaded(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!DICT_BASE || !selectedLang) return
+
+    let cancelled = false
+    const controller = new AbortController()
+    setDomainsLoaded(false)
+
+    void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject(new Error(`Domains API failed with status ${r.status}`))))
+      .then((data) => {
+        if (!cancelled) {
+          setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setDomains(FALLBACK_DOMAINS)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDomainsLoaded(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [selectedLang])
+
+  const isLanguageValid = languages.some((language) => language.slug === selectedLang)
+  const ready = languagesLoaded && domainsLoaded && !!selectedLang && isLanguageValid && domains.length > 0
+
+  return { languages, domains, ready }
+}
 
 /**
  * T1 — Teacher session setup screen.
@@ -23,11 +114,26 @@ const DURATIONS = [5, 10, 15, 20]
 export function SetupScreen({ onCreated }: SetupScreenProps) {
   const [mode, setMode] = useState<CollectionMode>('rwc')
   const [language, setLanguage] = useState('mandinka')
-  const [domain, setDomain] = useState('6.2')
+  const [domain, setDomain] = useState('agriculture-6.2')
   const [duration, setDuration] = useState(15)
   const [depth, setDepth] = useState<CollectionDepth>('translation_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { languages, domains, ready } = useDictionarySetup(language)
+
+  useEffect(() => {
+    if (languages.length > 0 && !languages.some((l) => l.slug === language)) {
+      setLanguage(languages[0].slug)
+    }
+  }, [languages, language])
+
+  useEffect(() => {
+    if (domains.length > 0) {
+      setDomain((currentDomain) => {
+        return domains.some((d) => d.slug === currentDomain) ? currentDomain : domains[0].slug
+      })
+    }
+  }, [domains])
 
   const handleCreate = async () => {
     setLoading(true)
@@ -76,23 +182,29 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
-          style={selectStyle}
+          disabled={!ready}
+          style={{ minHeight: 44, width: '100%' }}
+          aria-label="Session language"
         >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>{l.label}</option>
+          {languages.map((l) => (
+            <option key={l.slug} value={l.slug}>{l.name}</option>
           ))}
         </select>
       </Field>
 
       {/* Semantic domain */}
       <Field label="Semantic domain">
-        <input
-          type="text"
+        <select
           value={domain}
           onChange={(e) => setDomain(e.target.value)}
-          placeholder="e.g. 6.2 (Agriculture)"
-          style={inputStyle}
-        />
+          disabled={!ready}
+          style={{ minHeight: 44, width: '100%' }}
+          aria-label="Semantic domain"
+        >
+          {domains.map((d) => (
+            <option key={d.slug} value={d.slug}>{d.name}</option>
+          ))}
+        </select>
       </Field>
 
       {/* Duration */}
@@ -135,12 +247,12 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
       <button
         type="button"
         onClick={() => void handleCreate()}
-        disabled={loading}
+        disabled={loading || !ready}
         style={{
           minHeight: 52, fontSize: 18, fontWeight: 700,
-          background: loading ? '#b4b2a9' : '#1B3A6B',
+          background: (loading || !ready) ? '#b4b2a9' : '#1B3A6B',
           color: '#ffffff', border: 'none', borderRadius: 10,
-          cursor: loading ? 'not-allowed' : 'pointer', marginTop: 8,
+          cursor: (loading || !ready) ? 'not-allowed' : 'pointer', marginTop: 8,
         }}
       >
         {loading ? 'Creating…' : 'Create session'}
@@ -187,16 +299,4 @@ function SegmentedControl({
       ))}
     </div>
   )
-}
-
-const selectStyle: React.CSSProperties = {
-  width: '100%', fontSize: 16, padding: '10px 14px',
-  border: '2px solid #b4b2a9', borderRadius: 8,
-  background: '#ffffff', appearance: 'auto',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', fontSize: 16, padding: '10px 14px',
-  border: '2px solid #b4b2a9', borderRadius: 8,
-  boxSizing: 'border-box',
 }
