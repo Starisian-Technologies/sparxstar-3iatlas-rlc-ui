@@ -23,6 +23,7 @@ const FALLBACK_DOMAINS: DictDomain[] = [
 ]
 
 const DURATIONS = [5, 10, 15, 20]
+const DICT_FETCH_TIMEOUT_MS = 8000
 
 function useDictionarySetup(selectedLang: string) {
   const [languages, setLanguages] = useState<DictLanguage[]>([])
@@ -39,12 +40,34 @@ function useDictionarySetup(selectedLang: string) {
       return
     }
 
+    let cancelled = false
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), DICT_FETCH_TIMEOUT_MS)
     setLanguagesLoaded(false)
-    void fetch(`${DICT_BASE}/languages`)
+    void fetch(`${DICT_BASE}/languages`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() as Promise<{ data: { languages: DictLanguage[] } }> : Promise.reject(new Error(`Languages API failed with status ${r.status}`))))
-      .then((data) => setLanguages(data.data.languages.length > 0 ? data.data.languages : FALLBACK_LANGUAGES))
-      .catch(() => setLanguages(FALLBACK_LANGUAGES))
-      .finally(() => setLanguagesLoaded(true))
+      .then((data) => {
+        if (!cancelled) {
+          setLanguages(data.data.languages.length > 0 ? data.data.languages : FALLBACK_LANGUAGES)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLanguages(FALLBACK_LANGUAGES)
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId)
+        if (!cancelled) {
+          setLanguagesLoaded(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
   }, [])
 
   useEffect(() => {
