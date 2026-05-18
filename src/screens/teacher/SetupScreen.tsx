@@ -47,10 +47,27 @@ function useDictionarySetup(selectedLang: string) {
   useEffect(() => {
     if (!DICT_BASE || !selectedLang) return
 
-    void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`)
+    const controller = new AbortController()
+
+    void fetch(`${DICT_BASE}/domains?lang_source=${selectedLang}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() as Promise<{ data: { domains: DictDomain[] } }> : Promise.reject(new Error(`Domains API failed with status ${r.status}`))))
-      .then((data) => setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS))
-      .catch(() => setDomains(FALLBACK_DOMAINS))
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setDomains(data.data.domains.length > 0 ? data.data.domains : FALLBACK_DOMAINS)
+        }
+      })
+      .catch((error: unknown) => {
+        if (
+          !controller.signal.aborted &&
+          !(error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          setDomains(FALLBACK_DOMAINS)
+        }
+      })
+
+    return () => {
+      controller.abort()
+    }
   }, [selectedLang])
 
   return { languages, domains, ready }
