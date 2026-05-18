@@ -62,7 +62,7 @@ function useDictionarySetup(selectedLang: string) {
         }
       })
       .catch((error: unknown) => {
-        if (!cancelled && !(error instanceof Error && error.name === 'AbortError')) {
+        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
           setDomains(FALLBACK_DOMAINS)
         }
       })
@@ -79,7 +79,7 @@ function useDictionarySetup(selectedLang: string) {
   }, [selectedLang])
 
   const isLanguageValid = languages.some((language) => language.slug === selectedLang)
-  const ready = languagesLoaded && domainsLoaded && isLanguageValid && domains.length > 0
+  const ready = languagesLoaded && domainsLoaded && !!selectedLang && isLanguageValid && domains.length > 0
 
   return { languages, domains, ready }
 }
@@ -105,10 +105,12 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   }, [languages, language])
 
   useEffect(() => {
-    if (domains.length > 0 && !domains.some((d) => d.slug === domain)) {
-      setDomain(domains[0].slug)
+    if (domains.length > 0) {
+      setDomain((currentDomain) => {
+        return domains.some((d) => d.slug === currentDomain) ? currentDomain : domains[0].slug
+      })
     }
-  }, [domains, domain])
+  }, [domains])
 
   const handleCreate = async () => {
     setLoading(true)
