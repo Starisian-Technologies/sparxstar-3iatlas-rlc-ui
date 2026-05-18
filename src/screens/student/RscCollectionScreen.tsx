@@ -48,7 +48,8 @@ export function RscCollectionScreen({
   const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
 
   useEffect(() => {
-    if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
+    const status = session?.status
+    if (!hasCollectionEndedRef.current && (status === 'qc' || status === 'closed')) {
       hasCollectionEndedRef.current = true
       onCollectionEnded()
     }

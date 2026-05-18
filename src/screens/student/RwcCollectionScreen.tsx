@@ -68,7 +68,8 @@ export function RwcCollectionScreen({
   }, [currentRound])
 
   useEffect(() => {
-    if (!sessionEndedRef.current && session?.status && session.status !== 'open') {
+    const status = session?.status
+    if (!sessionEndedRef.current && (status === 'qc' || status === 'closed')) {
       sessionEndedRef.current = true
       onCollectionEnded()
     }

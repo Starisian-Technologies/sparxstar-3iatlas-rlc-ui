@@ -6,10 +6,12 @@ import { SetupScreen } from '@/screens/teacher/SetupScreen'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
 import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
+import { RscCompleteScreen } from '@/screens/student/RscCompleteScreen'
 import { QcScreen } from '@/screens/qc/QcScreen'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
+import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
 
@@ -23,6 +25,7 @@ type Screen =
   | 'student_lobby'
   | 'student_rwc_collection'
   | 'student_rsc_collection'
+  | 'student_rsc_complete'
   | 'student_round_complete'
   | 'qc'
   | 'ceremony'
@@ -40,6 +43,10 @@ export function App() {
     collection_depth: null,
     language: null,
   })
+  const { cleanupSession } = useSubmissionQueue(
+    state.session_id ?? '',
+    state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
+  )
 
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
@@ -218,8 +225,17 @@ export function App() {
           // Stay on collection screen until all 12 domains are complete.
         }}
         onCollectionCompleted={() => {
-          // Student has submitted all 12 domains and now waits.
+          setScreen('student_rsc_complete')
         }}
+        onCollectionEnded={() => setScreen('qc')}
+      />
+    )
+  }
+
+  if (screen === 'student_rsc_complete' && state.session_id) {
+    return (
+      <RscCompleteScreen
+        session_id={state.session_id}
         onCollectionEnded={() => setScreen('qc')}
       />
     )
@@ -293,7 +309,10 @@ export function App() {
     return (
       <CeremonyScreen
         session_id={state.session_id}
-        onReturnToSession={() => setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')}
+        onReturnToSession={() => {
+          void cleanupSession()
+          setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
+        }}
       />
     )
   }
