@@ -11,8 +11,8 @@ import { QcScreen } from '@/screens/qc/QcScreen'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
+import { cleanupSyncedRecords } from '@/runtime/offlineQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
-import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
 
 const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
@@ -43,14 +43,6 @@ export function App() {
     collection_depth: null,
     language: null,
   })
-  // App uses the hook only for manual ceremony cleanup, so autoFlush stays disabled.
-  // The fallback IDs satisfy the hook signature before a real session/participant exists,
-  // but cleanupSession() is only invoked from the ceremony flow after session_id is set.
-  const { cleanupSession } = useSubmissionQueue(
-    state.session_id ?? 'app-session',
-    state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
-    { autoFlush: false },
-  )
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
     return (
@@ -315,12 +307,8 @@ export function App() {
       <CeremonyScreen
         session_id={ceremonySessionId}
         onReturnToSession={async () => {
-          if (!state.session_id) {
-            setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
-            return
-          }
           try {
-            await cleanupSession()
+            await cleanupSyncedRecords(ceremonySessionId)
           } catch (error) {
             console.error(
               `Failed to clean up synced records for session ${ceremonySessionId}. Offline data may persist until manual cleanup or app restart.`,
