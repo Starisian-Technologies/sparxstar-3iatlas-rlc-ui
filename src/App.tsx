@@ -310,7 +310,9 @@ export function App() {
       <CeremonyScreen
         session_id={state.session_id}
         onReturnToSession={() => {
-          void cleanupSession()
+          cleanupSession().catch((error) => {
+            console.error('Failed to clean up session', error)
+          })
           setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
         }}
       />
