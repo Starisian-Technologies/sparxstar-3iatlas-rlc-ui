@@ -44,7 +44,9 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
 
   return (
     <div style={wrapStyle}>
-      <div style={{ fontSize: 48 }}>✅</div>
+      <div aria-hidden="true" style={{ fontSize: 48 }}>
+        ✅
+      </div>
       <div style={{ fontSize: 22, fontWeight: 800 }}>You finished!</div>
       <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginTop: 6 }}>
         All 12 sentences submitted. Waiting for the class…
