@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 
+const TOTAL_SENTENCES = 12
+
 interface RscCompleteScreenProps {
   session_id: string
   onCollectionEnded: () => void
@@ -25,7 +27,7 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
       </div>
       <div style={{ fontSize: 22, fontWeight: 800 }}>You finished!</div>
       <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginTop: 6 }}>
-        All 12 sentences submitted. Waiting for the class…
+        All {TOTAL_SENTENCES} sentences submitted. Waiting for the class…
       </div>
       <div style={pulseWrapStyle}>
         <div style={pulseStyle} />
