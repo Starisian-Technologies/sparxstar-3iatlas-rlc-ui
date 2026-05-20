@@ -315,11 +315,15 @@ export function App() {
       <CeremonyScreen
         session_id={ceremonySessionId}
         onReturnToSession={async () => {
+          if (!state.session_id) {
+            setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
+            return
+          }
           try {
             await cleanupSession()
           } catch (error) {
             console.error(
-              `Failed to clean up synced records for session ${ceremonySessionId}. Offline data may persist until the next sync.`,
+              `Failed to clean up synced records for session ${ceremonySessionId}. Offline data may persist until manual cleanup or app restart.`,
               error,
             )
           }
