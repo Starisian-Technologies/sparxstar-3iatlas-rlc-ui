@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 
 const TOTAL_SENTENCES = 12
@@ -10,12 +10,14 @@ interface RscCompleteScreenProps {
 
 export function RscCompleteScreen({ session_id, onCollectionEnded }: RscCompleteScreenProps) {
   const hasCollectionEndedRef = useRef(false)
-  const { session } = useSessionPoll(session_id, !hasCollectionEndedRef.current)
+  const [pollingEnabled, setPollingEnabled] = useState(true)
+  const { session } = useSessionPoll(session_id, pollingEnabled)
 
   useEffect(() => {
     const status = session?.status
     if (!hasCollectionEndedRef.current && (status === 'qc' || status === 'closed')) {
       hasCollectionEndedRef.current = true
+      setPollingEnabled(false)
       onCollectionEnded()
     }
   }, [onCollectionEnded, session?.status])
