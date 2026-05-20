@@ -11,8 +11,8 @@ import { QcScreen } from '@/screens/qc/QcScreen'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
-import { cleanupSyncedRecords } from '@/runtime/offlineQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
+import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
 
 const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
@@ -43,6 +43,11 @@ export function App() {
     collection_depth: null,
     language: null,
   })
+  const { cleanupSession } = useSubmissionQueue(
+    state.session_id ?? 'app-session',
+    state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
+    { autoFlush: false },
+  )
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
     return (
@@ -308,7 +313,7 @@ export function App() {
         session_id={ceremonySessionId}
         onReturnToSession={async () => {
           try {
-            await cleanupSyncedRecords(ceremonySessionId)
+            await cleanupSession()
           } catch (error) {
             console.error(
               `Failed to clean up synced records for session ${ceremonySessionId}. Offline data may persist until the next sync.`,

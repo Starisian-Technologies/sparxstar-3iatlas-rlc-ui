@@ -79,7 +79,16 @@ export interface SyncedSubmissionReceipt {
   result: SaveTokenResponse
 }
 
-export function useSubmissionQueue(sessionId: string, participantId: string) {
+export interface UseSubmissionQueueOptions {
+  autoFlush?: boolean
+}
+
+export function useSubmissionQueue(
+  sessionId: string,
+  participantId: string,
+  options: UseSubmissionQueueOptions = {},
+) {
+  const { autoFlush = true } = options
   const { isOnline } = useNetworkStatus()
   const [syncState, setSyncState] = useState<SyncState>(() => (isOnline ? 'syncing' : 'offline'))
   const [pendingCount, setPendingCount] = useState(0)
@@ -202,6 +211,12 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
   // ── Re-flush when the device comes back online ────────────────────────────
 
   useEffect(() => {
+    if (!autoFlush) {
+      setSyncState(isOnline ? 'synced' : 'offline')
+      void refreshPendingCount()
+      return
+    }
+
     if (!isOnline) {
       setSyncState('offline')
       void refreshPendingCount()
@@ -213,7 +228,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       void flushPending()
     }, 2000)
     return () => clearInterval(interval)
-  }, [isOnline, flushPending, refreshPendingCount])
+  }, [autoFlush, isOnline, flushPending, refreshPendingCount])
 
   // ── Primary submit function ───────────────────────────────────────────────
 
