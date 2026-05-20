@@ -20,7 +20,7 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
       setPollingEnabled(false)
       onCollectionEnded()
     }
-  }, [onCollectionEnded, session?.status])
+  }, [onCollectionEnded, session])
 
   return (
     <div style={wrapStyle}>
