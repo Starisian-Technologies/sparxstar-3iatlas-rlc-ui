@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { api } from '@/api/client'
+import { useSessionPoll } from '@/hooks/useSessionPoll'
 
 interface RscCompleteScreenProps {
   session_id: string
@@ -7,40 +7,16 @@ interface RscCompleteScreenProps {
 }
 
 export function RscCompleteScreen({ session_id, onCollectionEnded }: RscCompleteScreenProps) {
-  const callbackRef = useRef(onCollectionEnded)
+  const hasCollectionEndedRef = useRef(false)
+  const { session } = useSessionPoll(session_id, !hasCollectionEndedRef.current)
 
   useEffect(() => {
-    callbackRef.current = onCollectionEnded
-  }, [onCollectionEnded])
-
-  useEffect(() => {
-    let active = true
-    let hasEnded = false
-
-    const poll = async () => {
-      if (!active || hasEnded) return
-      try {
-        const status = await api.session.status(session_id)
-        if (!active || hasEnded) return
-        if (status.status === 'qc' || status.status === 'closed') {
-          hasEnded = true
-          active = false
-          clearInterval(interval)
-          callbackRef.current()
-        }
-      } catch {
-        // transient error — keep polling
-      }
+    const status = session?.status
+    if (!hasCollectionEndedRef.current && (status === 'qc' || status === 'closed')) {
+      hasCollectionEndedRef.current = true
+      onCollectionEnded()
     }
-
-    const interval = setInterval(() => void poll(), 3000)
-    void poll()
-
-    return () => {
-      active = false
-      clearInterval(interval)
-    }
-  }, [session_id])
+  }, [onCollectionEnded, session?.status])
 
   return (
     <div style={wrapStyle}>
