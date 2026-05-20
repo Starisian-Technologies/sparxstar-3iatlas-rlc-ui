@@ -11,7 +11,7 @@ import { QcScreen } from '@/screens/qc/QcScreen'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
-import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
+import { cleanupSyncedRecords } from '@/runtime/offlineQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
 
@@ -43,11 +43,6 @@ export function App() {
     collection_depth: null,
     language: null,
   })
-  const { cleanupSession } = useSubmissionQueue(
-    state.session_id ?? '',
-    state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
-  )
-
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
     return (
@@ -306,16 +301,18 @@ export function App() {
   }
 
   if (screen === 'ceremony' && state.session_id) {
+    const ceremonySessionId = state.session_id
+
     return (
       <CeremonyScreen
-        session_id={state.session_id}
+        session_id={ceremonySessionId}
         onReturnToSession={() => {
-          cleanupSession().catch((error) => {
-            console.error('Failed to clean up session', error)
-          })
-          setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
-        }}
-      />
+            cleanupSyncedRecords(ceremonySessionId).catch((error) => {
+              console.error('Failed to clean up session', error)
+            })
+            setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
+          }}
+        />
     )
   }
 

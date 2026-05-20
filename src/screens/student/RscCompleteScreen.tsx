@@ -15,12 +15,17 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
 
   useEffect(() => {
     let active = true
+    let hasEnded = false
 
     const poll = async () => {
+      if (!active || hasEnded) return
       try {
         const status = await api.session.status(session_id)
-        if (!active) return
+        if (!active || hasEnded) return
         if (status.status === 'qc' || status.status === 'closed') {
+          hasEnded = true
+          active = false
+          clearInterval(interval)
           callbackRef.current()
         }
       } catch {
@@ -28,8 +33,8 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
       }
     }
 
-    void poll()
     const interval = setInterval(() => void poll(), 3000)
+    void poll()
 
     return () => {
       active = false
