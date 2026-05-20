@@ -1,9 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { api } from '@/api/client'
 
-const TOTAL_SENTENCES = 12
-const STATUS_POLL_INTERVAL_MS = 3000
-
 interface RscCompleteScreenProps {
   session_id: string
   onCollectionEnded: () => void
@@ -19,14 +16,6 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
   useEffect(() => {
     let active = true
     let hasEnded = false
-    let timeout: ReturnType<typeof setTimeout> | null = null
-
-    const scheduleNextPoll = () => {
-      if (!active || hasEnded) return
-      timeout = setTimeout(() => {
-        void poll()
-      }, STATUS_POLL_INTERVAL_MS)
-    }
 
     const poll = async () => {
       if (!active || hasEnded) return
@@ -36,21 +25,20 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
         if (status.status === 'qc' || status.status === 'closed') {
           hasEnded = true
           active = false
+          clearInterval(interval)
           callbackRef.current()
-          return
         }
       } catch {
         // transient error — keep polling
       }
-
-      scheduleNextPoll()
     }
 
+    const interval = setInterval(() => void poll(), 3000)
     void poll()
 
     return () => {
       active = false
-      if (timeout) clearTimeout(timeout)
+      clearInterval(interval)
     }
   }, [session_id])
 
@@ -61,7 +49,7 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
       </div>
       <div style={{ fontSize: 22, fontWeight: 800 }}>You finished!</div>
       <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginTop: 6 }}>
-        All {TOTAL_SENTENCES} sentences submitted. Waiting for the class…
+        All 12 sentences submitted. Waiting for the class…
       </div>
       <div style={pulseWrapStyle}>
         <div style={pulseStyle} />
