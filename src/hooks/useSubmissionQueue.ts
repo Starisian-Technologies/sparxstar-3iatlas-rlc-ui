@@ -80,6 +80,10 @@ export interface SyncedSubmissionReceipt {
 }
 
 export interface UseSubmissionQueueOptions {
+  /**
+   * Disable the hook's background flusher when a caller only needs queue helpers
+   * like cleanupSession() and already has another auto-flushing instance mounted.
+   */
   autoFlush?: boolean
 }
 

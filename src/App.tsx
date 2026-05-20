@@ -43,6 +43,9 @@ export function App() {
     collection_depth: null,
     language: null,
   })
+  // App uses the hook only for manual ceremony cleanup, so autoFlush stays disabled.
+  // The fallback IDs satisfy the hook signature before a real session/participant exists,
+  // but cleanupSession() is only invoked from the ceremony flow after session_id is set.
   const { cleanupSession } = useSubmissionQueue(
     state.session_id ?? 'app-session',
     state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
