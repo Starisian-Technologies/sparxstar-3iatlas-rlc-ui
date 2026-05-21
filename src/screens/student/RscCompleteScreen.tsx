@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
-
-const TOTAL_SENTENCES = 12
+import { GRAMMAR_DOMAINS } from '@/types'
 
 interface RscCompleteScreenProps {
   session_id: string
@@ -24,12 +23,14 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
 
   return (
     <div style={wrapStyle}>
-      <div aria-hidden="true" style={{ fontSize: 48 }}>
-        ✅
-      </div>
+      <svg aria-hidden="true" width={48} height={48} viewBox="0 0 48 48" fill="none">
+        <circle cx={24} cy={24} r={22} fill="var(--success)" opacity={0.15} />
+        <circle cx={24} cy={24} r={22} stroke="var(--success)" strokeWidth={2} />
+        <path d="M14 24l8 8 12-14" stroke="var(--success)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
       <div style={{ fontSize: 22, fontWeight: 800 }}>You finished!</div>
       <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginTop: 6 }}>
-        All {TOTAL_SENTENCES} sentences submitted. Waiting for the class…
+        All {GRAMMAR_DOMAINS.length} sentences submitted. Waiting for the class…
       </div>
       <div style={pulseWrapStyle}>
         <div style={pulseStyle} />
