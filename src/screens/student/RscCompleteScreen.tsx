@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
-import { GRAMMAR_DOMAINS } from '@/types'
-
 interface RscCompleteScreenProps {
   session_id: string
+  submittedCount: number
   onCollectionEnded: () => void
 }
 
-export function RscCompleteScreen({ session_id, onCollectionEnded }: RscCompleteScreenProps) {
+export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnded }: RscCompleteScreenProps) {
   const hasCollectionEndedRef = useRef(false)
   const [pollingEnabled, setPollingEnabled] = useState(true)
   const { session } = useSessionPoll(session_id, pollingEnabled)
@@ -30,7 +29,7 @@ export function RscCompleteScreen({ session_id, onCollectionEnded }: RscComplete
       </svg>
       <div style={{ fontSize: 22, fontWeight: 800 }}>You finished!</div>
       <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginTop: 6 }}>
-        All {GRAMMAR_DOMAINS.length} sentences submitted. Waiting for the class…
+        All {submittedCount} sentences submitted. Waiting for the class…
       </div>
       <div style={pulseWrapStyle}>
         <div style={pulseStyle} />

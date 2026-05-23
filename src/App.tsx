@@ -33,6 +33,7 @@ type Screen =
 export function App() {
   const [screen, setScreen] = useState<Screen>('landing')
   const [roundSummary, setRoundSummary] = useState<RoundCompleteSummary | null>(null)
+  const [rscSubmittedCount, setRscSubmittedCount] = useState(0)
   const [state, setState] = useState<AppState>({
     role: 'none',
     session_id: null,
@@ -224,7 +225,8 @@ export function App() {
         onSubmitted={() => {
           // Stay on collection screen until all 12 domains are complete.
         }}
-        onCollectionCompleted={() => {
+        onCollectionCompleted={(submittedCount) => {
+          setRscSubmittedCount(submittedCount)
           setScreen('student_rsc_complete')
         }}
         onCollectionEnded={() => setScreen('qc')}
@@ -236,6 +238,7 @@ export function App() {
     return (
       <RscCompleteScreen
         session_id={state.session_id}
+        submittedCount={rscSubmittedCount}
         onCollectionEnded={() => setScreen('qc')}
       />
     )
