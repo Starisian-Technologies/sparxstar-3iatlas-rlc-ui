@@ -216,9 +216,23 @@ export function useSubmissionQueue(
 
   useEffect(() => {
     if (!autoFlush) {
-      setSyncState(isOnline ? 'synced' : 'offline')
-      void refreshPendingCount()
-      return
+      let cancelled = false
+      const syncFromQueueState = async () => {
+        const remainingSubs = await refreshPendingCount()
+        const remainingEvents = await getPendingEvents(sessionId)
+        if (cancelled) return
+
+        if (remainingSubs === 0 && remainingEvents.length === 0) {
+          setSyncState('synced')
+          return
+        }
+
+        setSyncState(isOnline ? 'syncing' : 'offline')
+      }
+      void syncFromQueueState()
+      return () => {
+        cancelled = true
+      }
     }
 
     if (!isOnline) {
@@ -232,7 +246,7 @@ export function useSubmissionQueue(
       void flushPending()
     }, 2000)
     return () => clearInterval(interval)
-  }, [autoFlush, isOnline, flushPending, refreshPendingCount])
+  }, [autoFlush, isOnline, flushPending, refreshPendingCount, sessionId])
 
   // ── Primary submit function ───────────────────────────────────────────────
 
