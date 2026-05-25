@@ -228,7 +228,7 @@ export function useSubmissionQueue(
             return
           }
 
-          setSyncState(isOnline ? 'syncing' : 'offline')
+          setSyncState('offline')
         } catch (error) {
           if (cancelled) return
           console.error('Failed to sync queue state from IndexedDB', error)
