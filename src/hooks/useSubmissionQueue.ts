@@ -218,16 +218,22 @@ export function useSubmissionQueue(
     if (!autoFlush) {
       let cancelled = false
       const syncFromQueueState = async () => {
-        const remainingSubs = await refreshPendingCount()
-        const remainingEvents = await getPendingEvents(sessionId)
-        if (cancelled) return
+        try {
+          const remainingSubs = await refreshPendingCount()
+          const remainingEvents = await getPendingEvents(sessionId)
+          if (cancelled) return
 
-        if (remainingSubs === 0 && remainingEvents.length === 0) {
-          setSyncState('synced')
-          return
+          if (remainingSubs === 0 && remainingEvents.length === 0) {
+            setSyncState('synced')
+            return
+          }
+
+          setSyncState(isOnline ? 'syncing' : 'offline')
+        } catch (error) {
+          if (cancelled) return
+          console.error('Failed to sync queue state from IndexedDB', error)
+          setSyncState('offline')
         }
-
-        setSyncState(isOnline ? 'syncing' : 'offline')
       }
       void syncFromQueueState()
       return () => {
