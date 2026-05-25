@@ -216,6 +216,12 @@ export function useSubmissionQueue(
 
   useEffect(() => {
     if (!autoFlush) {
+      if (!sessionId.trim()) {
+        setPendingCount(0)
+        setSyncState('synced')
+        return
+      }
+
       let cancelled = false
       const syncFromQueueState = async () => {
         try {
@@ -292,7 +298,12 @@ export function useSubmissionQueue(
     return { localId: queued.id, result: null, status: 'queued' }
   }, [sessionId, participantId, isOnline, flushPending])
 
-  const cleanupSession = useCallback(() => cleanupSyncedRecords(sessionId), [sessionId])
+  const cleanupSession = useCallback(() => {
+    if (!sessionId.trim()) {
+      return Promise.resolve()
+    }
+    return cleanupSyncedRecords(sessionId)
+  }, [sessionId])
 
   return { submit, syncState, pendingCount, syncedSubmissions, flushPending, cleanupSession }
 }
