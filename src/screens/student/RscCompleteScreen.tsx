@@ -13,12 +13,12 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
 
   useEffect(() => {
     const status = session?.status
-    if (!hasCollectionEndedRef.current && (status === 'qc' || status === 'closed')) {
+    if (!hasCollectionEndedRef.current && ['qc', 'closed', 'ceremony', 'archived'].includes(status ?? '')) {
       hasCollectionEndedRef.current = true
       setPollingEnabled(false)
       onCollectionEnded()
     }
-  }, [onCollectionEnded, session])
+  }, [onCollectionEnded, session?.status])
 
   return (
     <div style={wrapStyle}>
