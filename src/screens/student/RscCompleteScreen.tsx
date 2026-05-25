@@ -13,7 +13,7 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
 
   useEffect(() => {
     const status = session?.status
-    if (!hasCollectionEndedRef.current && ['qc', 'closed', 'ceremony', 'archived'].includes(status ?? '')) {
+    if (!hasCollectionEndedRef.current && ['qc', 'closed'].includes(status ?? '')) {
       hasCollectionEndedRef.current = true
       setPollingEnabled(false)
       onCollectionEnded()
