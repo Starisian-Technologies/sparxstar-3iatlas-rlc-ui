@@ -13,7 +13,7 @@ structure, and phase status. Everything below is supplementary.
 - UI technical spec: `.github/instructions/sparxstar-3iatlas-rlc-ui-technical-spec.md`
 - Game spec (most current): `.github/instructions/Sparxstar 3iatlas rlc spec v2.1 .md`
 - Suite architecture: `.github/instructions/3IATLAS-SUITE-ARCHITECTURE-v1.0.md`
-- RWC/RSC technical spec: `.github/instructions/AIWA-RWC-RSC-Technical-Specification-v1.0.md`
+- RWC/RSC technical spec: `[.github/instructions/AIWA-RWC-RSC-Technical-Specification-v3.0.md](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v3.0.md)`
 
 ## Backend
 
