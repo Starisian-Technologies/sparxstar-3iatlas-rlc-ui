@@ -7,7 +7,7 @@ import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import { GRAMMAR_DOMAINS } from '@/types'
-import type { CollectionDepth, SaveTokenResponse } from '@/types'
+import type { CollectionDepth, SaveTokenResponse, SessionStatus } from '@/types'
 
 interface RscCollectionScreenProps {
   session_id: string
@@ -16,7 +16,7 @@ interface RscCollectionScreenProps {
   language: string
   onSubmitted: (result: SaveTokenResponse) => void
   onCollectionCompleted: () => void
-  onCollectionEnded: () => void
+  onCollectionEnded: (status: SessionStatus) => void
 }
 
 type Step = 'sentence' | 'translation' | 'recording' | 'done'
@@ -48,9 +48,10 @@ export function RscCollectionScreen({
   const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
 
   useEffect(() => {
-    if (!hasCollectionEndedRef.current && session?.status && session.status !== 'open') {
+    const status = session?.status
+    if (!hasCollectionEndedRef.current && status && status !== 'open') {
       hasCollectionEndedRef.current = true
-      onCollectionEnded()
+      onCollectionEnded(status)
     }
   }, [onCollectionEnded, session?.status])
 
