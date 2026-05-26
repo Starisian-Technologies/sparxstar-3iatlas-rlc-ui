@@ -79,7 +79,20 @@ export interface SyncedSubmissionReceipt {
   result: SaveTokenResponse
 }
 
-export function useSubmissionQueue(sessionId: string, participantId: string) {
+export interface UseSubmissionQueueOptions {
+  /**
+   * Disable the hook's background flusher when a caller only needs queue helpers
+   * like cleanupSession() and already has another auto-flushing instance mounted.
+   */
+  autoFlush?: boolean
+}
+
+export function useSubmissionQueue(
+  sessionId: string,
+  participantId: string,
+  options: UseSubmissionQueueOptions = {},
+) {
+  const { autoFlush = true } = options
   const { isOnline } = useNetworkStatus()
   const [syncState, setSyncState] = useState<SyncState>(() => (isOnline ? 'syncing' : 'offline'))
   const [pendingCount, setPendingCount] = useState(0)
@@ -202,6 +215,38 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
   // ── Re-flush when the device comes back online ────────────────────────────
 
   useEffect(() => {
+    if (!autoFlush) {
+      if (!sessionId.trim()) {
+        setPendingCount(0)
+        setSyncState('synced')
+        return
+      }
+
+      let cancelled = false
+      const syncFromQueueState = async () => {
+        try {
+          const remainingSubs = await refreshPendingCount()
+          const remainingEvents = await getPendingEvents(sessionId)
+          if (cancelled) return
+
+          if (remainingSubs === 0 && remainingEvents.length === 0) {
+            setSyncState('synced')
+            return
+          }
+
+          setSyncState('offline')
+        } catch (error) {
+          if (cancelled) return
+          console.error('Failed to sync queue state from IndexedDB', error)
+          setSyncState('offline')
+        }
+      }
+      void syncFromQueueState()
+      return () => {
+        cancelled = true
+      }
+    }
+
     if (!isOnline) {
       setSyncState('offline')
       void refreshPendingCount()
@@ -213,7 +258,7 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
       void flushPending()
     }, 2000)
     return () => clearInterval(interval)
-  }, [isOnline, flushPending, refreshPendingCount])
+  }, [autoFlush, isOnline, flushPending, refreshPendingCount, sessionId])
 
   // ── Primary submit function ───────────────────────────────────────────────
 
@@ -253,7 +298,12 @@ export function useSubmissionQueue(sessionId: string, participantId: string) {
     return { localId: queued.id, result: null, status: 'queued' }
   }, [sessionId, participantId, isOnline, flushPending])
 
-  const cleanupSession = useCallback(() => cleanupSyncedRecords(sessionId), [sessionId])
+  const cleanupSession = useCallback(() => {
+    if (!sessionId.trim()) {
+      return Promise.resolve()
+    }
+    return cleanupSyncedRecords(sessionId)
+  }, [sessionId])
 
   return { submit, syncState, pendingCount, syncedSubmissions, flushPending, cleanupSession }
 }
