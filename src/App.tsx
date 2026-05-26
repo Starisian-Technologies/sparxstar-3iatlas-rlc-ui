@@ -44,11 +44,6 @@ export function App() {
     collection_depth: null,
     language: null,
   })
-  const { cleanupSession } = useSubmissionQueue(
-    state.session_id ?? '',
-    state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID,
-    { autoFlush: false },
-  )
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
     return (
@@ -309,25 +304,46 @@ export function App() {
   }
 
   if (screen === 'ceremony' && state.session_id) {
-    const ceremonySessionId = state.session_id
-
     return (
-      <CeremonyScreen
-        session_id={ceremonySessionId}
-        onReturnToSession={async () => {
-          try {
-            await cleanupSession()
-          } catch (error) {
-            console.error(
-              `Failed to clean up synced records for session ${ceremonySessionId}. Offline data may persist until manual cleanup or app restart.`,
-              error,
-            )
-          }
-          setScreen(state.role === 'teacher' ? 'teacher_monitor' : 'student_lobby')
-        }}
+      <CeremonyRoute
+        session_id={state.session_id}
+        participant_id={state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID}
+        role={state.role}
+        onReturnToSession={(role) => setScreen(role === 'teacher' ? 'teacher_monitor' : 'student_lobby')}
       />
     )
   }
 
   return null
+}
+
+function CeremonyRoute({
+  session_id,
+  participant_id,
+  role,
+  onReturnToSession,
+}: {
+  session_id: string
+  participant_id: string
+  role: AppState['role']
+  onReturnToSession: (role: AppState['role']) => void
+}) {
+  const { cleanupSession } = useSubmissionQueue(session_id, participant_id, { autoFlush: false })
+
+  return (
+    <CeremonyScreen
+      session_id={session_id}
+      onReturnToSession={async () => {
+        try {
+          await cleanupSession()
+        } catch (error) {
+          console.error(
+            `Failed to clean up synced records for session ${session_id}. Offline data may persist until manual cleanup or app restart.`,
+            error,
+          )
+        }
+        onReturnToSession(role)
+      }}
+    />
+  )
 }
