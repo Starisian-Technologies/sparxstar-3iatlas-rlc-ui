@@ -10,10 +10,10 @@ structure, and phase status. Everything below is supplementary.
 
 ## Authoritative specs
 
-- UI technical spec: `docs/specs/sparxstar-3iatlas-rlc-ui-technical-spec.md`
-- Game spec (most current): `docs/specs/Sparxstar 3iatlas rlc spec v2.1 .md`
-- Suite architecture: `docs/specs/3IATLAS-SUITE-ARCHITECTURE-v1.0.md`
-- RWC/RSC technical spec: `docs/specs/AIWA-RWC-RSC-Technical-Specification-v1.0.md`
+- UI technical spec: `.github/instructions/sparxstar-3iatlas-rlc-ui-technical-spec.md`
+- Game spec (most current): `.github/instructions/Sparxstar 3iatlas rlc spec v2.1 .md`
+- Suite architecture: `.github/instructions/3IATLAS-SUITE-ARCHITECTURE-v1.0.md`
+- RWC/RSC technical spec: `.github/instructions/AIWA-RWC-RSC-Technical-Specification-v1.0.md`
 
 ## Backend
 
@@ -34,10 +34,10 @@ structure, and phase status. Everything below is supplementary.
 
 ## UI mockups
 
-- [Game Play](../RLC-game-play.png)
-- [Awards](../RLC-awards.png)
-- [Awards 2](../RLC-awards-2.png)
-- [Awards 3](../RLC-awards-3.png)
+- [Game Play](./instructions/RLC-game-play.png)
+- [Awards](./instructions/RLC-awards.png)
+- [Awards 2](./instructions/RLC-awards-2.png)
+- [Awards 3](./instructions/RLC-awards-3.png)
 
 ## Before opening a PR
 
