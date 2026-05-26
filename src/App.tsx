@@ -31,6 +31,10 @@ type Screen =
 // by the terminal status: 'ceremony'/'archived' skip straight to the ceremony so
 // they are never stranded; 'qc'/'closed' enter the QC review flow.
 function nextScreenAfterCollection(status: SessionStatus): Screen {
+  if (status === 'open') {
+    throw new Error('nextScreenAfterCollection called with non-terminal session status')
+  }
+
   return status === 'ceremony' || status === 'archived' ? 'ceremony' : 'qc'
 }
 
