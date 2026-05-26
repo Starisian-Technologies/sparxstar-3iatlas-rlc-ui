@@ -291,7 +291,7 @@ run('RLC backend contract', () => {
       checkShape('token/save', r.body, {
         token_id: { type: 'string' },
         spelling_signal: { type: 'string', enum: ['confirmed', 'variant', 'discovery'] },
-        saturation_signal: { type: 'string', enum: ['ok', 'saturated'] },
+        saturation_signal: { type: 'string', enum: ['continue', 'saturated'] },
         spelling_score: { type: 'number' },
         xp_awarded: { type: 'number' },
       }),
