@@ -91,8 +91,9 @@ API files**.
 
 - **TypeScript:** strict mode. No `any`. No `@ts-ignore`. All props interfaces
   explicitly typed. All API responses typed against `src/types/index.ts`.
-- **React:** functional components only. `useCallback` on handlers passed as
-  props. `void` prefix on async calls in event handlers
+- **React:** functional components only. Use `useCallback` when needed (for
+  example, for stable dependencies or memoized children), not by default.
+  Use a `void` prefix on async calls in event handlers
   (`onClick={() => void handleJoin()}`).
 - **Accessibility:** `aria-label` on any control whose text isn't
   self-describing. `role="status"` / `aria-live="polite"` for live vote counts.
