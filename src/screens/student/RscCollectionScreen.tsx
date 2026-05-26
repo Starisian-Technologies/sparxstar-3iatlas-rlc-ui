@@ -15,7 +15,7 @@ interface RscCollectionScreenProps {
   collection_depth: CollectionDepth
   language: string
   onSubmitted: (result: SaveTokenResponse) => void
-  onCollectionCompleted: () => void
+  onCollectionCompleted: (submittedCount: number) => void
   onCollectionEnded: (status: SessionStatus) => void
 }
 
@@ -163,7 +163,7 @@ export function RscCollectionScreen({
       setTranslation('')
       setStep('sentence')
       if (nextCompleted.size === totalDomains) {
-        onCollectionCompleted()
+        onCollectionCompleted(nextCompleted.size)
       }
     } catch {
       setError('Could not submit. Try again.')

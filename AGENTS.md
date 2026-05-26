@@ -10,9 +10,9 @@ It calls the `sparxstar-3iatlas-rlc` WordPress plugin REST API at `/aiwa/v1/`.
 The plugin is the server; this repo is the UI.
 
 - **Backend repo (game server):** https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc
-- **Authoritative UI spec:** `docs/specs/sparxstar-3iatlas-rlc-ui-technical-spec.md`
-- **Game spec (most current):** `docs/specs/Sparxstar 3iatlas rlc spec v2.1 .md`
-- **Suite architecture:** `docs/specs/3IATLAS-SUITE-ARCHITECTURE-v1.0.md`
+- **Authoritative UI spec:** `.github/instructions/sparxstar-3iatlas-rlc-ui-technical-spec.md`
+- **Game spec (most current):** `.github/instructions/Sparxstar 3iatlas rlc spec v2.1 .md`
+- **Suite architecture:** `.github/instructions/3IATLAS-SUITE-ARCHITECTURE-v1.0.md`
 
 > Note: `sparxstar-3iatlas-dictionary` is a **separate** upstream lexical service,
 > not this repo and not the RLC game server. Do not apply its PHP/WordPress
