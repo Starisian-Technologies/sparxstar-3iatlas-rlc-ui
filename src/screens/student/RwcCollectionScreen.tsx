@@ -8,7 +8,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
-import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SubmittedWord } from '@/types'
+import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SessionStatus, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
   session_id: string
@@ -19,7 +19,7 @@ interface RwcCollectionScreenProps {
   onSubmitted: (result: SaveTokenResponse) => void
   onRoundComplete: (summary: RoundCompleteSummary) => void
   onClose: () => void
-  onCollectionEnded: () => void
+  onCollectionEnded: (status: SessionStatus) => void
 }
 
 export function RwcCollectionScreen({
@@ -69,12 +69,9 @@ export function RwcCollectionScreen({
 
   useEffect(() => {
     const status = session?.status
-    if (
-      !sessionEndedRef.current &&
-      (status === 'qc' || status === 'closed')
-    ) {
+    if (!sessionEndedRef.current && status && status !== 'open') {
       sessionEndedRef.current = true
-      onCollectionEnded()
+      onCollectionEnded(status)
     }
   }, [onCollectionEnded, session?.status])
 

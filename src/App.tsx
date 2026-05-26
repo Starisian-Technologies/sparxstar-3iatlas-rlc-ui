@@ -13,7 +13,7 @@ import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
-import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary } from '@/types'
+import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary, SessionStatus } from '@/types'
 
 const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
 
@@ -29,6 +29,17 @@ type Screen =
   | 'student_round_complete'
   | 'qc'
   | 'ceremony'
+
+// A student still on a collection screen when the session leaves 'open' is routed
+// by the terminal status: 'ceremony'/'archived' skip straight to the ceremony so
+// they are never stranded; 'qc'/'closed' enter the QC review flow.
+function nextScreenAfterCollection(status: SessionStatus): Screen {
+  if (status === 'open') {
+    throw new Error('nextScreenAfterCollection called with non-terminal session status')
+  }
+
+  return status === 'ceremony' || status === 'archived' ? 'ceremony' : 'qc'
+}
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('landing')
@@ -200,7 +211,7 @@ export function App() {
           setScreen('student_round_complete')
         }}
         onClose={() => setScreen('student_lobby')}
-        onCollectionEnded={() => setScreen('qc')}
+        onCollectionEnded={(status) => setScreen(nextScreenAfterCollection(status))}
       />
     )
   }
@@ -224,7 +235,7 @@ export function App() {
           setRscSubmittedCount(submittedCount)
           setScreen('student_rsc_complete')
         }}
-        onCollectionEnded={() => setScreen('qc')}
+        onCollectionEnded={(status) => setScreen(nextScreenAfterCollection(status))}
       />
     )
   }
@@ -234,7 +245,7 @@ export function App() {
       <RscCompleteScreen
         session_id={state.session_id}
         submittedCount={rscSubmittedCount}
-        onCollectionEnded={() => setScreen('qc')}
+        onCollectionEnded={(status) => setScreen(nextScreenAfterCollection(status))}
       />
     )
   }

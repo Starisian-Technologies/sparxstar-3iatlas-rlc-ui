@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
+import type { SessionStatus } from '@/types'
+
 interface RscCompleteScreenProps {
   session_id: string
   submittedCount: number
-  onCollectionEnded: () => void
+  onCollectionEnded: (status: SessionStatus) => void
 }
 
 export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnded }: RscCompleteScreenProps) {
@@ -13,10 +15,10 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
 
   useEffect(() => {
     const status = session?.status
-    if (!hasCollectionEndedRef.current && ['qc', 'closed'].includes(status ?? '')) {
+    if (!hasCollectionEndedRef.current && status && status !== 'open') {
       hasCollectionEndedRef.current = true
       setPollingEnabled(false)
-      onCollectionEnded()
+      onCollectionEnded(status)
     }
   }, [onCollectionEnded, session?.status])
 
