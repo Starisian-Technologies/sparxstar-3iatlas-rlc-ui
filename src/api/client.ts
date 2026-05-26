@@ -99,24 +99,24 @@ export const api = {
       })
     },
 
-    vote(token_id: string, payload: VotePayload): Promise<VoteResponse> {
+    vote(token_id: string, participant_id: string, payload: VotePayload): Promise<VoteResponse> {
       return request(`/token/${token_id}/vote`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, participant_id }),
       })
     },
 
-    submitTranslation(token_id: string, translation: string): Promise<void> {
+    submitTranslation(token_id: string, participant_id: string, translation: string): Promise<void> {
       return request(`/token/${token_id}/translate`, {
         method: 'POST',
-        body: JSON.stringify({ translation }),
+        body: JSON.stringify({ translation, participant_id }),
       })
     },
 
-    correct(token_id: string, corrected_text: string): Promise<void> {
+    correct(token_id: string, participant_id: string, corrected_text: string): Promise<void> {
       return request(`/token/${token_id}/correct`, {
         method: 'POST',
-        body: JSON.stringify({ corrected_text }),
+        body: JSON.stringify({ corrected_text, participant_id }),
       })
     },
   },

@@ -234,7 +234,6 @@ run('RLC backend contract', () => {
           spelling_score: { type: 'number' },
           vote_orthography: { type: 'object' },
           vote_semantics: { type: 'object' },
-          vote_audio: { type: 'object' },
           qc_translations: { type: 'array' },
           submitter_id: { type: 'string' },
         }),

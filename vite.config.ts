@@ -45,9 +45,13 @@ export default defineConfig({
     // Proxy API calls to WordPress during local development
     // Set VITE_WP_URL in .env.local to your WordPress dev site
     proxy: {
+      // The client calls /aiwa/v1/* but WordPress mounts REST routes under
+      // /wp-json. Rewrite so dev requests reach the real route; in production
+      // the plugin injects window.RLC_API_BASE with the correct prefix.
       '/aiwa': {
         target: process.env.VITE_WP_URL || 'http://localhost:8888',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/aiwa/, '/wp-json/aiwa'),
       },
       '/wp-json': {
         target: process.env.VITE_WP_URL || 'http://localhost:8888',

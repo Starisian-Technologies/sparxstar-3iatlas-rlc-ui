@@ -11,8 +11,9 @@ by WordPress at `/wp-json/aiwa/v1`.
 **Legend:** ✅ aligned · ❌ confirmed mismatch (breaks at runtime) · ⚠️ partial / degrades · ℹ️ note
 
 Run `RLC_SMOKE_BASE=<url> npm run smoke` against a live backend to re-verify.
-Today the smoke test will fail on items **B** and **G** below — that is intended;
-they are the real bugs.
+The UI side of **B** (participant_id) is now fixed; until the backend lands **B2**
+(qc-words rename) the smoke test will still flag the `vote_*` field names — that is
+intended.
 
 ---
 
@@ -118,16 +119,22 @@ prompt word shows "TARGET WORD", and round-complete never fires.
 
 ## Reconciliation checklist
 
-UI-side (this repo, low-risk, no backend change):
-- [ ] Add `participant_id` to vote / translate / correct bodies (fixes **B**).
-- [ ] Map backend `vote_spelling`/`vote_meaning` → UI vote counts; stop requiring `vote_audio` (fixes **G** UI-side).
-- [ ] Type `token_id` consistently and `saturation_signal` as `'saturated' | 'continue'`.
-- [ ] Confirm `RLC_API_BASE` injection; point the dev proxy at `/wp-json` (**C**).
+Decisions locked: teacher auth = **Helios JWT**; QC vote fields = **backend renames**; RWC rounds = **backend adds rounds**.
+
+UI-side (this repo):
+- [x] Add `participant_id` to vote / translate / correct bodies (fixes **B**).
+- [x] Keep `vote_orthography`/`vote_semantics`; make `vote_audio` optional (UI side of **G**).
+- [x] Type `saturation_signal` as `'saturated' | 'continue'`.
+- [x] Point the dev proxy at `/wp-json` so dev hits the real route (**C**).
+- [ ] Acquire + send `Authorization: Bearer <Helios JWT>` on teacher endpoints (**A**, ticket U3 — blocked on where the token comes from).
+- [ ] Confirm the plugin injects `window.RLC_API_BASE` in production (**C**, backend B3).
 
 Backend-side (needs a PR to `sparxstar-3iatlas-rlc`):
-- [ ] Read `grammar_domain` from the request in `handle_token_save` (fixes **H**).
-- [ ] Decide teacher auth (open vs Helios JWT) and document it (**A**).
-- [ ] Add RWC round fields to `status`, or confirm the UI should drop them (**I**).
-- [ ] Optionally rename `vote_spelling`/`vote_meaning` to match the UI (**G**).
+- [ ] Read `grammar_domain` from the request in `handle_token_save` (fixes **H**, B1).
+- [ ] Rename `vote_spelling`/`vote_meaning` → `vote_orthography`/`vote_semantics` (+ `vote_audio`) in `qc-words` (**G**, B2).
+- [ ] Document the Helios teacher-auth flow + return clean 401 (**A**, B4).
+- [ ] Add `current_round`/`total_rounds`/`round_goal`/`round_status` to `status` (**I**, B5).
+- [ ] Return `token_id` as a string in `qc-words` (B6).
+- [ ] Inject `window.RLC_API_BASE` + CORS; stand up staging + a test teacher JWT (B3/B7).
 
 Then: `RLC_SMOKE_BASE=<staging>/wp-json/aiwa/v1 RLC_SMOKE_WRITE=1 RLC_SMOKE_TOKEN=<jwt> npm run smoke` and clear every reported mismatch.

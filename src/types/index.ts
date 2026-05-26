@@ -52,7 +52,7 @@ export interface JoinSessionResponse {
 // ─── Token (Submission) ──────────────────────────────────────────────────────
 
 export type SpellingSignal = 'confirmed' | 'variant' | 'discovery'
-export type SaturationSignal = 'ok' | 'saturated'
+export type SaturationSignal = 'continue' | 'saturated'
 
 export interface SaveTokenPayload {
   session_id: string
@@ -82,7 +82,7 @@ export interface QcToken {
   spelling_score: number
   vote_orthography: { yes: number; no: number }
   vote_semantics: { yes: number; no: number }
-  vote_audio: { yes: number; no: number }
+  vote_audio?: { yes: number; no: number }
   qc_translations: Array<{ participant_id: string; translation: string }>
   submitter_id: string
   collection_mode?: CollectionMode
@@ -92,7 +92,7 @@ export interface QcToken {
 }
 
 export interface VotePayload {
-  dimension: 'orthography' | 'semantics' | 'audio'
+  dimension: 'orthography' | 'semantics'
   vote_yes: boolean
 }
 
