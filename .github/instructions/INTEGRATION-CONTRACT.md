@@ -126,8 +126,8 @@ UI-side (this repo):
 - [x] Keep `vote_orthography`/`vote_semantics`; make `vote_audio` optional (UI side of **G**).
 - [x] Type `saturation_signal` as `'saturated' | 'continue'`.
 - [x] Point the dev proxy at `/wp-json` so dev hits the real route (**C**).
-- [ ] Acquire + send `Authorization: Bearer <Helios JWT>` on teacher endpoints (**A**, ticket U3 — blocked on where the token comes from).
-- [ ] Confirm the plugin injects `window.RLC_API_BASE` in production (**C**, backend B3).
+- [x] Send `Authorization: Bearer <Helios JWT>` on teacher endpoints (**A**, ticket U3). Token source: `window.RLC_TEACHER_TOKEN` (plugin-injected in production) with a `localStorage.RLC_TEACHER_TOKEN` fallback for dev. The UI never calls Helios directly.
+- [ ] Confirm the plugin injects `window.RLC_API_BASE` and `window.RLC_TEACHER_TOKEN` in production (**C**, backend B3).
 
 Backend-side (needs a PR to `sparxstar-3iatlas-rlc`):
 - [ ] Read `grammar_domain` from the request in `handle_token_save` (fixes **H**, B1).
@@ -135,6 +135,6 @@ Backend-side (needs a PR to `sparxstar-3iatlas-rlc`):
 - [ ] Document the Helios teacher-auth flow + return clean 401 (**A**, B4).
 - [ ] Add `current_round`/`total_rounds`/`round_goal`/`round_status` to `status` (**I**, B5).
 - [ ] Return `token_id` as a string in `qc-words` (B6).
-- [ ] Inject `window.RLC_API_BASE` + CORS; stand up staging + a test teacher JWT (B3/B7).
+- [ ] Inject `window.RLC_API_BASE` and `window.RLC_TEACHER_TOKEN` in the plugin asset loader; add CORS; stand up staging + a test teacher JWT (B3/B7).
 
 Then: `RLC_SMOKE_BASE=<staging>/wp-json/aiwa/v1 RLC_SMOKE_WRITE=1 RLC_SMOKE_TOKEN=<jwt> npm run smoke` and clear every reported mismatch.
