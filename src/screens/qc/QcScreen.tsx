@@ -16,7 +16,7 @@ interface QcScreenProps {
 
 type QcStep = 'audio' | 'vote' | 'correction' | 'translation'
 type VoteCounts = { yes: number; no: number }
-type QcVoteToken = { vote_orthography: VoteCounts; vote_semantics: VoteCounts; vote_audio: VoteCounts }
+type QcVoteToken = { vote_orthography: VoteCounts; vote_semantics: VoteCounts; vote_audio?: VoteCounts }
 
 export function QcScreen({
   session_id,
@@ -93,7 +93,7 @@ export function QcScreen({
     if (hasVoted) return
     setActionError(null)
     try {
-      const response = await api.token.vote(currentToken.token_id, {
+      const response = await api.token.vote(currentToken.token_id, participant_id, {
         dimension: voteDimension,
         vote_yes,
       })
@@ -124,7 +124,7 @@ export function QcScreen({
     if (!correction.trim()) return
     setActionError(null)
     try {
-      await api.token.correct(currentToken.token_id, correction.trim())
+      await api.token.correct(currentToken.token_id, participant_id, correction.trim())
       setStep('translation')
     } catch {
       setActionError('Could not submit correction. Try again.')
@@ -135,7 +135,7 @@ export function QcScreen({
     if (!translation.trim()) return
     setActionError(null)
     try {
-      await api.token.submitTranslation(currentToken.token_id, translation.trim())
+      await api.token.submitTranslation(currentToken.token_id, participant_id, translation.trim())
       setTranslationSubmittedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
       await refreshStatus()
     } catch {
@@ -177,7 +177,7 @@ export function QcScreen({
             <div style={placeholderStyle}>
               <div style={{ fontSize: 42 }}>🔊</div>
               <div>
-                {(currentToken.vote_audio.yes + currentToken.vote_audio.no) > 0
+                {((currentToken.vote_audio?.yes ?? 0) + (currentToken.vote_audio?.no ?? 0)) > 0
                   ? 'Playback placeholder (Starmus not wired yet)'
                   : 'No recording'}
               </div>
@@ -326,9 +326,8 @@ export function QcScreen({
 }
 
 function getDefaultCounts(token: QcVoteToken, dimension: VotePayload['dimension']): VoteCounts {
-  if (dimension === 'orthography') return token.vote_orthography
   if (dimension === 'semantics') return token.vote_semantics
-  return token.vote_audio
+  return token.vote_orthography
 }
 
 function FullScreenMessage({ title, subtitle }: { title: string; subtitle: string }) {

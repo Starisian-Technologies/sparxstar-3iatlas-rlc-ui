@@ -32,13 +32,40 @@ const BASE =
   (window as unknown as Record<string, string>)['RLC_API_BASE'] ??
   '/aiwa/v1'
 
+/**
+ * Teacher endpoints (`session/create`, `session/{id}/close`, `teachers-star`)
+ * require a Helios Bearer token. The plugin's asset loader is expected to inject
+ * `window.RLC_TEACHER_TOKEN` after the teacher authenticates. For local dev,
+ * `localStorage.RLC_TEACHER_TOKEN` is used as a fallback so a developer can set
+ * the token once via the browser console.
+ *
+ * The UI never talks to Helios directly (AGENTS.md: "No direct downstream
+ * integrations").
+ */
+function getTeacherToken(): string | null {
+  if (typeof window === 'undefined') return null
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
+  try {
+    const fromStorage = window.localStorage.getItem('RLC_TEACHER_TOKEN')
+    return fromStorage && fromStorage.length > 0 ? fromStorage : null
+  } catch {
+    return null
+  }
+}
+
+function teacherAuthHeaders(): Record<string, string> {
+  const token = getTeacherToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   })
 
   if (!res.ok) {
@@ -56,6 +83,7 @@ export const api = {
     create(payload: CreateSessionPayload): Promise<CreateSessionResponse> {
       return request('/session/create', {
         method: 'POST',
+        headers: teacherAuthHeaders(),
         body: JSON.stringify(payload),
       })
     },
@@ -72,7 +100,10 @@ export const api = {
     },
 
     close(session_id: string): Promise<void> {
-      return request(`/session/${session_id}/close`, { method: 'POST' })
+      return request(`/session/${session_id}/close`, {
+        method: 'POST',
+        headers: teacherAuthHeaders(),
+      })
     },
 
     qcWords(session_id: string): Promise<QcToken[]> {
@@ -86,6 +117,7 @@ export const api = {
     assignTeacherStar(session_id: string, participant_id: string): Promise<void> {
       return request(`/session/${session_id}/teachers-star`, {
         method: 'POST',
+        headers: teacherAuthHeaders(),
         body: JSON.stringify({ participant_id }),
       })
     },
@@ -99,24 +131,24 @@ export const api = {
       })
     },
 
-    vote(token_id: string, payload: VotePayload): Promise<VoteResponse> {
+    vote(token_id: string, participant_id: string, payload: VotePayload): Promise<VoteResponse> {
       return request(`/token/${token_id}/vote`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, participant_id }),
       })
     },
 
-    submitTranslation(token_id: string, translation: string): Promise<void> {
+    submitTranslation(token_id: string, participant_id: string, translation: string): Promise<void> {
       return request(`/token/${token_id}/translate`, {
         method: 'POST',
-        body: JSON.stringify({ translation }),
+        body: JSON.stringify({ translation, participant_id }),
       })
     },
 
-    correct(token_id: string, corrected_text: string): Promise<void> {
+    correct(token_id: string, participant_id: string, corrected_text: string): Promise<void> {
       return request(`/token/${token_id}/correct`, {
         method: 'POST',
-        body: JSON.stringify({ corrected_text }),
+        body: JSON.stringify({ corrected_text, participant_id }),
       })
     },
   },
