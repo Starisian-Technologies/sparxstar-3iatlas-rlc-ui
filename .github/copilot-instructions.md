@@ -1,36 +1,38 @@
 # Copilot Instructions — sparxstar-3iatlas-rlc-ui
 
-This repository is the **React 19 + TypeScript + Vite PWA** for the SPARXSTAR
-3iAtlas Rapid Language Collection (RLC) classroom game. It is the UI only. It
-calls the `sparxstar-3iatlas-rlc` WordPress plugin REST API at `/aiwa/v1/`.
+This repository is the **React 19 + TypeScript + Vite + i18next PWA** for the
+AIWA Rapid Word & Sentence Collection Platform. It is the UI only. It calls
+the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST (`/api/v1/`) and
+socket.io.
 
 **Read `AGENTS.md` in the repo root first.** It is the canonical contract for
 this repo: absolute rules, backend endpoints, UI rules, coding standards, file
-structure, and phase status. Everything below is supplementary.
+structure. Everything below is supplementary.
 
-## Authoritative specs
+## Authoritative spec
 
-- UI technical spec: `.github/instructions/sparxstar-3iatlas-rlc-ui-technical-spec.md`
-- Game spec (most current): `.github/instructions/Sparxstar 3iatlas rlc spec v2.1 .md`
-- Suite architecture: `.github/instructions/3IATLAS-SUITE-ARCHITECTURE-v1.0.md`
-- RWC/RSC technical spec: `[.github/instructions/AIWA-RWC-RSC-Technical-Specification-v3.0.md](https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc-ui/blob/main/.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v3.0.md)`
+- **Canonical:** `.github/instructions/AIWA-RWC-RSC-Technical-Specification-v4.0.md`
 
-## Backend
+This document supersedes every prior spec — v1.x, v2.x, v2.1, v3.0, and any
+integration-contract notes. They have been removed from this repo. If you find
+another spec file anywhere, ignore it.
 
-- Game server (WordPress plugin): https://github.com/Starisian-Technologies/sparxstar-3iatlas-rlc
-- Namespace `Starisian\Sparxstar\Aiwa`, REST base `/aiwa/v1/`.
-- `sparxstar-3iatlas-dictionary` is a **separate** upstream lexical service — its
-  PHP/WordPress conventions do **not** apply to this repo.
+## The three repos
 
-## Hard constraints (see AGENTS.md for the full list)
+- **`sparxstar-3iatlas-rlc-ui`** (this repo) — React frontend
+- `sparxstar-3iatlas-rlc-node-engine` — Node + Express + PostgreSQL + socket.io backend (system of record)
+- `sparxstar-3iatlas-rlc` — WordPress PHP orchestrator (myCred + DVE + page mount only)
 
-- No WordPress dependency, no Node server, no database. Static-built client only.
-- No WebSocket library — use 2-second polling via `useSessionPoll`.
-- Token immutability: QC corrections create new tokens; never imply the original
-  was changed.
-- `AccessoryBar` is mandatory on every text-input screen; `ŋ` is the first char.
-- Keep the Starmus recorder placeholder; do not implement audio recording.
-- Inline styles only. TypeScript strict, no `any`. Functional components only.
+## Hard constraints (full list in AGENTS.md / spec §9)
+
+- UI talks to the Node backend only. Never call WordPress directly.
+- Real-time is socket.io. Use `socket.io-client`. No polling for live game state.
+- Audio never touches the UI's data layer. Starmus routes directly to Yahura. Keep the Starmus placeholder until the real widget is wired.
+- Every student-facing string is an i18next key. No hardcoded English.
+- Submitter identity is never displayed in QC. Revealed only at ceremony.
+- Participant token in memory only — never localStorage, never IndexedDB.
+- AccessoryBar is mandatory on text-input screens; `ŋ` is the first character; multi-char inserts bypass IME.
+- TypeScript strict. Inline styles only. Functional components.
 
 ## UI mockups
 
@@ -41,9 +43,8 @@ structure, and phase status. Everything below is supplementary.
 
 ## Before opening a PR
 
-Run and pass all of: `npm run typecheck`, `npm run lint`, `npm run test`,
-`npm run build`.
+Run and pass all of: `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`.
 
 ---
 
-sparxstar-3iatlas-rlc-ui | Starisian Technologies | CONFIDENTIAL — PATENT PENDING
+sparxstar-3iatlas-rlc-ui · Starisian Technologies · CONFIDENTIAL · PATENT PENDING
