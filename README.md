@@ -36,8 +36,6 @@ single source of truth across all three repos. Repo-specific contract lives in
 ```bash
 cp .env.example .env.local
 # Set VITE_AIWA_BACKEND_URL to your Node backend (e.g. http://localhost:3001)
-# Optionally set RLC_TEACHER_TOKEN / RLC_API_BASE locally via the browser
-# console for tier-aware sign-in.
 
 npm install
 npm run dev
