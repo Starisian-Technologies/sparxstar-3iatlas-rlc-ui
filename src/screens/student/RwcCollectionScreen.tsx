@@ -4,10 +4,13 @@ import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { Avatar } from '@/components/Avatar'
+import { StarBadge } from '@/components/StarBadge'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
+import { useTheme } from '@/theme/useTheme'
 import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SessionStatus, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
@@ -33,6 +36,7 @@ export function RwcCollectionScreen({
   onClose,
   onCollectionEnded,
 }: RwcCollectionScreenProps) {
+  const { tokens } = useTheme()
   const [word, setWord] = useState('')
   const [translation, setTranslation] = useState('')
   const [loading, setLoading] = useState(false)
@@ -227,10 +231,24 @@ export function RwcCollectionScreen({
   return (
     <div style={wrapStyle}>
       <header style={headerStyle}>
-        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Back to lobby">✕</button>
-        <div style={chipStyle}>🕘 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</div>
-        <div style={chipStyle}>👥 {session?.participant_count ?? 0}</div>
-        <div style={chipStyle}>⭐ {myLeaderboard?.xp ?? 0}</div>
+        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Back to lobby">
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <div style={chipStyle} aria-label={`Time remaining ${minutes} minutes ${seconds} seconds`}>
+          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>TIME</span>
+          <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+            {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+          </span>
+        </div>
+        <div style={chipStyle} aria-label={`${session?.participant_count ?? 0} players`}>
+          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>PLAYERS</span>
+          <span style={{ fontWeight: 800 }}>{session?.participant_count ?? 0}</span>
+        </div>
+        <div style={chipStyle} aria-label={`${myLeaderboard?.xp ?? 0} XP`}>
+          <StarBadge variant="gold" size={14} count={myLeaderboard?.xp ?? 0} />
+        </div>
         <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} />
       </header>
 
@@ -260,8 +278,10 @@ export function RwcCollectionScreen({
             style={inputStyle}
             aria-label="Word input"
           />
-          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle}>
-            ➤
+          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle} aria-label="Submit word">
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
         {needsTranslation && (
@@ -298,7 +318,7 @@ export function RwcCollectionScreen({
               </div>
               {entry.syncStatus === 'queued'
                 ? <span style={queuedBadgeStyle}>queued</span>
-                : <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
+                : <StarBadge variant="gold" count={`+${entry.xp_awarded}`} label={`${entry.xp_awarded} XP`} />
               }
             </div>
           ))}
@@ -317,12 +337,13 @@ export function RwcCollectionScreen({
                 background: entry.participant_id === participant_id ? 'rgba(255,45,120,0.2)' : 'rgba(255,255,255,0.03)',
               }}
             >
-              <span style={{ minWidth: 22, color: 'var(--text-secondary)' }}>{entry.rank}</span>
-              <span style={{ flex: 1 }}>
+              <span style={{ minWidth: 22, color: tokens.textMuted, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{entry.rank}</span>
+              <Avatar seed={entry.display_name} size={28} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {entry.display_name}
                 {entry.participant_id === participant_id ? ' (You)' : ''}
               </span>
-              <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
+              <StarBadge variant="gold" count={entry.xp} size={13} label={`${entry.xp} XP`} />
             </div>
           ))}
         </div>
@@ -402,12 +423,15 @@ const closeBtnStyle: React.CSSProperties = {
 
 const chipStyle: React.CSSProperties = {
   minHeight: 44,
-  borderRadius: 999,
+  borderRadius: 12,
   background: 'var(--card)',
   border: '1px solid var(--border)',
   display: 'flex',
+  flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
+  padding: '4px 6px',
+  gap: 2,
   fontWeight: 600,
 }
 
