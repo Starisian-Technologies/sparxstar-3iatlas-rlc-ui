@@ -4,7 +4,12 @@ import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { SpellingSignalDot } from '@/components/SpellingSignalDot'
+import { Avatar } from '@/components/Avatar'
+import { StarBadge } from '@/components/StarBadge'
+import { TenantLogo } from '@/components/TenantLogo'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { useTheme } from '@/theme/useTheme'
 import type { QcToken } from '@/types'
 
 interface MonitorScreenProps {
@@ -15,6 +20,7 @@ interface MonitorScreenProps {
 }
 
 export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRound }: MonitorScreenProps) {
+  const { tokens } = useTheme()
   const { session, error } = useSessionPoll(session_id, true)
   const { isOnline } = useNetworkStatus()
   const [liveFeed, setLiveFeed] = useState<QcToken[]>([])
@@ -46,29 +52,44 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
 
   return (
     <div style={wrapStyle}>
-      {/* ── Header ── */}
-      <header style={headerStyle}>
+      {/* ── Tenant header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <TenantLogo size="medium" />
+        <ThemeToggle />
+      </div>
+
+      {/* ── Join-code hero ── */}
+      <section style={joinCodeHeroStyle}>
         <div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12, letterSpacing: 1 }}>GAME LOBBY</div>
-          <div style={{ fontSize: 22, fontWeight: 800 }}>
-            Game Code: <span style={{ color: 'var(--accent-primary)' }}>{join_code}</span>
+          <div style={{ color: tokens.textMuted, fontSize: 12, letterSpacing: 1, fontWeight: 700 }}>JOIN CODE</div>
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 900,
+              color: tokens.primary,
+              letterSpacing: 6,
+              fontFamily: 'ui-monospace, "SFMono-Regular", Menlo, monospace',
+              lineHeight: 1.1,
+            }}
+          >
+            {join_code}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ color: 'var(--accent-primary)', fontWeight: 700, fontSize: 16 }}>
+          <div style={{ color: tokens.text, fontWeight: 800, fontSize: 16 }}>
             Round {round}/{totalRounds}
           </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>⏱ {timeDisplay}</div>
+          <div style={{ color: tokens.textMuted, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{timeDisplay}</div>
         </div>
-      </header>
+      </section>
 
       <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
 
       {/* ── Stats row ── */}
       <div style={statsRowStyle}>
-        <StatChip label="Players" value={String(session?.participant_count ?? 0)} icon="👥" />
-        <StatChip label="Words" value={String(session?.token_count ?? 0)} icon="💬" />
-        <StatChip label="Status" value={session?.status === 'open' ? 'In Progress' : (session?.status ?? '—')} icon="📍" />
+        <StatChip label="Players" value={String(session?.participant_count ?? 0)} />
+        <StatChip label="Words" value={String(session?.token_count ?? 0)} />
+        <StatChip label="Status" value={session?.status === 'open' ? 'In progress' : (session?.status ?? '—')} />
       </div>
 
       {/* ── Main two-column body ── */}
@@ -86,26 +107,30 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
                   {token.text}
                   <SpellingSignalDot signal={token.spelling_signal} />
                   {token.speaker_affirmed && (
-                    <span title="Speaker affirmed — recorded and QC vote passed" aria-label="Speaker affirmed" style={{ fontSize: 12 }}>🎙✓</span>
+                    <span title="Speaker affirmed — recorded and QC vote passed" aria-label="Speaker affirmed" style={{ color: tokens.success, fontSize: 12, fontWeight: 700 }}>✓ audio</span>
                   )}
                 </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
+                <div style={{ color: tokens.textMuted, fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
               </div>
-              <span style={{ color: 'var(--gold)', fontWeight: 700 }}>+{token.xp_awarded ?? 10} ⭐</span>
+              <StarBadge variant="gold" count={`+${token.xp_awarded ?? 10}`} size={14} label={`${token.xp_awarded ?? 10} XP`} />
             </div>
           ))}
         </section>
 
         {/* Leaderboard */}
         <section style={panelStyle}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>Players</div>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>Players</div>
           {(session?.leaderboard ?? []).slice(0, 8).map((entry) => (
             <div key={entry.participant_id} style={rowStyle}>
-              <span style={{ minWidth: 22, color: 'var(--text-secondary)' }}>{entry.rank}</span>
-              <span style={{ flex: 1 }}>{entry.display_name}</span>
-              <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
+              <span style={{ minWidth: 22, color: tokens.textMuted, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{entry.rank}</span>
+              <Avatar seed={entry.display_name} size={28} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.display_name}</span>
+              <StarBadge variant="gold" count={entry.xp} size={13} label={`${entry.xp} XP`} />
             </div>
           ))}
+          {(session?.leaderboard ?? []).length === 0 && (
+            <div style={{ color: tokens.textMuted, fontSize: 13 }}>No players yet — waiting for joins.</div>
+          )}
         </section>
       </div>
 
@@ -114,7 +139,7 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
       {error && <div style={errorStyle}>Connection issue — retrying.</div>}
 
       {/* ── Teacher action buttons ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
         {onNextRound && (
           <button
             type="button"
@@ -122,29 +147,40 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
             aria-label="Start next round"
             style={nextRoundBtnStyle}
           >
-            Next Round
+            Next round
           </button>
         )}
         <button type="button" onClick={onEndCollection} style={endBtnStyle}>
-          End Game / Start QC
+          End collection &amp; start QC
         </button>
       </div>
     </div>
   )
 }
 
-function StatChip({ label, value, icon }: { label: string; value: string; icon: string }) {
+function StatChip({ label, value }: { label: string; value: string }) {
+  const { tokens } = useTheme()
   return (
     <div style={{
-      flex: 1, background: 'var(--card)', border: '1px solid var(--border)',
-      borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', gap: 2,
+      flex: 1, background: tokens.card, border: `1px solid ${tokens.border}`,
+      borderRadius: 12, padding: '10px 12px', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', gap: 2, minHeight: 60,
     }}>
-      <div style={{ fontSize: 18 }}>{icon}</div>
-      <div style={{ fontWeight: 700 }}>{value}</div>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{label}</div>
+      <div style={{ fontWeight: 900, fontSize: 22, color: tokens.text, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.3 }}>{label}</div>
     </div>
   )
+}
+
+const joinCodeHeroStyle: React.CSSProperties = {
+  borderRadius: 16,
+  border: '1px solid var(--primary-soft)',
+  background: 'var(--card)',
+  padding: 16,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 10,
 }
 
 const wrapStyle: React.CSSProperties = {
@@ -155,17 +191,6 @@ const wrapStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
-}
-
-const headerStyle: React.CSSProperties = {
-  borderRadius: 14,
-  border: '1px solid var(--border)',
-  background: 'var(--card)',
-  padding: 14,
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: 10,
 }
 
 const statsRowStyle: React.CSSProperties = {

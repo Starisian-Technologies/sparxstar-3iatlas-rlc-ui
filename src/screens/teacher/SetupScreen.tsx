@@ -1,5 +1,20 @@
+/**
+ * T1 — Teacher session setup screen.
+ *
+ * Teachers pick collection mode, language, semantic domain, duration, and
+ * collection depth. The list of languages and domains is fetched from the
+ * dictionary API at `window.DICT_API_BASE` or `VITE_DICTIONARY_API_URL`,
+ * with a baked-in fallback (Mandinka / Agriculture) so the teacher can
+ * still start a session if the dictionary endpoint is offline.
+ */
 import { useEffect, useState } from 'react'
 import { api } from '@/api/client'
+import { Screen } from '@/components/Screen'
+import { Card } from '@/components/Card'
+import { Button } from '@/components/Button'
+import { TenantLogo } from '@/components/TenantLogo'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { useTheme } from '@/theme/useTheme'
 import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/types'
 
 interface SetupScreenProps {
@@ -107,11 +122,8 @@ function useDictionarySetup(selectedLang: string) {
   return { languages, domains, ready }
 }
 
-/**
- * T1 — Teacher session setup screen.
- * Select mode, language, semantic domain, duration, collection depth.
- */
 export function SetupScreen({ onCreated }: SetupScreenProps) {
+  const { tokens } = useTheme()
   const [mode, setMode] = useState<CollectionMode>('rwc')
   const [language, setLanguage] = useState('mandinka')
   const [domain, setDomain] = useState('agriculture-6.2')
@@ -154,119 +166,139 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
     }
   }
 
+  const selectStyle: React.CSSProperties = {
+    width: '100%',
+    minHeight: 48,
+    padding: '0 12px',
+    background: tokens.bg,
+    color: tokens.text,
+    border: `1.5px solid ${tokens.border}`,
+    borderRadius: 12,
+    fontSize: 16,
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23${tokens.textMuted.replace('#', '')}' stroke-width='2'%3e%3cpath d='M1 1l5 5 5-5'/%3e%3c/svg%3e")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 14px center',
+    paddingRight: 36,
+  }
+
   return (
-    <div style={{
-      minHeight: '100dvh',
-      background: '#f4f4f4',
-      padding: 20,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 16,
-    }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: '#1B3A6B' }}>New Session</div>
-
-      {/* Mode */}
-      <Field label="Mode">
-        <SegmentedControl
-          options={[
-            { value: 'rwc', label: 'Word collection' },
-            { value: 'rsc', label: 'Sentence collection' },
-          ]}
-          value={mode}
-          onChange={(v) => setMode(v as CollectionMode)}
-        />
-      </Field>
-
-      {/* Language */}
-      <Field label="Language">
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          disabled={!ready}
-          style={{ minHeight: 44, width: '100%' }}
-          aria-label="Session language"
-        >
-          {languages.map((l) => (
-            <option key={l.slug} value={l.slug}>{l.name}</option>
-          ))}
-        </select>
-      </Field>
-
-      {/* Semantic domain */}
-      <Field label="Semantic domain">
-        <select
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          disabled={!ready}
-          style={{ minHeight: 44, width: '100%' }}
-          aria-label="Semantic domain"
-        >
-          {domains.map((d) => (
-            <option key={d.slug} value={d.slug}>{d.name}</option>
-          ))}
-        </select>
-      </Field>
-
-      {/* Duration */}
-      <Field label="Duration">
-        <SegmentedControl
-          options={DURATIONS.map((d) => ({ value: String(d), label: `${d} min` }))}
-          value={String(duration)}
-          onChange={(v) => setDuration(Number(v))}
-        />
-      </Field>
-
-      {/* Collection depth */}
-      <Field label="Collection depth">
-        <SegmentedControl
-          options={[
-            { value: 'translation_only', label: 'Translation' },
-            { value: 'basic', label: 'Basic' },
-          ]}
-          value={depth}
-          onChange={(v) => setDepth(v as CollectionDepth)}
-        />
-        <div style={{ fontSize: 12, color: 'var(--accent-secondary)', marginTop: 6 }}>
-          Audio recording (full depth) is not enabled in this sprint.
+    <Screen
+      header={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <TenantLogo size="medium" />
+          <ThemeToggle />
         </div>
-        <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
-          {depth === 'translation_only' && 'Word + translation, no recording'}
-          {depth === 'basic' && 'Word only'}
+      }
+      footer={
+        <Button onClick={() => void handleCreate()} disabled={loading || !ready} large>
+          {loading ? 'Creating…' : 'Create session'}
+        </Button>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 420, margin: '0 auto', width: '100%' }}>
+        <div>
+          <div style={{ fontSize: 13, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>TEACHER</div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: '4px 0 0 0' }}>New session</h1>
         </div>
-      </Field>
 
-      {error && (
-        <div role="alert" style={{
-          background: '#ffeded', border: '1px solid #f09595',
-          borderRadius: 8, padding: '10px 14px', fontSize: 14, color: '#a32d2d',
-        }}>
-          {error}
-        </div>
-      )}
+        <Card>
+          <Field label="Mode">
+            <SegmentedControl
+              options={[
+                { value: 'rwc', label: 'Words' },
+                { value: 'rsc', label: 'Sentences' },
+              ]}
+              value={mode}
+              onChange={(v) => setMode(v as CollectionMode)}
+            />
+          </Field>
+        </Card>
 
-      <button
-        type="button"
-        onClick={() => void handleCreate()}
-        disabled={loading || !ready}
-        style={{
-          minHeight: 52, fontSize: 18, fontWeight: 700,
-          background: (loading || !ready) ? '#b4b2a9' : '#1B3A6B',
-          color: '#ffffff', border: 'none', borderRadius: 10,
-          cursor: (loading || !ready) ? 'not-allowed' : 'pointer', marginTop: 8,
-        }}
-      >
-        {loading ? 'Creating…' : 'Create session'}
-      </button>
-    </div>
+        <Card>
+          <Field label="Language">
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              disabled={!ready}
+              style={selectStyle}
+              aria-label="Session language"
+            >
+              {languages.map((l) => (
+                <option key={l.slug} value={l.slug} style={{ background: tokens.bg, color: tokens.text }}>{l.name}</option>
+              ))}
+            </select>
+          </Field>
+
+          <div style={{ height: 12 }} />
+
+          <Field label="Topic">
+            <select
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              disabled={!ready}
+              style={selectStyle}
+              aria-label="Semantic domain"
+            >
+              {domains.map((d) => (
+                <option key={d.slug} value={d.slug} style={{ background: tokens.bg, color: tokens.text }}>{d.name}</option>
+              ))}
+            </select>
+          </Field>
+        </Card>
+
+        <Card>
+          <Field label="Round duration">
+            <SegmentedControl
+              options={DURATIONS.map((d) => ({ value: String(d), label: `${d} min` }))}
+              value={String(duration)}
+              onChange={(v) => setDuration(Number(v))}
+            />
+          </Field>
+
+          <div style={{ height: 14 }} />
+
+          <Field label="Collection depth">
+            <SegmentedControl
+              options={[
+                { value: 'translation_only', label: 'Word + translation' },
+                { value: 'basic', label: 'Word only' },
+              ]}
+              value={depth}
+              onChange={(v) => setDepth(v as CollectionDepth)}
+            />
+            <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 8 }}>
+              Audio recording (full depth) is not enabled in this build.
+            </div>
+          </Field>
+        </Card>
+
+        {error && (
+          <div
+            role="alert"
+            style={{
+              background: 'rgba(239,68,68,0.12)',
+              border: `1px solid ${tokens.danger}`,
+              borderRadius: 10,
+              padding: '10px 14px',
+              fontSize: 14,
+              color: tokens.danger,
+            }}
+          >
+            {error}
+          </div>
+        )}
+      </div>
+    </Screen>
   )
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const { tokens } = useTheme()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</div>
       {children}
     </div>
   )
@@ -279,24 +311,46 @@ function SegmentedControl({
   value: string
   onChange: (v: string) => void
 }) {
+  const { tokens } = useTheme()
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          style={{
-            minHeight: 40, padding: '0 14px', fontSize: 14, fontWeight: 600,
-            background: value === opt.value ? '#1B3A6B' : '#ffffff',
-            color: value === opt.value ? '#ffffff' : '#1a1a1a',
-            border: `2px solid ${value === opt.value ? '#1B3A6B' : '#b4b2a9'}`,
-            borderRadius: 8, cursor: 'pointer', flex: '1 1 auto',
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div
+      role="radiogroup"
+      style={{
+        display: 'flex',
+        gap: 4,
+        padding: 4,
+        background: tokens.bg,
+        border: `1px solid ${tokens.border}`,
+        borderRadius: 12,
+      }}
+    >
+      {options.map((opt) => {
+        const selected = value === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: '1 1 0',
+              minHeight: 40,
+              padding: '0 12px',
+              fontSize: 14,
+              fontWeight: 700,
+              background: selected ? tokens.primary : 'transparent',
+              color: selected ? tokens.textInverse : tokens.textMuted,
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+              transition: 'background 80ms ease, color 80ms ease',
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
