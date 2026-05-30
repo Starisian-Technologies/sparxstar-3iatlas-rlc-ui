@@ -93,7 +93,7 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 
 - Student active / not active
 - Assignment submitted / not submitted
-- Last active timestamp (defined as `MAX(last_socket_heartbeat, last_submission_at)`; never keystroke or typing telemetry)
+- Last active timestamp (defined as `GREATEST(last_socket_heartbeat, last_submission_at)`; never keystroke or typing telemetry)
 
 **Teacher dashboard never shows for any tier:**
 
@@ -492,7 +492,6 @@ CREATE TABLE sessions (
     participants        JSONB NOT NULL DEFAULT '{}',
     rights              JSONB NOT NULL
 );
-CREATE INDEX idx_sessions_join_code ON sessions (join_code);
 CREATE INDEX idx_sessions_class_id  ON sessions (class_id);
 CREATE INDEX idx_sessions_status    ON sessions (status);
 ```
@@ -539,7 +538,7 @@ CREATE INDEX idx_tokens_session_id      ON tokens (session_id);
 CREATE INDEX idx_tokens_account_id      ON tokens (account_id);
 CREATE INDEX idx_tokens_completeness    ON tokens (completeness_signal);
 CREATE INDEX idx_tokens_spelling_signal ON tokens (spelling_signal);
-CREATE INDEX idx_tokens_orthography     ON tokens (orthography_state) WHERE orthography_state = 'corrected';
+CREATE INDEX idx_tokens_orthography     ON tokens (session_id) WHERE orthography_state = 'corrected';
 ```
 
 **`text` is immutable after creation. No UPDATE on this column. Ever.**
@@ -560,7 +559,6 @@ CREATE TABLE token_translations (
     created_at          BIGINT NOT NULL,
     UNIQUE (token_id, target_language)
 );
-CREATE INDEX idx_token_translations_token_id ON token_translations (token_id);
 ```
 
 ## 5.7 Vote Dimensions — Locked
@@ -788,7 +786,7 @@ HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator ve
 | Screen | Description |
 | :---- | :---- |
 | T1 — Session Setup | Mode, language, locale, domain, duration, depth. Rights confirmation — teacher confirms each field, no forced defaults. Calls `POST /api/v1/session/create`. |
-| T2 — Live Monitor | Join code + QR. Participant count. Rolling submission feed. Live leaderboard. Class XP total. **Lower Basic sessions:** roster claim panel showing which screen names are claimed and which remain free. **All tiers:** last-active indicator per participant (defined as `MAX(last_socket_heartbeat, last_submission_at)` — never includes keystroke or productivity data). Locked-account list with one-tap unlock. End session button. Socket-driven. |
+| T2 — Live Monitor | Join code + QR. Participant count. Rolling submission feed. Live leaderboard. Class XP total. **Lower Basic sessions:** roster claim panel showing which screen names are claimed and which remain free. **All tiers:** last-active indicator per participant (defined as `GREATEST(last_socket_heartbeat, last_submission_at)` — never includes keystroke or productivity data). Locked-account list with one-tap unlock. End session button. Socket-driven. |
 | T3 — QC Review | One token at a time. Yahura transcription displayed as reference. Audio vote live counts. Orthography vote live counts. Semantics vote live counts. Translation feed. Submitter identity hidden from teacher during voting (revealed at ceremony only). Advance button. |
 | T4 — Teacher's Star | Participant list with session XP. One tap. Calls `POST /api/v1/session/:id/teachers-star`. Disabled after assignment. |
 | T5 — Ceremony | Same as student ceremony screen. |
