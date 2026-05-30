@@ -147,12 +147,12 @@ export function RwcCollectionScreen({
     }
     if (latestResult) {
       setLastResult(latestResult)
-      if (latestLocalId) {
+      if (latestLocalId && collection_depth === 'full') {
         const meta = submissionMetaRef.current.get(latestLocalId)
         if (meta) setPendingAudioToken({ token_id: latestResult.token_id, word: meta.word })
       }
     }
-  }, [syncedSubmissions, onSubmitted, session_id, participant_id])
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id, collection_depth])
 
   const myLeaderboard = useMemo(
     () => session?.leaderboard.find((entry) => entry.participant_id === participant_id || entry.display_name === display_name),

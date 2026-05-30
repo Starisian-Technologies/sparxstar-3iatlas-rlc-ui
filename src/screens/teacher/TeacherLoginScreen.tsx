@@ -43,6 +43,12 @@ export function TeacherLoginScreen({ onLoggedIn, onBack }: TeacherLoginScreenPro
       // Also poke the window property so same-session requests pick it up
       // without waiting for a re-render.
       ;(window as unknown as Record<string, string>)['RLC_TEACHER_TOKEN'] = result.token
+      // School context — recording_enabled gates audio capture in T1.
+      if (result.school) {
+        const ctx = JSON.stringify(result.school)
+        try { localStorage.setItem('RLC_SCHOOL_CONTEXT', ctx) } catch { /* ignore */ }
+        ;(window as unknown as Record<string, string>)['RLC_SCHOOL_CONTEXT'] = ctx
+      }
       onLoggedIn()
     } catch {
       setError('Incorrect username or password. Please try again.')

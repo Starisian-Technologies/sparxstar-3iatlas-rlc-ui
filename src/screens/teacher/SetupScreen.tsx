@@ -7,7 +7,7 @@
  * with a baked-in fallback (Mandinka / Agriculture) so the teacher can
  * still start a session if the dictionary endpoint is offline.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api/client'
 import { Screen } from '@/components/Screen'
 import { Card } from '@/components/Card'
@@ -15,7 +15,16 @@ import { Button } from '@/components/Button'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from '@/theme/useTheme'
-import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/types'
+import type { CollectionMode, CollectionDepth, CreateSessionResponse, SchoolContext } from '@/types'
+
+function getSchoolContext(): SchoolContext | null {
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_SCHOOL_CONTEXT']
+  const raw = typeof fromWindow === 'string' && fromWindow.length > 0
+    ? fromWindow
+    : (() => { try { return localStorage.getItem('RLC_SCHOOL_CONTEXT') } catch { return null } })()
+  if (!raw) return null
+  try { return JSON.parse(raw) as SchoolContext } catch { return null }
+}
 
 interface SetupScreenProps {
   onCreated: (result: CreateSessionResponse & { mode: CollectionMode; collection_depth: CollectionDepth; language: string }) => void
@@ -128,10 +137,16 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   const [language, setLanguage] = useState('mandinka')
   const [domain, setDomain] = useState('agriculture-6.2')
   const [duration, setDuration] = useState(15)
+  const recordingEnabled = useMemo(() => getSchoolContext()?.recording_enabled ?? false, [])
   const [depth, setDepth] = useState<CollectionDepth>('translation_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { languages, domains, ready } = useDictionarySetup(language)
+
+  // Defensive: if recording is disabled at the school level, never allow `full`.
+  useEffect(() => {
+    if (!recordingEnabled && depth === 'full') setDepth('translation_only')
+  }, [recordingEnabled, depth])
 
   useEffect(() => {
     if (languages.length > 0 && !languages.some((l) => l.slug === language)) {
@@ -262,15 +277,18 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
           <Field label="Collection depth">
             <SegmentedControl
               options={[
+                ...(recordingEnabled ? [{ value: 'full', label: 'Word + audio' }] : []),
                 { value: 'translation_only', label: 'Word + translation' },
                 { value: 'basic', label: 'Word only' },
               ]}
               value={depth}
               onChange={(v) => setDepth(v as CollectionDepth)}
             />
-            <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 8 }}>
-              Audio recording (full depth) is not enabled in this build.
-            </div>
+            {!recordingEnabled && (
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 8 }}>
+                Audio recording is not enabled for this class.
+              </div>
+            )}
           </Field>
         </Card>
 

@@ -5,10 +5,24 @@ export interface AuthLoginPayload {
   password: string
 }
 
+/**
+ * School-level deployment context returned with the teacher JWT.
+ * `recording_enabled` is the kill-switch the UI uses to hide the
+ * `full` collection depth option in T1 setup — e.g. low-bandwidth
+ * deployments or Lower Basic classes where audio capture is not
+ * approved.
+ */
+export interface SchoolContext {
+  school_id: string
+  name?: string
+  recording_enabled: boolean
+}
+
 export interface AuthLoginResponse {
   token: string
   role: 'teacher' | 'school_admin' | 'adult'
   expires_in: number
+  school?: SchoolContext
 }
 
 // ─── Session ────────────────────────────────────────────────────────────────
