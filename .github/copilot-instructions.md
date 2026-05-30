@@ -1,9 +1,15 @@
 # Copilot Instructions — sparxstar-3iatlas-rlc-ui
 
 This repository is the **React 19 + TypeScript + Vite + i18next PWA** for the
-AIWA Rapid Word & Sentence Collection Platform. It is the UI only. It calls
-the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST (`/api/v1/`) and
-socket.io.
+SPARXSTAR 3iAtlas RLC (Rapid Language Collection) Platform. It is the UI only.
+At the v4.0 target it calls the `sparxstar-3iatlas-rlc-node-engine` Node
+backend over REST (`/api/v1/`) and socket.io.
+
+> **Status — during migration:** today `src/api/client.ts` still calls the
+> WordPress plugin at `/aiwa/v1` via `window.RLC_API_BASE`, and `useSessionPoll`
+> is polling-based. The migration steps that flip these to the Node backend +
+> socket.io are tracked in `README.md`. The contract below describes the
+> target; don't add new `/aiwa/v1` callers or new polling hooks.
 
 **Read `AGENTS.md` in the repo root first.** It is the canonical contract for
 this repo: absolute rules, backend endpoints, UI rules, coding standards, file
@@ -11,7 +17,7 @@ structure. Everything below is supplementary.
 
 ## Authoritative spec
 
-- **Canonical:** `.github/instructions/AIWA-RWC-RSC-Technical-Specification-v4.0.md`
+- **Canonical:** `.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md`
 
 This document supersedes every prior spec — v1.x, v2.x, v2.1, v3.0, and any
 integration-contract notes. They have been removed from this repo. If you find
