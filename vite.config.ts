@@ -27,13 +27,12 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache API responses for offline resilience
         runtimeCaching: [
           {
-            urlPattern: /\/aiwa\/v1\//,
+            urlPattern: /\/api\/v1\//,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'aiwa-api',
+              cacheName: 'rlc-api',
               networkTimeoutSeconds: 5,
             },
           },
@@ -42,19 +41,11 @@ export default defineConfig({
     }),
   ],
   server: {
-    // Proxy API calls to WordPress during local development
-    // Set VITE_WP_URL in .env.local to your WordPress dev site
+    // Proxy /api/* to the Node backend during local development.
+    // Set VITE_RLC_BACKEND_URL in .env.local to your Node backend URL.
     proxy: {
-      // The client calls /aiwa/v1/* but WordPress mounts REST routes under
-      // /wp-json. Rewrite so dev requests reach the real route; in production
-      // the plugin injects window.RLC_API_BASE with the correct prefix.
-      '/aiwa': {
-        target: process.env.VITE_WP_URL || 'http://localhost:8888',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/aiwa/, '/wp-json/aiwa'),
-      },
-      '/wp-json': {
-        target: process.env.VITE_WP_URL || 'http://localhost:8888',
+      '/api': {
+        target: process.env.VITE_RLC_BACKEND_URL || 'http://localhost:3000',
         changeOrigin: true,
       },
     },

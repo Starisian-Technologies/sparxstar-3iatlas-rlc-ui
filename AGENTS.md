@@ -11,13 +11,12 @@ It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 (`/api/v1/`) and socket.io.
 
 > **Status — during migration to v4.0:** the rules below describe the v4.0
-> target. Today, `src/api/client.ts` still reads `window.RLC_API_BASE` with a
-> `/aiwa/v1` fallback and calls the WordPress plugin REST namespace, and
-> `useSessionPoll` is still polling-based. The migration steps that flip these
-> to the Node backend + socket.io are tracked in `README.md`. Treat the v4.0
-> rules below as the contract every new line of code is written *toward*; do
-> not introduce new calls against `/aiwa/v1` or new polling hooks, even though
-> existing ones survive until their migration step lands.
+> target. Today, `src/api/client.ts` calls the Node backend at `/api/v1/` via
+> `window.RLC_API_BASE`, but `useSessionPoll` is still polling-based. The
+> socket.io replacement lands in the **Socket Introduction** migration step.
+> Migration steps are tracked in `README.md`. Treat the rules below as the
+> contract every new line of code is written *toward*; do not introduce new
+> polling hooks.
 
 ## The Three Repos
 

@@ -1,13 +1,15 @@
 /**
- * API client for sparxstar-3iatlas-rlc WordPress plugin.
- * All calls go to /aiwa/v1/ — the plugin's REST namespace.
+ * REST API client for the sparxstar-3iatlas-rlc-node-engine Node backend.
+ * All calls go to /api/v1/ (the backend's REST prefix).
  *
- * During local development, Vite proxies these calls to VITE_WP_URL.
- * In production, set the base URL via the RLC_API_BASE window variable
- * injected by the WordPress plugin's asset loader.
+ * In production, `window.RLC_API_BASE` is injected by the orchestrator
+ * (or whatever host page mounts this app). For local development, Vite
+ * proxies /api/* to VITE_RLC_BACKEND_URL.
  */
 
 import type {
+  AuthLoginPayload,
+  AuthLoginResponse,
   CreateSessionPayload,
   CreateSessionResponse,
   JoinSessionResponse,
@@ -27,24 +29,18 @@ export type EventsBatchFlushResponse = {
   accepted_event_ids?: string[]
 }
 
-// Base URL — injected by WordPress or falls back to Vite proxy
-const BASE =
-  (window as unknown as Record<string, string>)['RLC_API_BASE'] ??
-  '/aiwa/v1'
+// Base URL — injected by the host page or falls back to the Vite dev proxy
+const BASE = window.RLC_API_BASE ?? '/api/v1'
 
 /**
- * Teacher endpoints (`session/create`, `session/{id}/close`, `teachers-star`)
- * require a Helios Bearer token. The plugin's asset loader is expected to inject
- * `window.RLC_TEACHER_TOKEN` after the teacher authenticates. For local dev,
- * `localStorage.RLC_TEACHER_TOKEN` is used as a fallback so a developer can set
- * the token once via the browser console.
- *
- * The UI never talks to Helios directly (AGENTS.md: "No direct downstream
- * integrations").
+ * Teacher endpoints require a backend-issued JWT. The host page injects
+ * `window.RLC_TEACHER_TOKEN` after the teacher authenticates via
+ * POST /api/v1/auth/login. For local dev, localStorage.RLC_TEACHER_TOKEN
+ * is accepted as a fallback so a developer can set it once in the console.
  */
 function getTeacherToken(): string | null {
   if (typeof window === 'undefined') return null
-  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  const fromWindow = window.RLC_TEACHER_TOKEN
   if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
   try {
     const fromStorage = window.localStorage.getItem('RLC_TEACHER_TOKEN')
@@ -52,6 +48,11 @@ function getTeacherToken(): string | null {
   } catch {
     return null
   }
+}
+
+function getSchoolId(): string | null {
+  if (typeof window === 'undefined') return null
+  return window.RLC_SCHOOL_ID ?? null
 }
 
 function teacherAuthHeaders(): Record<string, string> {
@@ -76,9 +77,20 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
-// ─── Session ─────────────────────────────────────────────────────────────────
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const api = {
+  auth: {
+    login(payload: AuthLoginPayload): Promise<AuthLoginResponse> {
+      return request('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+    },
+  },
+
+  // ─── Session ───────────────────────────────────────────────────────────────
+
   session: {
     create(payload: CreateSessionPayload): Promise<CreateSessionResponse> {
       return request('/session/create', {
@@ -88,10 +100,17 @@ export const api = {
       })
     },
 
+    // Tier-aware join — PIN/password fields added in Step 5 (Tier-aware Sign-in).
+    // school_id is read from window.RLC_SCHOOL_ID per spec §3.2.
     join(join_code: string, display_name: string): Promise<JoinSessionResponse> {
+      const school_id = getSchoolId()
       return request('/session/join', {
         method: 'POST',
-        body: JSON.stringify({ join_code, display_name }),
+        body: JSON.stringify({
+          join_code,
+          display_name,
+          ...(school_id ? { school_id } : {}),
+        }),
       })
     },
 
@@ -153,7 +172,7 @@ export const api = {
     },
   },
 
-  // ─── Events batch ───────────────────────────────────────────────────────────
+  // ─── Events batch ──────────────────────────────────────────────────────────
   // POST /events/batch — flush queued runtime events (spec §7.4).
   // Events are append-only; the server never modifies or deletes them.
 

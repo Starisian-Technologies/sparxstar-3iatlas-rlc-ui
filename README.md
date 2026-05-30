@@ -13,9 +13,9 @@ Node backend over REST (`/api/v1/`) and socket.io. The WordPress plugin
 `sparxstar-3iatlas-rlc` is an **orchestrator only** (myCred hooks, DVE
 promotion, page mount) — the UI never calls WordPress directly.
 
-**Current (as of this commit):** `src/api/client.ts` still calls the WordPress
-plugin at `/aiwa/v1/` via `window.RLC_API_BASE`. The backend retarget lands in
-the **Backend Retarget** migration step (see below).
+**Current (as of this commit):** `src/api/client.ts` calls the Node backend at
+`/api/v1/` via `window.RLC_API_BASE`. Real-time state is still polling-based;
+socket.io lands in the **Socket Introduction** migration step (see below).
 
 ## Stack
 
@@ -44,16 +44,13 @@ single source of truth across all three repos. Repo-specific contract lives in
 
 ```bash
 cp .env.example .env.local
-# Set VITE_WP_URL to your WordPress dev site (current dev setup).
-# The Backend Retarget step retargets this to a Node backend URL.
+# Set VITE_RLC_BACKEND_URL to your local Node backend (default http://localhost:3000).
 
 npm install
 npm run dev
 ```
 
-**Current dev proxy:** Vite proxies `/aiwa/v1/*` to the WordPress plugin
-(see `vite.config.ts`). The Backend Retarget step switches this to `/api/v1/*`
-against the Node backend.
+**Dev proxy:** Vite proxies `/api/*` to `VITE_RLC_BACKEND_URL` (see `vite.config.ts`).
 
 **Production:** the orchestrator host page injects `window.RLC_API_BASE`,
 `window.RLC_TEACHER_TOKEN`, and `window.RLC_SCHOOL_ID` at runtime.
@@ -91,14 +88,14 @@ Each step is a single PR. Numbers below are sequence within the migration,
 not GitHub PR numbers (those depend on what else lands in the repo).
 
 - [x] **Step 1 — Spec adoption.** Commit v4.0 spec; rewrite AGENTS.md and copilot-instructions
-- [ ] **Step 2 — Branch hygiene (this PR).** Drop unused deps, i18n stub, README refresh
-- [ ] **Step 3 — Backend Retarget.** `/aiwa/v1` → `/api/v1`; add `RLC_SCHOOL_ID` host global; dev proxy reset
+- [x] **Step 2 — Branch hygiene.** Drop unused deps, i18n stub, README refresh
+- [x] **Step 3 — Backend Retarget.** `/aiwa/v1` → `/api/v1`; add `RLC_SCHOOL_ID` host global; dev proxy reset
 - [ ] **Step 4 — Socket Introduction.** Add socket.io-client; replace `useSessionPoll`
 - [ ] **Step 5 — Tier-aware Sign-in.** S1 LB/UB/SS/Adult flows + failure UX
 - [ ] **Step 6 — Localization Extraction.** All student-facing strings → i18n keys
 - [ ] **Step 7 — QC Rewrite.** Audio → orthography → semantics sequence; anonymized submitter
 - [ ] **Step 8 — Polish.** AccessoryBar IME, ceremony lifetime XP, screen-time UI, E2E
 
-Step 3 onward needs the Node backend at least minimally up.
+Step 4 onward requires the Node backend running socket.io.
 
 ## Confidential · Patent Pending · Starisian Technologies

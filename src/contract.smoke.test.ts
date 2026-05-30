@@ -6,7 +6,7 @@
  * It is SKIPPED unless RLC_SMOKE_BASE is set, so `npm test` / CI stay green.
  *
  * Usage:
- *   RLC_SMOKE_BASE=https://wp.example.com/wp-json/aiwa/v1 npm run smoke
+ *   RLC_SMOKE_BASE=https://backend.example/api/v1 npm run smoke
  *
  * Optional env (each check skips, rather than fails, when its inputs are absent):
  *   RLC_SMOKE_TOKEN          Bearer token for teacher endpoints

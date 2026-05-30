@@ -1,3 +1,16 @@
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export interface AuthLoginPayload {
+  username: string
+  password: string
+}
+
+export interface AuthLoginResponse {
+  token: string
+  role: 'teacher' | 'school_admin' | 'adult'
+  expires_in: number
+}
+
 // ─── Session ────────────────────────────────────────────────────────────────
 
 export type CollectionMode = 'rwc' | 'rsc'
