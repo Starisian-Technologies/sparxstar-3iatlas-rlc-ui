@@ -250,6 +250,12 @@ export function RscCollectionScreen({
               placeholder="Type your sentence…"
               style={inputStyle}
               aria-label="Sentence input"
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode="text"
+              lang={language}
             />
             <FocusPreview sentence={sentence} focusWord={focusWord} />
             <button
@@ -275,6 +281,10 @@ export function RscCollectionScreen({
               placeholder="Translation…"
               style={inputStyle}
               aria-label="Translation input"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck
+              inputMode="text"
             />
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" onClick={() => setStep('sentence')} style={backBtnStyle}>← Back</button>

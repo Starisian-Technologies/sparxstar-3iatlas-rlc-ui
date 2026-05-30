@@ -277,6 +277,13 @@ export function RwcCollectionScreen({
             placeholder={`Type a word in ${language}`}
             style={inputStyle}
             aria-label="Word input"
+            // Indigenous-language words must not be "corrected" to English.
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck={false}
+            inputMode="text"
+            lang={language}
           />
           <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle} aria-label="Submit word">
             <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -293,6 +300,13 @@ export function RwcCollectionScreen({
             placeholder="Type translation (required)"
             style={inputStyle}
             aria-label="Translation input"
+            // The translation field accepts English — leave autocorrect on,
+            // but turn off autoCapitalize so common-noun glosses aren't
+            // sentence-cased.
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck
+            inputMode="text"
           />
         )}
         {lastResult && (
