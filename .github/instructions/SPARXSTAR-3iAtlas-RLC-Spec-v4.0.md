@@ -1,6 +1,6 @@
-# AIWA Rapid Word & Sentence Collection Platform
+# SPARXSTAR 3iAtlas RLC (Rapid Language Collection) Platform
 ## Technical Specification v4.0
-### Starisian Technologies / AI West Africa · Confidential · May 2026
+### Starisian Technologies · Confidential · May 2026
 
 ---
 
@@ -28,7 +28,7 @@ This is the only architecture that meets data privacy law across all jurisdictio
 | **Audio recording** | Captured → routed directly by Starmus to Yahura MCP → transcribed → destroyed. No audio file persists after Yahura processing completes. Never stored. Never enters DVE. Starmus does not persist audio between capture and Yahura routing — no retry buffer, no cache, no local copy. If routing fails, the student is prompted to re-record. |
 | **Typed text** | Encrypted at rest. Retained as structured linguistic signal — spelling confidence, domain classification, vote outcome. Not retained as a child's personal record. |
 | **Translation** | Encrypted at rest. Retained as derived parallel corpus signal. |
-| **Student identity** | Screen name only. No PII stored by AIWA. School holds the mapping between screen name and real student. AIWA never does. |
+| **Student identity** | Screen name only. No PII stored by the platform. School holds the mapping between screen name and real student. The platform never does. |
 
 ## 1.2 All Writing Is Encrypted At Rest — All Users, All Tiers
 
@@ -44,7 +44,7 @@ Teacher visibility of content is governed by tier (§1.5). Encryption does not c
 
 **If children can hear a word said properly from a recording made in a crowded, loud classroom full of kids shouting — the AI must have the same ears. That is the quality threshold.**
 
-This is the governing standard for all speech technology in the AIWA platform. The community sets the bar by voting. The AI must meet it.
+This is the governing standard for all speech technology in the SPARXSTAR 3iAtlas RLC platform. The community sets the bar by voting. The AI must meet it.
 
 Every classroom audio vote is simultaneously:
 
@@ -80,7 +80,7 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **Lower Basic** | Lower Basic | 1–6 | Teacher-managed class code. No individual login. Screen names assigned by teacher. | Full — teacher sees all activity and submitted content | Encrypted at rest. Teacher can read submitted work. | Grade-level enforced |
 | **Upper Basic** | Upper Basic | 7–9 | School-issued screen name + 4-digit PIN. Student owns the PIN. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content visible only on submission. | Encrypted at rest. Teacher reads on submission. | Age-appropriate ceiling |
-| **Senior Secondary** | Senior Secondary | 10–12 | Screen name + password. Student controls. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content never visible before submission. | Encrypted at rest. Teacher reads only submitted work. Unsubmitted drafts inaccessible to all parties including AIWA. | Age-appropriate ceiling |
+| **Senior Secondary** | Senior Secondary | 10–12 | Screen name + password. Student controls. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content never visible before submission. | Encrypted at rest. Teacher reads only submitted work. Unsubmitted drafts inaccessible to all parties including the platform. | Age-appropriate ceiling |
 | **Adult** | Post-secondary | — | Full account. Own credentials. Joins existing teacher-created sessions only — adult solo collection is out of scope for v4.0. | N/A — no school context | Encrypted at rest. Full ownership. | None |
 
 **Credential rules:**
@@ -106,9 +106,9 @@ This is grounded in educational research consensus (Google Classroom, Canvas, Se
 
 ## 1.6 Rewards — myCred Hooks Only
 
-AIWA fires hooks to myCred. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. AIWA does not implement reward logic, tiers, or redemption. That is myCred's job.
+The backend fires hooks to myCred. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. The backend does not implement reward logic, tiers, or redemption. That is myCred's job.
 
-The spec defines what signal AIWA fires. myCred decides what to do with it. School admins configure myCred directly.
+The spec defines what signal the backend fires. myCred decides what to do with it. School admins configure myCred directly.
 
 XP, Gold, stars, and badges are all myCred entities. The backend fires the hook. Done.
 
@@ -258,9 +258,9 @@ All inbound calls from Yahura MCP, Behistun MCP, and ESU MCP to the backend use 
 
 | Scope | Granted to | Endpoints |
 | :---- | :---- | :---- |
-| `aiwa:teacher` | Classroom teachers | Session create/close/approve, teacher's star, class leaderboard |
-| `aiwa:school_admin` | School administrators | Account create, school leaderboard, screen-time configuration |
-| `aiwa:adult` | Adult tier accounts | Self-managed session join (read-only otherwise) |
+| `rlc:teacher` | Classroom teachers | Session create/close/approve, teacher's star, class leaderboard |
+| `rlc:school_admin` | School administrators | Account create, school leaderboard, screen-time configuration |
+| `rlc:adult` | Adult tier accounts | Self-managed session join (read-only otherwise) |
 
 "School admin JWT" and "Teacher JWT" referenced elsewhere in this spec are shorthand for Helios JWTs carrying the corresponding scope claim.
 
@@ -362,7 +362,7 @@ Elicits short sentences exemplifying one of 12 grammar domain categories. Same s
 
 **Focus word underlining:** As the student types, the grammar domain focus element is underlined in red. Implementation: per-domain heuristic, client-side only, best-effort. Gracefully degrades to no underline if the heuristic cannot identify the focus element for the current language. Never blocks submission.
 
-**Focus word and rewards:** AIWA fires a signal to myCred indicating whether the focus element was detected. myCred configuration at the school level determines whether this affects the reward. AIWA does not implement the reward logic.
+**Focus word and rewards:** The backend fires a signal to myCred indicating whether the focus element was detected. myCred configuration at the school level determines whether this affects the reward. The backend does not implement the reward logic.
 
 ### The 12 Grammar Domains — Fixed Sequence
 
@@ -459,7 +459,7 @@ CREATE UNIQUE INDEX idx_accounts_adult_screen_name
     WHERE school_id IS NULL;
 ```
 
-No PII. No real name. No email (except optional `reset_email` on Adult accounts — declared and documented). Screen name only. School holds the real-world identity mapping. AIWA never does.
+No PII. No real name. No email (except optional `reset_email` on Adult accounts — declared and documented). Screen name only. School holds the real-world identity mapping. The platform never does.
 
 **Account creation:** School admin pre-registers students. Admin creates the class, assigns screen names and initial credentials (PIN for Upper Basic, password for Senior Secondary). Lower Basic accounts are class-level — no individual login. Students do not self-register. Adult accounts may self-register via a separate `POST /api/v1/account/adult-register` endpoint (rate-limited, captcha-gated).
 
@@ -643,25 +643,25 @@ Base path: `/api/v1/`
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/account/create` | `aiwa:school_admin` | Body: `{ school_id, class_id, screen_name, tier, pin? }`. Returns: `{ account_id }`. School pre-registers students. |
+| POST | `/account/create` | `rlc:school_admin` | Body: `{ school_id, class_id, screen_name, tier, pin? }`. Returns: `{ account_id }`. School pre-registers students. |
 | POST | `/account/adult-register` | None (captcha + rate-limited) | Body: `{ screen_name, password, reset_email? }`. Adult self-registration. |
-| POST | `/account/:id/unlock` | `aiwa:teacher` | Clears `failed_logins` and `locked_until`. Teacher PIN/password reset path. |
+| POST | `/account/:id/unlock` | `rlc:teacher` | Clears `failed_logins` and `locked_until`. Teacher PIN/password reset path. |
 | GET | `/account/:id/xp` | Account token | Lifetime XP, gold, achievements |
-| GET | `/class/:id/leaderboard` | `aiwa:teacher` | Class XP totals, student rankings |
-| GET | `/school/:id/leaderboard` | `aiwa:school_admin` | School XP totals, class rankings |
+| GET | `/class/:id/leaderboard` | `rlc:teacher` | Class XP totals, student rankings |
+| GET | `/school/:id/leaderboard` | `rlc:school_admin` | School XP totals, class rankings |
 | GET | `/leaderboard/national?country=GM` | None | National school rankings. `country` defaults to the requesting school's country if a school is identifiable from origin; otherwise required. |
 
 ### Session Endpoints
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/session/create` | `aiwa:teacher` | Body: `{ mode, language, locale, semantic_domain_id, duration_minutes, collection_depth, class_id, rights }`. Returns: `{ session_id, join_code, qr_code_url }`. |
+| POST | `/session/create` | `rlc:teacher` | Body: `{ mode, language, locale, semantic_domain_id, duration_minutes, collection_depth, class_id, rights }`. Returns: `{ session_id, join_code, qr_code_url }`. |
 | POST | `/session/join` | None | **Lower Basic:** body `{ join_code }` only — student selects screen name from session list on device, no credential. **Upper Basic:** `{ join_code, screen_name, pin }`. **Senior Secondary / Adult:** `{ join_code, screen_name, password }`. School ID is injected by host page — never in the request body. Returns: `{ session_id, participant_id, participant_token, account_id, language, locale, mode, collection_depth, session_screen_names? }`. Failure responses listed below. |
 | GET | `/session/:id/status` | None | Returns: `{ status, participant_count, token_count, time_remaining_seconds, leaderboard[], class_xp_total, participant_token? }`. |
-| POST | `/session/:id/close` | `aiwa:teacher` | End collection. Trigger QC selection. Emit `session:status`. |
+| POST | `/session/:id/close` | `rlc:teacher` | End collection. Trigger QC selection. Emit `session:status`. |
 | GET | `/session/:id/qc-words` | None | Returns ordered `QcToken[]` — 5–10 by priority algorithm. Submitter identity stripped. |
 | GET | `/session/:id/awards` | None | Returns: `{ stars[], leaderboard[], total_tokens, discovery_count }`. |
-| POST | `/session/:id/teachers-star` | `aiwa:teacher` | Body: `{ participant_id }`. One per session — 409 if already assigned. |
+| POST | `/session/:id/teachers-star` | `rlc:teacher` | Body: `{ participant_id }`. One per session — 409 if already assigned. |
 
 **`POST /session/join` failure responses:**
 
@@ -684,7 +684,7 @@ Base path: `/api/v1/`
 | POST | `/token/:id/vote` | Participant token | Body: `{ dimension, vote_yes, participant_id }`. Returns: `{ success, vote_counts, has_voted }`. Duplicate votes 409. |
 | POST | `/token/:id/translate` | Participant token | Body: `{ translation, participant_id }`. |
 | POST | `/token/:id/correct` | Submitter only | Body: `{ corrected_text, participant_id }`. Writes encrypted `corrected_text`. Sets `orthography_state = corrected`. Never modifies `text`. 403 if not original submitter. |
-| POST | `/token/:id/approve` | `aiwa:teacher` | Teacher approval for DVE promotion. Sets `approved_by_teacher = true`, `approved_at`, advances to `promoted`. |
+| POST | `/token/:id/approve` | `rlc:teacher` | Teacher approval for DVE promotion. Sets `approved_by_teacher = true`, `approved_at`, advances to `promoted`. |
 | POST | `/token/:id/audio-routed` | Yahura MCP (HMAC) | Body: `{ yahura_transcription, yahura_confidence }`. Advances completeness. Fires myCred hook. |
 | POST | `/token/:id/translation-enriched` | Behistun MCP (HMAC) | Body: `{ enriched_translation, confidence, target_language }`. Writes to `token_translations`. |
 | POST | `/token/:id/completeness` | ESU MCP (HMAC) | Body: `{ completeness_signal }`. Monotonic only — 409 if backward. Triggers retroactive settlement in same handler. |
@@ -836,7 +836,7 @@ WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum (SPARXSTAR platform-wide secur
 
 | Responsibility | Detail |
 | :---- | :---- |
-| WordPress page mount | Registers page template. Enqueues React app. Injects `window.AIWA_API_BASE`, `window.AIWA_TEACHER_TOKEN`, and `window.AIWA_SCHOOL_ID`. |
+| WordPress page mount | Registers page template. Enqueues React app. Injects `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, and `window.RLC_SCHOOL_ID`. |
 | Webhook receiver | Receives HMAC-signed webhooks from backend. Verifies signature. Deduplicates on `event_id`. Processes only verified, non-duplicate events. |
 | myCred hooks | On verified game event webhooks: fires myCred point/badge hooks. Graceful no-op if myCred absent. |
 | DVE promotion pipeline | On `token.promoted` webhook: submits derived token envelope to `sparxstar-dheghom-dve-core` via HTTP POST to SPARXSTAR internal REST API with Helios Bearer auth. Audio never forwarded. |
@@ -857,7 +857,7 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 | :---- | :---- |
 | **Primary source always destroyed** | Audio destroyed after Yahura processing. No primary source from minors retained. Governing data ethics principle. |
 | **All writing encrypted at rest** | AES-256-GCM, per-account DEK in external KMS. All text, translation, corrected_text, yahura_transcription fields. Architectural — not configurable. |
-| **No PII stored by AIWA** | Screen names only. Adult `reset_email` is the single optional PII field, documented and rate-limited. School holds real-world identity mapping. AIWA never does. |
+| **No PII stored by the platform** | Screen names only. Adult `reset_email` is the single optional PII field, documented and rate-limited. School holds real-world identity mapping. The platform never does. |
 | **Audio quality standard** | Community vote is the threshold. If children can hear it, the AI must too. |
 | **Never block — always flag** | No submission rejected at intake. Flags drive enrichment and retroactive settlement. |
 | **XP persistent and forever** | Lifetime accumulation per account. Class, school, national totals. National competitions enabled from day one. |
@@ -877,7 +877,7 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 | **Audio and semantics votes never affect completeness** | Only orthography votes drive state. Audio + semantics are exported informationally. |
 | **Completeness transitions monotonic** | Forward only. Backward transitions rejected 409. |
 | **Participant token in memory only** | Never persisted to localStorage or IndexedDB. |
-| **myCred is the reward system** | AIWA fires hooks. myCred handles all logic. AIWA implements no reward logic. |
+| **myCred is the reward system** | The backend fires hooks. myCred handles all logic. The backend implements no reward logic. |
 | **Screen time enforced cross-product** | Hard ceiling by tier, tracked in central myCred ledger across all 3iAtlas products. Cannot be configured off. Graceful session end. |
 | **Webhook delivery has retry + DLQ** | Outbound webhooks retry with exponential backoff; failed deliveries land in dead-letter table for manual replay. |
 | **WordPress 6.5 minimum** | PHP 8.2 minimum. Orchestrator uses only core plugin registration APIs available since WP 5.x. |
@@ -895,13 +895,13 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 | 5 — RSC Collection | Backend + UI | Grammar domain sequencing. Focus element heuristic + `focus_detected` signal (NULL on RWC). Progress indicator. S3 screen. | Student completes all 12 domains. Focus detection fires myCred signal. RSC completion bonus fires on 12th save. |
 | 6 — QC Phase | Backend + UI | QC selection algorithm. All token endpoints. S4–S7 unified QC screen with full sequence (anonymized submitter). T3 controls with Yahura transcription display. All via socket. Offline queue for votes and translations. ESU corrected-token path live. | Full QC round completes. All vote types, correction, translation work. Teacher approves token. ESU advances a corrected token to verified. |
 | 7 — Awards | Backend + UI | Awards calculation. Class/school/national leaderboard aggregation. `GET /session/:id/awards`. T4 Teacher's Star + Teacher Award. S8 ceremony. Fireworks. Retroactive settlement. | Full ceremony runs on all screens. National totals update correctly. Retroactive settlement fires on ESU completeness advance. |
-| 8 — Orchestrator | Orchestrator | WordPress page mount. Inject `window.AIWA_API_BASE`, `window.AIWA_TEACHER_TOKEN`, `window.AIWA_SCHOOL_ID`. Webhook receiver with HMAC + event_id deduplication. myCred hooks for all event types. DVE promotion pipeline with Helios auth. Webhook DLQ table + admin replay endpoint. | React app loads on WordPress page. myCred awards fire. Promoted token reaches DVE. Failed webhook lands in DLQ; admin replays successfully. |
+| 8 — Orchestrator | Orchestrator | WordPress page mount. Inject `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, `window.RLC_SCHOOL_ID`. Webhook receiver with HMAC + event_id deduplication. myCred hooks for all event types. DVE promotion pipeline with Helios auth. Webhook DLQ table + admin replay endpoint. | React app loads on WordPress page. myCred awards fire. Promoted token reaches DVE. Failed webhook lands in DLQ; admin replays successfully. |
 | 9 — Polish | All | PWA manifest. IndexedDB offline queue for all action types. `/events/batch` with full event schema. Screen time enforcement end-to-end (myCred ledger). Connectivity indicators. Error states. End-to-end test both modes. | Submission survives 30-second drop. Full session test passes both modes. Screen-time limit triggers graceful session end. National leaderboard updates correctly. |
 
 ---
 
-*End of AIWA-RWC-RSC-Technical-Specification-v4.0*
-*Filename: `AIWA-RWC-RSC-Technical-Specification-v4.0.md`*
+*End of SPARXSTAR-3iAtlas-RLC-Spec-v4.0*
+*Filename: `SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md`*
 *Commit to `.github/instructions/` in all three repos.*
 *Delete every prior spec file from every location any coding agent can index.*
 *WordPress 6.5 minimum. PHP 8.2 minimum.*

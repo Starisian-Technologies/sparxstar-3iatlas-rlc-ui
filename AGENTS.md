@@ -2,10 +2,10 @@
 
 ## What This Repo Is
 
-This is the **React 19 + TypeScript + Vite + i18next PWA frontend** for the AIWA
-Rapid Word & Sentence Collection Platform. It is one of three repos in the
-3iAtlas RLC system. It is a pure client. It has **no WordPress dependency, no
-Node server of its own, no database, no game logic**.
+This is the **React 19 + TypeScript + Vite + i18next PWA frontend** for the
+SPARXSTAR 3iAtlas RLC (Rapid Language Collection) Platform. It is one of three
+repos in the 3iAtlas RLC system. It is a pure client. It has **no WordPress
+dependency, no Node server of its own, no database, no game logic**.
 
 It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 (`/api/v1/`) and socket.io.
@@ -20,7 +20,7 @@ It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 
 ## Canonical Spec
 
-**The single authoritative document is `.github/instructions/AIWA-RWC-RSC-Technical-Specification-v4.0.md`.** It supersedes everything prior. If anything in this AGENTS.md conflicts with the spec, the spec wins.
+**The single authoritative document is `.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md`.** It supersedes everything prior. If anything in this AGENTS.md conflicts with the spec, the spec wins.
 
 UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.png`).
 
@@ -28,7 +28,7 @@ UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.pn
 
 ## Absolute Rules — Never Violate
 
-- **UI talks to the Node backend only.** Base URL is `window.AIWA_API_BASE` (injected by the orchestrator) or `/api/v1` fallback. **Never call WordPress directly.**
+- **UI talks to the Node backend only.** Base URL is `window.RLC_API_BASE` (injected by the orchestrator) or `/api/v1` fallback. **Never call WordPress directly.**
 - **Audio never touches the UI's data layer.** Starmus widget routes audio directly to Yahura MCP. The UI never references audio files in any API call, never stores audio, never holds binary audio bytes.
 - **Participant token in memory only.** Never persist to localStorage or IndexedDB.
 - **Never compute XP client-side.** XP comes from the backend on the `token:submitted` socket event and the `token/save` response.
@@ -51,18 +51,18 @@ REST base: `/api/v1/`. socket.io for live game state.
 
 | Method | Path | Auth | Purpose |
 | :---- | :---- | :---- | :---- |
-| POST | `/session/create` | Helios JWT (`aiwa:teacher`) | Create session |
+| POST | `/session/create` | Helios JWT (`rlc:teacher`) | Create session |
 | POST | `/session/join` | None (tier-aware body) | Join session — see tier rules below |
 | GET | `/session/:id/status` | None | Poll session metadata (real-time still via socket) |
-| POST | `/session/:id/close` | Helios JWT (`aiwa:teacher`) | End collection, trigger QC |
+| POST | `/session/:id/close` | Helios JWT (`rlc:teacher`) | End collection, trigger QC |
 | GET | `/session/:id/qc-words` | None | Ordered `QcToken[]`, submitter stripped |
 | GET | `/session/:id/awards` | None | Stars + leaderboards |
-| POST | `/session/:id/teachers-star` | Helios JWT (`aiwa:teacher`) | Assign Teacher's Star |
+| POST | `/session/:id/teachers-star` | Helios JWT (`rlc:teacher`) | Assign Teacher's Star |
 | POST | `/token/save` | Participant token | Submit word/sentence |
 | POST | `/token/:id/vote` | Participant token | Cast orthography/semantics/audio vote |
 | POST | `/token/:id/translate` | Participant token | QC translation |
 | POST | `/token/:id/correct` | Submitter only | Submit correction |
-| POST | `/token/:id/approve` | Helios JWT (`aiwa:teacher`) | Approve for DVE promotion |
+| POST | `/token/:id/approve` | Helios JWT (`rlc:teacher`) | Approve for DVE promotion |
 | POST | `/events/batch` | Participant token | Flush offline queue |
 
 ### Key socket events
@@ -84,7 +84,7 @@ REST base: `/api/v1/`. socket.io for live game state.
 | Senior Secondary (grades 10–12) | Join code + screen name + password (`type="password"`, 12-char min, show/hide). |
 | Adult | Same as Senior Secondary. |
 
-School ID is injected by the orchestrator host page as `window.AIWA_SCHOOL_ID` — never entered by the student. Three failed attempts locks the account; teacher unlocks via T2 monitor.
+School ID is injected by the orchestrator host page as `window.RLC_SCHOOL_ID` — never entered by the student. Three failed attempts locks the account; teacher unlocks via T2 monitor.
 
 ### Join failure responses (handle in UI with localized error UX)
 
@@ -165,9 +165,9 @@ One screen per file. One hook per file. No barrel files.
 The orchestrator (`sparxstar-3iatlas-rlc`) injects on the WordPress page where the app mounts:
 
 ```
-window.AIWA_API_BASE      = "https://backend.example/api/v1"
-window.AIWA_TEACHER_TOKEN = "<Helios JWT, present only for teacher sessions>"
-window.AIWA_SCHOOL_ID     = "<UUID of the school for this deployment>"
+window.RLC_API_BASE      = "https://backend.example/api/v1"
+window.RLC_TEACHER_TOKEN = "<Helios JWT, present only for teacher sessions>"
+window.RLC_SCHOOL_ID     = "<UUID of the school for this deployment>"
 ```
 
 In dev these are set via `.env.local` (see `.env.example`) and the Vite proxy.
@@ -195,7 +195,7 @@ Before opening a PR, `typecheck`, `lint`, `test`, and `build` must all pass.
 | :---- | :---- |
 | 1 — Scaffold | (backend phase) |
 | 2 — Accounts & Schools | Small: types + `useAccountSession` hook + smoke test shapes |
-| 3 — Session core | **Big.** Tier-aware S1, T1 with rights confirmation, T2 with LB roster panel and locked-account list, socket.io connect, i18next wired (English), AIWA_* injection path, replace polling with sockets |
+| 3 — Session core | **Big.** Tier-aware S1, T1 with rights confirmation, T2 with LB roster panel and locked-account list, socket.io connect, i18next wired (English), RLC_* host-global injection path, replace polling with sockets |
 | 4 — RWC | S2 already mostly done. Add AccessoryBar IME bypass + long vowels, drive XP from socket, Starmus mount |
 | 5 — RSC | S3 already mostly done. Add tri-state `focus_detected`, localize prompts |
 | 6 — QC | **Heavy.** Rewrite QcScreen for audio → orthography → semantics → correction → translation sequence. Anonymize submitter. Offline queue for vote/translate/correct. |

@@ -23,10 +23,18 @@ void i18n.use(initReactI18next).init({
   fallbackLng: DEFAULT_LOCALE,
   supportedLngs: SUPPORTED_LOCALES,
   defaultNS: 'common',
+  // Resources are bundled (synchronous import above) — no backend loader,
+  // so init resolves on the same tick.
   interpolation: {
     escapeValue: false, // React already escapes by default
   },
   returnNull: false,
+  // react-i18next defaults to useSuspense=true. There is no <Suspense>
+  // boundary in main.tsx, so disable suspense to prevent the first
+  // useTranslation() call from throwing/suspending on initial render.
+  react: {
+    useSuspense: false,
+  },
 })
 
 export default i18n
