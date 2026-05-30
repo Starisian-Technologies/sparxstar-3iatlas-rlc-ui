@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessoryBar } from '@/components/AccessoryBar'
+import { RlcRecorder } from '@/components/RlcRecorder'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { SpellingSignalDot } from '@/components/SpellingSignalDot'
@@ -45,6 +46,7 @@ export function RwcCollectionScreen({
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
+  const [pendingAudioToken, setPendingAudioToken] = useState<{ token_id: string; word: string } | null>(null)
   const auth = useMemo(
     () => participant_token ? { token: participant_token } : null,
     [participant_token],
@@ -60,8 +62,8 @@ export function RwcCollectionScreen({
   const sessionEndedRef = useRef(false)
   // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
   const processedReceiptsRef = useRef<Set<string>>(new Set())
-  // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event.
-  const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean }>>(new Map())
+  // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event and audio prompt.
+  const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean; word: string }>>(new Map())
 
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
@@ -124,12 +126,14 @@ export function RwcCollectionScreen({
     // Notify parent and emit runtime events for newly confirmed submissions.
     // processedReceiptsRef prevents duplicate calls across re-renders.
     let latestResult: SaveTokenResponse | null = null
+    let latestLocalId: string | null = null
     for (const receipt of myReceipts) {
       if (processedReceiptsRef.current.has(receipt.localId)) continue
       processedReceiptsRef.current.add(receipt.localId)
       const meta = submissionMetaRef.current.get(receipt.localId)
       onSubmitted(receipt.result)
       latestResult = receipt.result
+      latestLocalId = receipt.localId
       emitRuntimeEvent('WORD_SUBMITTED', {
         sessionId:     session_id,
         participantId: participant_id,
@@ -141,7 +145,13 @@ export function RwcCollectionScreen({
         },
       })
     }
-    if (latestResult) setLastResult(latestResult)
+    if (latestResult) {
+      setLastResult(latestResult)
+      if (latestLocalId) {
+        const meta = submissionMetaRef.current.get(latestLocalId)
+        if (meta) setPendingAudioToken({ token_id: latestResult.token_id, word: meta.word })
+      }
+    }
   }, [syncedSubmissions, onSubmitted, session_id, participant_id])
 
   const myLeaderboard = useMemo(
@@ -225,8 +235,8 @@ export function RwcCollectionScreen({
         collection_mode: 'rwc',
       }, localId)
 
-      // Store metadata for WORD_SUBMITTED event (used when the sync receipt arrives).
-      submissionMetaRef.current.set(localId, { hasTranslation })
+      // Store metadata for WORD_SUBMITTED event and audio prompt (used when the sync receipt arrives).
+      submissionMetaRef.current.set(localId, { hasTranslation, word: wordValue })
     } catch {
       setError('Could not submit. Try again.')
     } finally {
@@ -323,6 +333,16 @@ export function RwcCollectionScreen({
           </div>
         )}
       </section>
+
+      {pendingAudioToken && (
+        <RlcRecorder
+          token_id={pendingAudioToken.token_id}
+          word={pendingAudioToken.word}
+          participant_token={participant_token}
+          onComplete={() => setPendingAudioToken(null)}
+          onSkip={() => setPendingAudioToken(null)}
+        />
+      )}
 
       <section style={panelStyle}>
         <div style={sectionTitleStyle}>Your words</div>

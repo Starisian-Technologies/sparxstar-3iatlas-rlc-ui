@@ -8,6 +8,7 @@
  */
 
 import type {
+  AudioSubmitResponse,
   AuthLoginPayload,
   AuthLoginResponse,
   CreateSessionPayload,
@@ -166,6 +167,20 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ corrected_text, participant_id }),
       })
+    },
+
+    // POST /token/:id/audio — multipart upload; backend forwards to Yahura,
+    // discards the blob, returns transcription + confidence.
+    // Does NOT use request() because multipart must not have Content-Type: application/json.
+    async submitAudio(token_id: string, blob: Blob, participantToken: string | null): Promise<AudioSubmitResponse> {
+      const form = new FormData()
+      const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+      form.append('audio', blob, `recording.${ext}`)
+      const headers: Record<string, string> = {}
+      if (participantToken) headers['Authorization'] = `Bearer ${participantToken}`
+      const res = await fetch(`${BASE}/token/${token_id}/audio`, { method: 'POST', headers, body: form })
+      if (!res.ok) { const body = await res.text(); throw new Error(`API ${res.status}: ${body}`) }
+      return res.json() as Promise<AudioSubmitResponse>
     },
   },
 

@@ -120,6 +120,8 @@ export interface QcToken {
   submitter_id: string
   collection_mode?: CollectionMode
   grammar_domain?: string
+  /** Yahura transcription set when qc:audio-ready event arrives */
+  yahura_transcription?: string
   /** True when submission has audio AND passed the QC vote — spec §8.2 */
   speaker_affirmed?: boolean
 }
@@ -132,6 +134,11 @@ export interface VotePayload {
 export interface VoteResponse {
   success: boolean
   vote_counts: { yes: number; no: number }
+}
+
+export interface AudioSubmitResponse {
+  yahura_transcription: string
+  confidence: number
 }
 
 // ─── Awards ──────────────────────────────────────────────────────────────────
