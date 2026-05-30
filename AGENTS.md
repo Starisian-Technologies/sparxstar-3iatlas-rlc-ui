@@ -51,18 +51,18 @@ REST base: `/api/v1/`. socket.io for live game state.
 
 | Method | Path | Auth | Purpose |
 | :---- | :---- | :---- | :---- |
-| POST | `/session/create` | Helios JWT (`rlc:teacher`) | Create session |
+| POST | `/session/create` | Teacher JWT | Create session |
 | POST | `/session/join` | None (tier-aware body) | Join session — see tier rules below |
 | GET | `/session/:id/status` | None | Poll session metadata (real-time still via socket) |
-| POST | `/session/:id/close` | Helios JWT (`rlc:teacher`) | End collection, trigger QC |
+| POST | `/session/:id/close` | Teacher JWT | End collection, trigger QC |
 | GET | `/session/:id/qc-words` | None | Ordered `QcToken[]`, submitter stripped |
 | GET | `/session/:id/awards` | None | Stars + leaderboards |
-| POST | `/session/:id/teachers-star` | Helios JWT (`rlc:teacher`) | Assign Teacher's Star |
+| POST | `/session/:id/teachers-star` | Teacher JWT | Assign Teacher's Star |
 | POST | `/token/save` | Participant token | Submit word/sentence |
 | POST | `/token/:id/vote` | Participant token | Cast orthography/semantics/audio vote |
 | POST | `/token/:id/translate` | Participant token | QC translation |
 | POST | `/token/:id/correct` | Submitter only | Submit correction |
-| POST | `/token/:id/approve` | Helios JWT (`rlc:teacher`) | Approve for DVE promotion |
+| POST | `/token/:id/approve` | Teacher JWT | Approve for DVE promotion |
 | POST | `/events/batch` | Participant token | Flush offline queue |
 
 ### Key socket events
@@ -151,7 +151,7 @@ src/
   api/         ← client.ts only — do not add API files
   i18n/        ← i18next init + locale bundles (en, mn, wo, ff, fr)
   runtime/     ← offline queue, screen-time tracking, RLC event emitters
-  services/    ← auth helpers (Helios scope parsing, participant token), drafts handler
+  services/    ← auth helpers (JWT role parsing, participant token), drafts handler
   types/       ← index.ts only — add types here, do not create new type files
   App.tsx      ← top-level screen router + game state
 ```
@@ -166,7 +166,7 @@ The orchestrator (`sparxstar-3iatlas-rlc`) injects on the WordPress page where t
 
 ```
 window.RLC_API_BASE      = "https://backend.example/api/v1"
-window.RLC_TEACHER_TOKEN = "<Helios JWT, present only for teacher sessions>"
+window.RLC_TEACHER_TOKEN = "<backend-issued JWT, present only for teacher sessions>"
 window.RLC_SCHOOL_ID     = "<UUID of the school for this deployment>"
 ```
 
@@ -209,7 +209,7 @@ Before opening a PR, `typecheck`, `lint`, `test`, and `build` must all pass.
 
 - Do not add WordPress dependencies, REST calls to `/wp-json`, or `@wordpress/*` packages
 - Do not add a Node server or database to this repo
-- Do not call Helios, Yahura, Behistun, ESU, DVE, or any SPARXSTAR pipeline component directly — backend handles all downstream
+- Do not call Yahura, Behistun, ESU, DVE, or any SPARXSTAR pipeline component directly — backend handles all downstream. There is no external identity provider; the backend mints its own JWTs and HMAC participant tokens.
 - Do not implement reward logic, XP calculation, or badge awards — myCred owns reward logic
 - Do not store plaintext writing or audio anywhere — all server-side at rest is encrypted, audio never reaches us
 - Do not show productivity metrics (word count, time on task, typing speed) anywhere

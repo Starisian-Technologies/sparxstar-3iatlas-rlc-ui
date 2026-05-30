@@ -104,13 +104,13 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 
 This is grounded in educational research consensus (Google Classroom, Canvas, Seesaw standard) and the principle that handwriting studies show productivity metrics are a poor proxy for language learning. A student composing a Mandinka sentence in their head before typing a single character is doing the most important cognitive work in the session.
 
-## 1.6 Rewards — myCred Hooks Only
+## 1.6 Rewards — myCred Hooks Only (and Optional)
 
-The backend fires hooks to myCred. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. The backend does not implement reward logic, tiers, or redemption. That is myCred's job.
+The backend fires hooks to myCred when the WordPress orchestrator is configured and connected. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. The backend does not implement reward logic, tiers, or redemption. That is myCred's job.
 
 The spec defines what signal the backend fires. myCred decides what to do with it. School admins configure myCred directly.
 
-XP, Gold, stars, and badges are all myCred entities. The backend fires the hook. Done.
+**myCred is optional.** The product is a fully self-contained commercial classroom game. If the orchestrator + myCred are present, the backend fires webhooks and rewards display. If they are not present, webhook delivery fails gracefully, lands in the DLQ for record-keeping, and the game continues without interruption. XP totals are still tracked internally on the accounts table for the in-session leaderboard and ceremony; only the cross-product reward / badge / redemption layer requires myCred.
 
 ## 1.7 Screen Time Limits
 
@@ -123,9 +123,11 @@ Screen time is tracked per account per day across all 3iAtlas products combined 
 | Senior Secondary | 120 minutes |
 | Adult | No limit |
 
-These are defaults. School admin can adjust within a configurable range via myCred / school dashboard. Hard ceiling cannot be removed — the system enforces it regardless of admin configuration.
+These are defaults. School admin can adjust within a configurable range via the orchestrator / school dashboard (when present). Hard ceiling cannot be removed — the system enforces it regardless of admin configuration.
 
-**Central ledger:** The screen-time ledger lives in myCred (as it spans all 3iAtlas products and myCred already holds per-account state). On `POST /api/v1/session/join`, the backend queries myCred for remaining daily quota. Join rejected with 423 Locked + localized "Daily limit reached" if quota exhausted. Successful joins emit `screentime.session.started` to myCred; session close emits `screentime.session.ended` with elapsed minutes.
+**Per-product ledger (always):** The backend maintains a `screen_time_daily` table keyed by `(account_id, date)` and enforces per-product limits with no external dependency. On `POST /api/v1/session/join`, the backend checks the account's daily total. Join rejected with 423 Locked + localized "Daily limit reached" if exhausted. Mid-session, the backend tracks elapsed minutes and fires `screentime:limit-reached` when crossed.
+
+**Cross-product ledger (optional, when the orchestrator + myCred are connected):** The backend additionally publishes `screentime.session.started` and `screentime.session.ended` webhooks. myCred aggregates across all 3iAtlas products. If the orchestrator is not configured, the cross-product roll-up is unavailable; per-product enforcement still works perfectly.
 
 When a student hits their limit mid-session, the session ends gracefully — not a hard crash. Teacher is notified so they can manage the classroom.
 
@@ -246,23 +248,36 @@ socket.io handles all real-time game communication. No polling for game state.
 
 ## 3.3 WebSocket Authentication
 
-- **Teacher:** Helios JWT in socket handshake auth. Verified via JWKS endpoint. Invalid JWT closes connection immediately.
-- **Student:** HMAC-signed participant token issued at `POST /api/v1/session/join`. Contains `{ session_id, participant_id, account_id, issued_at }`. Expires at session close.
+- **Teacher / school admin / adult:** Backend-issued JWT in socket handshake auth. Signed with the backend's own `JWT_SECRET` — no external issuer, no JWKS. Invalid or expired JWT closes connection immediately.
+- **Student:** HMAC-signed participant token issued at `POST /api/v1/session/join`. Contains `{ session_id, participant_id, account_id, issued_at }`. Signed with the backend's own `PARTICIPANT_HMAC_SECRET`. Expires at session close.
 - **Cached:** Verification result cached per socket connection after handshake. Re-validated on reconnect only.
 
 ## 3.4 Inbound Service Authentication
 
 All inbound calls from Yahura MCP, Behistun MCP, and ESU MCP to the backend use HMAC-SHA256 signed request bodies with a shared secret per service. Same pattern as outbound webhooks. The backend verifies the signature before processing any inbound service call. Unsigned or incorrectly signed requests return 401 and are logged.
 
-**Helios JWT scopes:**
+**Internal JWT — roles, not external scopes:**
 
-| Scope | Granted to | Endpoints |
+The backend mints its own JWTs at `POST /api/v1/auth/login`. There is no external identity provider. There is no JWKS endpoint. The backend signs with `JWT_SECRET` and verifies with the same secret.
+
+The JWT carries a `role` claim:
+
+| Role claim | Granted to | Endpoints |
 | :---- | :---- | :---- |
-| `rlc:teacher` | Classroom teachers | Session create/close/approve, teacher's star, class leaderboard |
-| `rlc:school_admin` | School administrators | Account create, school leaderboard, screen-time configuration |
-| `rlc:adult` | Adult tier accounts | Self-managed session join (read-only otherwise) |
+| `teacher` | Classroom teachers | Session create/close/approve, teacher's star, class leaderboard, account unlock |
+| `school_admin` | School administrators | Account create, school + national admin views, screen-time configuration |
+| `adult` | Adult tier accounts (self-registered) | Self-managed session join, lifetime XP read |
 
-"School admin JWT" and "Teacher JWT" referenced elsewhere in this spec are shorthand for Helios JWTs carrying the corresponding scope claim.
+References to "Teacher JWT" / "School admin JWT" elsewhere in this spec are shorthand for an internal JWT carrying the corresponding `role` claim.
+
+**Auth env (the only auth env the backend needs):**
+
+```
+JWT_SECRET=changeme
+PARTICIPANT_HMAC_SECRET=changeme
+```
+
+No third party. No external issuer. No coupling to any other SPARXSTAR component.
 
 ## 3.5 ESU Consistency Interface
 
@@ -437,10 +452,12 @@ CREATE TABLE accounts (
     school_id       UUID REFERENCES schools(school_id), -- NULL for adult accounts not affiliated with a school
     class_id        UUID REFERENCES classes(class_id),
     screen_name     VARCHAR(64) NOT NULL,
-    tier            VARCHAR(20) NOT NULL
-                      CHECK (tier IN ('lower_basic','upper_basic','senior_secondary','adult')),
-    pin_hash        VARCHAR(256),        -- Upper Basic only — Argon2id
-    password_hash   VARCHAR(256),        -- Senior Secondary and Adult — Argon2id
+    role            VARCHAR(20) NOT NULL DEFAULT 'student'
+                      CHECK (role IN ('student','teacher','school_admin','adult')),
+    tier            VARCHAR(20)          -- NULL for teachers and school admins
+                      CHECK (tier IS NULL OR tier IN ('lower_basic','upper_basic','senior_secondary','adult')),
+    pin_hash        VARCHAR(256),        -- Upper Basic students — Argon2id
+    password_hash   VARCHAR(256),        -- Senior Secondary, Adult, teachers, school admins — Argon2id
     failed_logins   SMALLINT NOT NULL DEFAULT 0,
     locked_until    BIGINT,              -- Unix timestamp; NULL when not locked
     reset_email     VARCHAR(256),        -- Adult tier only — optional, the single optional PII field
@@ -452,12 +469,15 @@ CREATE TABLE accounts (
 );
 CREATE INDEX idx_accounts_school_id ON accounts (school_id);
 CREATE INDEX idx_accounts_class_id  ON accounts (class_id);
+CREATE INDEX idx_accounts_role      ON accounts (role);
 
 -- Adult tier global screen-name uniqueness (school_id IS NULL):
 CREATE UNIQUE INDEX idx_accounts_adult_screen_name
     ON accounts (screen_name)
     WHERE school_id IS NULL;
 ```
+
+`role` distinguishes the account's permission class. `tier` is the educational level for students/adults and is NULL for teachers and school admins. The internal JWT (§3.4) carries the `role` claim verbatim.
 
 No PII. No real name. No email (except optional `reset_email` on Adult accounts — declared and documented). Screen name only. School holds the real-world identity mapping. The platform never does.
 
@@ -610,7 +630,7 @@ API and database always use `orthography`, `semantics`, `audio`. UI labels and q
 | Framework | Express |
 | Database | PostgreSQL |
 | Real-time | socket.io |
-| Teacher auth | Helios JWT via JWKS endpoint, scope-checked |
+| Teacher auth | Backend-issued JWT signed with `JWT_SECRET` — no external issuer, no JWKS. Role-checked. |
 | Student auth | HMAC-signed participant token — account_id embedded |
 | Inbound service auth | HMAC-SHA256 signed body, shared secret per service |
 | Encryption | AES-256-GCM, per-account DEK wrapped by per-school KEK in external KMS |
@@ -639,29 +659,38 @@ migrations/       PostgreSQL DDL — versioned, sequential
 
 Base path: `/api/v1/`
 
+### Auth Endpoints
+
+| Method | Path | Auth | Description |
+| :---- | :---- | :---- | :---- |
+| POST | `/auth/login` | None | Body: `{ screen_name, password, school_id? }`. Verifies the Argon2id `password_hash` for accounts with `role IN ('teacher','school_admin','adult')`. Returns: `{ jwt, account_id, role, school_id? }`. JWT signed with the backend's `JWT_SECRET`. Students do not use this endpoint — they authenticate via `/session/join`. |
+| POST | `/auth/logout` | Teacher / School admin / Adult JWT | Invalidates the current JWT (token revocation list). 204 on success. |
+
+The JWT issued here is the only "Teacher JWT" / "School admin JWT" / "Adult JWT" referenced in the endpoint tables below — no external issuer is involved.
+
 ### Account & Leaderboard Endpoints
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/account/create` | `rlc:school_admin` | Body: `{ school_id, class_id, screen_name, tier, pin? }`. Returns: `{ account_id }`. School pre-registers students. |
+| POST | `/account/create` | School admin JWT | Body: `{ school_id, class_id, screen_name, tier, pin? }`. Returns: `{ account_id }`. School pre-registers students. |
 | POST | `/account/adult-register` | None (captcha + rate-limited) | Body: `{ screen_name, password, reset_email? }`. Adult self-registration. |
-| POST | `/account/:id/unlock` | `rlc:teacher` | Clears `failed_logins` and `locked_until`. Teacher PIN/password reset path. |
+| POST | `/account/:id/unlock` | Teacher JWT | Clears `failed_logins` and `locked_until`. Teacher PIN/password reset path. |
 | GET | `/account/:id/xp` | Account token | Lifetime XP, gold, achievements |
-| GET | `/class/:id/leaderboard` | `rlc:teacher` | Class XP totals, student rankings |
-| GET | `/school/:id/leaderboard` | `rlc:school_admin` | School XP totals, class rankings |
+| GET | `/class/:id/leaderboard` | Teacher JWT | Class XP totals, student rankings |
+| GET | `/school/:id/leaderboard` | School admin JWT | School XP totals, class rankings |
 | GET | `/leaderboard/national?country=GM` | None | National school rankings. `country` defaults to the requesting school's country if a school is identifiable from origin; otherwise required. |
 
 ### Session Endpoints
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/session/create` | `rlc:teacher` | Body: `{ mode, language, locale, semantic_domain_id, duration_minutes, collection_depth, class_id, rights }`. Returns: `{ session_id, join_code, qr_code_url }`. |
+| POST | `/session/create` | Teacher JWT | Body: `{ mode, language, locale, semantic_domain_id, duration_minutes, collection_depth, class_id, rights }`. Returns: `{ session_id, join_code, qr_code_url }`. |
 | POST | `/session/join` | None | **Lower Basic:** body `{ join_code }` only — student selects screen name from session list on device, no credential. **Upper Basic:** `{ join_code, screen_name, pin }`. **Senior Secondary / Adult:** `{ join_code, screen_name, password }`. School ID is injected by host page — never in the request body. Returns: `{ session_id, participant_id, participant_token, account_id, language, locale, mode, collection_depth, session_screen_names? }`. Failure responses listed below. |
 | GET | `/session/:id/status` | None | Returns: `{ status, participant_count, token_count, time_remaining_seconds, leaderboard[], class_xp_total, participant_token? }`. |
-| POST | `/session/:id/close` | `rlc:teacher` | End collection. Trigger QC selection. Emit `session:status`. |
+| POST | `/session/:id/close` | Teacher JWT | End collection. Trigger QC selection. Emit `session:status`. |
 | GET | `/session/:id/qc-words` | None | Returns ordered `QcToken[]` — 5–10 by priority algorithm. Submitter identity stripped. |
 | GET | `/session/:id/awards` | None | Returns: `{ stars[], leaderboard[], total_tokens, discovery_count }`. |
-| POST | `/session/:id/teachers-star` | `rlc:teacher` | Body: `{ participant_id }`. One per session — 409 if already assigned. |
+| POST | `/session/:id/teachers-star` | Teacher JWT | Body: `{ participant_id }`. One per session — 409 if already assigned. |
 
 **`POST /session/join` failure responses:**
 
@@ -684,7 +713,7 @@ Base path: `/api/v1/`
 | POST | `/token/:id/vote` | Participant token | Body: `{ dimension, vote_yes, participant_id }`. Returns: `{ success, vote_counts, has_voted }`. Duplicate votes 409. |
 | POST | `/token/:id/translate` | Participant token | Body: `{ translation, participant_id }`. |
 | POST | `/token/:id/correct` | Submitter only | Body: `{ corrected_text, participant_id }`. Writes encrypted `corrected_text`. Sets `orthography_state = corrected`. Never modifies `text`. 403 if not original submitter. |
-| POST | `/token/:id/approve` | `rlc:teacher` | Teacher approval for DVE promotion. Sets `approved_by_teacher = true`, `approved_at`, advances to `promoted`. |
+| POST | `/token/:id/approve` | Teacher JWT | Teacher approval for DVE promotion. Sets `approved_by_teacher = true`, `approved_at`, advances to `promoted`. |
 | POST | `/token/:id/audio-routed` | Yahura MCP (HMAC) | Body: `{ yahura_transcription, yahura_confidence }`. Advances completeness. Fires myCred hook. |
 | POST | `/token/:id/translation-enriched` | Behistun MCP (HMAC) | Body: `{ enriched_translation, confidence, target_language }`. Writes to `token_translations`. |
 | POST | `/token/:id/completeness` | ESU MCP (HMAC) | Body: `{ completeness_signal }`. Monotonic only — 409 if backward. Triggers retroactive settlement in same handler. |
@@ -756,7 +785,7 @@ HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator ve
 | `discovery.found` | Fire myCred hook → +100 XP + Gold badge |
 | `rsc.completed` | Fire myCred hook → +200 XP + Gold badge |
 | `settlement.retroactive` | Fire myCred hook → delta XP |
-| `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with Helios Bearer auth |
+| `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with the orchestrator-side shared secret. Skipped if the orchestrator is not configured. |
 
 **Retry policy:** Each outbound webhook attempts delivery with exponential backoff at 2s, 4s, 8s, 16s, 32s, 64s (6 attempts, ~2-minute total window). After exhaustion, the webhook is recorded in a `webhook_dead_letter` table with full payload, attempt history, and last error. Manual replay endpoint: `POST /api/v1/admin/webhooks/replay/:event_id` (admin auth). myCred outages are non-fatal — game continues; rewards settle on retry.
 
@@ -826,11 +855,13 @@ All four action types are queueable in IndexedDB: token save, vote, translation,
 
 ---
 
-# 8. Orchestrator — `sparxstar-3iatlas-rlc`
+# 8. Orchestrator — `sparxstar-3iatlas-rlc` (Optional)
+
+The orchestrator is **optional**. The product runs fully self-contained without it. When connected, the orchestrator adds the WordPress page mount, fires myCred hooks for rewards, and routes promoted tokens to the DVE pipeline. When absent, the React UI loads from any static host, the backend tracks XP internally, and the DVE / myCred integrations are simply skipped. Webhook failures land in the DLQ as a record; nothing in the game flow blocks.
 
 ## 8.1 Stack
 
-WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum (SPARXSTAR platform-wide security baseline). The orchestrator uses only core plugin registration APIs available since WordPress 5.x — it does not depend on WordPress 7.x-only APIs. If the SPARXSTAR baseline advances to 7.0 in the future, the orchestrator does not need code changes.
+WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum. The orchestrator uses only core plugin registration APIs available since WordPress 5.x — it does not depend on WordPress 7.x-only APIs.
 
 ## 8.2 What It Owns
 
@@ -839,7 +870,7 @@ WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum (SPARXSTAR platform-wide secur
 | WordPress page mount | Registers page template. Enqueues React app. Injects `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, and `window.RLC_SCHOOL_ID`. |
 | Webhook receiver | Receives HMAC-signed webhooks from backend. Verifies signature. Deduplicates on `event_id`. Processes only verified, non-duplicate events. |
 | myCred hooks | On verified game event webhooks: fires myCred point/badge hooks. Graceful no-op if myCred absent. |
-| DVE promotion pipeline | On `token.promoted` webhook: submits derived token envelope to `sparxstar-dheghom-dve-core` via HTTP POST to SPARXSTAR internal REST API with Helios Bearer auth. Audio never forwarded. |
+| DVE promotion pipeline | On `token.promoted` webhook: submits derived token envelope to `sparxstar-dheghom-dve-core` via HTTP POST to the SPARXSTAR internal REST API using the orchestrator's locally-configured shared secret. Skipped silently if the orchestrator or DVE endpoint is not configured. Audio never forwarded. |
 
 ## 8.3 What It Does Not Own
 
@@ -888,14 +919,14 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 
 | Phase | Repo | Work | Done when |
 | :---- | :---- | :---- | :---- |
-| 1 — Scaffold | Backend | PostgreSQL migrations (all tables, including partial indexes and DLQ table). Express + socket.io. Dictionary JSON in memory. Helios JWT middleware (scope-aware). Participant HMAC middleware. Inbound service HMAC middleware. AES-256-GCM encryption service with KMS wiring. CORS. Rate limiting. i18n strings loaded. | `npm run dev` clean. Migrations run. All auth paths validate. Encryption round-trips correctly. KMS get/wrap/unwrap verified. |
+| 1 — Scaffold | Backend | PostgreSQL migrations (all tables, including partial indexes and DLQ table). Express + socket.io. Dictionary JSON in memory. Internal JWT middleware (signed with `JWT_SECRET`, role-checked). Participant HMAC mint+verify. Participant HMAC middleware. Inbound service HMAC middleware. AES-256-GCM encryption service with KMS wiring. CORS. Rate limiting. i18n strings loaded. | `npm run dev` clean. Migrations run. All auth paths validate. Encryption round-trips correctly. KMS get/wrap/unwrap verified. |
 | 2 — Accounts & Schools | Backend | `POST /account/create`. `POST /account/adult-register`. `POST /account/:id/unlock`. Class admin endpoints. National leaderboard endpoint with country param. Screen-time ledger query via myCred. | School admin creates class. Admin creates student accounts. Locked account unlocks. Adult self-registers. Leaderboard updates on XP award. Screen-time check blocks join after limit. |
 | 3 — Session core | Backend + UI | Create, join (with all failure response shapes), status. `session:joined` / `session:left` sockets. T1 setup with rights confirmation. T2 monitor with LB roster claim panel and locked-account list. S1 join with tier-appropriate credential entry, masking, autofocus, IME handling. School ID injected by host page. | Teacher creates session. Lower Basic student picks name from roster. Upper Basic student enters PIN (locks after 3 fails). Teacher sees student in real time and can unlock. |
 | 4 — RWC Collection | Backend + UI | Token save. Spelling signal. Saturation. `token:submitted` socket with XP. S2 screen (depth-conditional). AccessoryBar with IME bypass. State machine. Starmus mount. `POST /token/:id/audio-routed`. `POST /token/:id/translation-enriched`. `qc:audio-ready` socket. | Student submits word. XP counter updates. Teacher sees submission live. Yahura returns; transcription stored encrypted. Behistun enriches asynchronously. |
 | 5 — RSC Collection | Backend + UI | Grammar domain sequencing. Focus element heuristic + `focus_detected` signal (NULL on RWC). Progress indicator. S3 screen. | Student completes all 12 domains. Focus detection fires myCred signal. RSC completion bonus fires on 12th save. |
 | 6 — QC Phase | Backend + UI | QC selection algorithm. All token endpoints. S4–S7 unified QC screen with full sequence (anonymized submitter). T3 controls with Yahura transcription display. All via socket. Offline queue for votes and translations. ESU corrected-token path live. | Full QC round completes. All vote types, correction, translation work. Teacher approves token. ESU advances a corrected token to verified. |
 | 7 — Awards | Backend + UI | Awards calculation. Class/school/national leaderboard aggregation. `GET /session/:id/awards`. T4 Teacher's Star + Teacher Award. S8 ceremony. Fireworks. Retroactive settlement. | Full ceremony runs on all screens. National totals update correctly. Retroactive settlement fires on ESU completeness advance. |
-| 8 — Orchestrator | Orchestrator | WordPress page mount. Inject `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, `window.RLC_SCHOOL_ID`. Webhook receiver with HMAC + event_id deduplication. myCred hooks for all event types. DVE promotion pipeline with Helios auth. Webhook DLQ table + admin replay endpoint. | React app loads on WordPress page. myCred awards fire. Promoted token reaches DVE. Failed webhook lands in DLQ; admin replays successfully. |
+| 8 — Orchestrator | Orchestrator | WordPress page mount. Inject `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, `window.RLC_SCHOOL_ID`. Webhook receiver with HMAC + event_id deduplication. myCred hooks for all event types. DVE promotion pipeline (orchestrator-side shared secret; skipped if not configured). Webhook DLQ table + admin replay endpoint. | React app loads on WordPress page. myCred awards fire. Promoted token reaches DVE. Failed webhook lands in DLQ; admin replays successfully. |
 | 9 — Polish | All | PWA manifest. IndexedDB offline queue for all action types. `/events/batch` with full event schema. Screen time enforcement end-to-end (myCred ledger). Connectivity indicators. Error states. End-to-end test both modes. | Submission survives 30-second drop. Full session test passes both modes. Screen-time limit triggers graceful session end. National leaderboard updates correctly. |
 
 ---
