@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
 import { RoundCompleteScreen } from '@/screens/student/RoundCompleteScreen'
@@ -58,42 +59,10 @@ export function App() {
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
     return (
-      <div style={{
-        minHeight: '100dvh', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        background: '#1B3A6B', padding: 24, gap: 20,
-      }}>
-        <div style={{ textAlign: 'center', color: '#ffffff' }}>
-          <div style={{ fontSize: 36, fontWeight: 700 }}>3iAtlas</div>
-          <div style={{ fontSize: 16, opacity: 0.8, marginTop: 4 }}>Rapid Language Collection</div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 320 }}>
-          <button
-            type="button"
-            onClick={() => { setState(s => ({ ...s, role: 'student' })); setScreen('student_join') }}
-            style={{
-              minHeight: 56, fontSize: 18, fontWeight: 700,
-              background: '#ffffff', color: '#1B3A6B',
-              border: 'none', borderRadius: 12, cursor: 'pointer',
-            }}
-          >
-            Join a session
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setState(s => ({ ...s, role: 'teacher' })); setScreen('teacher_setup') }}
-            style={{
-              minHeight: 56, fontSize: 18, fontWeight: 700,
-              background: 'rgba(255,255,255,0.15)', color: '#ffffff',
-              border: '2px solid rgba(255,255,255,0.4)', borderRadius: 12, cursor: 'pointer',
-            }}
-          >
-            Start a session (teacher)
-          </button>
-        </div>
-      </div>
+      <LandingScreen
+        onJoin={() => { setState(s => ({ ...s, role: 'student' })); setScreen('student_join') }}
+        onTeacher={() => { setState(s => ({ ...s, role: 'teacher' })); setScreen('teacher_setup') }}
+      />
     )
   }
 
