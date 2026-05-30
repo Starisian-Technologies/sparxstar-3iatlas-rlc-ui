@@ -12,6 +12,7 @@ import type {
   AuthLoginResponse,
   CreateSessionPayload,
   CreateSessionResponse,
+  JoinSessionPayload,
   JoinSessionResponse,
   SaveTokenPayload,
   SaveTokenResponse,
@@ -100,17 +101,17 @@ export const api = {
       })
     },
 
-    // Tier-aware join — PIN/password fields added in Step 5 (Tier-aware Sign-in).
-    // school_id is read from window.RLC_SCHOOL_ID per spec §3.2.
-    join(join_code: string, display_name: string): Promise<JoinSessionResponse> {
-      const school_id = getSchoolId()
+    // Tier-aware join (spec §6.3):
+    //   Lower Basic  — first call: { join_code } only → server returns session_screen_names roster
+    //                  second call: { join_code, screen_name } → returns participant token
+    //   Upper Basic  — { join_code, screen_name, pin }
+    //   SS / Adult   — { join_code, screen_name, password }
+    // school_id is injected by the host page (window.RLC_SCHOOL_ID) per spec §3.2,
+    // never sent in the request body.
+    join(payload: JoinSessionPayload): Promise<JoinSessionResponse> {
       return request('/session/join', {
         method: 'POST',
-        body: JSON.stringify({
-          join_code,
-          display_name,
-          ...(school_id ? { school_id } : {}),
-        }),
+        body: JSON.stringify(payload),
       })
     },
 

@@ -53,6 +53,8 @@ export interface CreateSessionResponse {
   qr_code_url?: string
 }
 
+export type StudentTier = 'lower_basic' | 'upper_basic' | 'senior_secondary' | 'adult'
+
 export interface JoinSessionResponse {
   session_id: string
   participant_id: string
@@ -60,6 +62,21 @@ export interface JoinSessionResponse {
   language: string
   mode: CollectionMode
   collection_depth: CollectionDepth
+  /** Roster of screen names — returned by server on Lower Basic code-only peek.
+   *  Present on first call (no screen_name) so the UI can show the name grid. */
+  session_screen_names?: string[]
+  /** Tier of the class associated with this session */
+  tier?: StudentTier
+}
+
+export interface JoinSessionPayload {
+  join_code: string
+  /** Not sent for Lower Basic first-pass roster peek */
+  screen_name?: string
+  /** Upper Basic only */
+  pin?: string
+  /** Senior Secondary / Adult only */
+  password?: string
 }
 
 // ─── Token (Submission) ──────────────────────────────────────────────────────
