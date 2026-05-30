@@ -7,6 +7,7 @@ import '@fontsource/noto-sans/latin-700.css'
 import '@fontsource/noto-sans/latin-800.css'
 import '@fontsource/noto-sans/latin-900.css'
 import './index.css'
+import './i18n'
 import { App } from './App'
 
 const root = document.getElementById('root')
