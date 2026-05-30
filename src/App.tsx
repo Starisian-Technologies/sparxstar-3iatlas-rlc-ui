@@ -3,6 +3,7 @@ import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
 import { RoundCompleteScreen } from '@/screens/student/RoundCompleteScreen'
+import { TeacherLoginScreen } from '@/screens/teacher/TeacherLoginScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
@@ -16,10 +17,23 @@ import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary, SessionStatus } from '@/types'
 
+function hasTeacherToken(): boolean {
+  if (typeof window === 'undefined') return false
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  if (typeof fromWindow === 'string' && fromWindow.length > 0) return true
+  try {
+    const stored = localStorage.getItem('RLC_TEACHER_TOKEN')
+    return typeof stored === 'string' && stored.length > 0
+  } catch {
+    return false
+  }
+}
+
 const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
 
 type Screen =
   | 'landing'
+  | 'teacher_login'
   | 'teacher_setup'
   | 'teacher_monitor'
   | 'student_join'
@@ -61,7 +75,21 @@ export function App() {
     return (
       <LandingScreen
         onJoin={() => { setState(s => ({ ...s, role: 'student' })); setScreen('student_join') }}
-        onTeacher={() => { setState(s => ({ ...s, role: 'teacher' })); setScreen('teacher_setup') }}
+        onTeacher={() => {
+          setState(s => ({ ...s, role: 'teacher' }))
+          // Skip login if a token already exists (orchestrator-injected or prior session).
+          setScreen(hasTeacherToken() ? 'teacher_setup' : 'teacher_login')
+        }}
+      />
+    )
+  }
+
+  // ── Teacher login ──────────────────────────────────────────────────────────
+  if (screen === 'teacher_login') {
+    return (
+      <TeacherLoginScreen
+        onLoggedIn={() => setScreen('teacher_setup')}
+        onBack={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }}
       />
     )
   }

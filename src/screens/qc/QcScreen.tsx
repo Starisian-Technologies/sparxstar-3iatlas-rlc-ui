@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api/client'
+import { Avatar } from '@/components/Avatar'
+import { Button } from '@/components/Button'
+import { Card } from '@/components/Card'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { TenantLogo } from '@/components/TenantLogo'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useQcSession } from '@/hooks/useQcSession'
 import { emitRuntimeEvent } from '@/runtime/events'
+import { useTheme } from '@/theme/useTheme'
 import type { CollectionMode, LeaderboardEntry, VotePayload } from '@/types'
 
 interface QcScreenProps {
@@ -25,6 +31,7 @@ export function QcScreen({
   isTeacher,
   onGoCeremony,
 }: QcScreenProps) {
+  const { tokens } = useTheme()
   const {
     qcWords,
     currentIndex,
@@ -57,9 +64,9 @@ export function QcScreen({
   const participants = useMemo(() => {
     const fromParticipants = session?.participants ?? []
     if (fromParticipants.length > 0) {
-      return fromParticipants.map((participant) => ({
-        participant_id: participant.participant_id,
-        display_name: participant.display_name,
+      return fromParticipants.map((p) => ({
+        participant_id: p.participant_id,
+        display_name: p.display_name,
       }))
     }
     const leaderboard = session?.leaderboard ?? []
@@ -70,14 +77,15 @@ export function QcScreen({
   }, [session?.leaderboard, session?.participants])
 
   if (loading) {
-    return <FullScreenMessage title="Loading QC..." subtitle="Preparing the review words." />
+    return <FullScreenMessage title="Loading review…" subtitle="Preparing words for the community check." tokens={tokens} />
   }
 
   if (!currentToken) {
     return (
       <FullScreenMessage
-        title="QC queue is empty"
-        subtitle={error ? 'Could not load QC words.' : 'No words are ready for review.'}
+        title="Review queue is empty"
+        subtitle={error ? 'Could not load words — check your connection.' : 'No words ready for review yet.'}
+        tokens={tokens}
       />
     )
   }
@@ -110,8 +118,6 @@ export function QcScreen({
       })
       setHasVotedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
       setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: response.vote_counts }))
-      // Only a strict "no" majority triggers shared correction state; tied votes
-      // continue to translation for all participants.
       const correctionRequired = response.vote_counts.no > response.vote_counts.yes
       setStep(correctionRequired ? 'correction' : 'translation')
       await refreshStatus()
@@ -159,39 +165,113 @@ export function QcScreen({
     setCurrentIndex(currentIndex + 1)
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: 12,
+    border: `1.5px solid ${tokens.border}`,
+    background: tokens.bg,
+    color: tokens.text,
+    padding: '12px 14px',
+    fontSize: 18,
+    boxSizing: 'border-box',
+    outline: 'none',
+  }
+
   return (
-    <div style={wrapStyle}>
-      <div style={headerStyle}>
-        <div style={{ fontSize: 14, opacity: 0.8 }}>
-          QC {currentIndex + 1} of {qcWords.length}
+    <div style={{
+      minHeight: '100dvh',
+      background: tokens.bg,
+      color: tokens.text,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12,
+      padding: 16,
+      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+      paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <TenantLogo size="medium" />
+        <ThemeToggle />
+      </div>
+
+      {/* Word hero card */}
+      <div style={{
+        borderRadius: 16,
+        background: `linear-gradient(135deg, ${tokens.primarySoft} 0%, rgba(168,85,247,0.12) 100%)`,
+        border: `1px solid ${tokens.border}`,
+        padding: '14px 16px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+      }}>
+        <div>
+          <div style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
+            Review {currentIndex + 1} of {qcWords.length}
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: tokens.text, marginTop: 2, letterSpacing: -0.5 }}>
+            {currentToken.text}
+          </div>
+          {currentToken.translation && (
+            <div style={{ color: tokens.textMuted, fontSize: 14, marginTop: 2 }}>{currentToken.translation}</div>
+          )}
         </div>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>{currentToken.text}</div>
+        <div style={{
+          background: tokens.primarySoft,
+          border: `1px solid ${tokens.primary}`,
+          borderRadius: 10,
+          padding: '6px 12px',
+          fontSize: 12,
+          fontWeight: 700,
+          color: tokens.primary,
+          whiteSpace: 'nowrap',
+        }}>
+          {mode === 'rsc' ? 'Sentence' : 'Word'}
+        </div>
       </div>
 
       <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
 
-      <div style={panelStyle}>
+      {/* Step panel */}
+      <Card>
         {step === 'audio' && (
-          <section style={sectionStyle}>
-            <h2 style={sectionTitleStyle}>Step 1 — Audio</h2>
-            <div style={placeholderStyle}>
-              <div style={{ fontSize: 42 }}>🔊</div>
-              <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <StepLabel label="Step 1 — Audio" tokens={tokens} />
+            <div style={{
+              border: `2px dashed ${tokens.border}`,
+              borderRadius: 12,
+              padding: 28,
+              textAlign: 'center',
+              color: tokens.textMuted,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              alignItems: 'center',
+            }}>
+              <svg aria-hidden="true" width={40} height={40} viewBox="0 0 40 40" fill="none">
+                <rect x={16} y={6} width={8} height={18} rx={4} fill={tokens.textMuted} />
+                <path d="M10 20c0 5.523 4.477 10 10 10s10-4.477 10-10" stroke={tokens.textMuted} strokeWidth={2} strokeLinecap="round" fill="none" />
+                <line x1={20} y1={30} x2={20} y2={36} stroke={tokens.textMuted} strokeWidth={2} strokeLinecap="round" />
+                <line x1={14} y1={36} x2={26} y2={36} stroke={tokens.textMuted} strokeWidth={2} strokeLinecap="round" />
+              </svg>
+              <div style={{ fontSize: 14 }}>
                 {((currentToken.vote_audio?.yes ?? 0) + (currentToken.vote_audio?.no ?? 0)) > 0
-                  ? 'Playback placeholder (Starmus not wired yet)'
-                  : 'No recording'}
+                  ? 'Audio playback (Starmus not yet wired)'
+                  : 'No recording for this word'}
               </div>
             </div>
-            <button type="button" onClick={() => setStep('vote')} style={primaryButtonStyle(false)}>
+            <Button onClick={() => setStep('vote')} variant="primary">
               Continue to vote
-            </button>
-          </section>
+            </Button>
+          </div>
         )}
 
         {step === 'vote' && (
-          <section style={sectionStyle}>
-            <h2 style={sectionTitleStyle}>Step 2 — Community vote</h2>
-            <div style={{ fontSize: 16, color: 'var(--text-primary)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <StepLabel label="Step 2 — Community vote" tokens={tokens} />
+            <div style={{ fontSize: 15, color: tokens.text, fontWeight: 600 }}>
               {mode === 'rsc' ? 'Does this sentence make sense?' : 'Is the spelling correct?'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -200,127 +280,263 @@ export function QcScreen({
                 aria-label="Vote yes"
                 onClick={() => void handleVote(true)}
                 disabled={hasVoted}
-                style={{ ...primaryButtonStyle(hasVoted), background: hasVoted ? 'rgba(255,255,255,0.15)' : 'var(--success)', flex: 1 }}
+                style={{
+                  flex: 1,
+                  minHeight: 56,
+                  borderRadius: 12,
+                  border: 'none',
+                  background: hasVoted ? tokens.card : tokens.success,
+                  color: hasVoted ? tokens.textMuted : '#fff',
+                  fontSize: 20,
+                  fontWeight: 800,
+                  cursor: hasVoted ? 'default' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
               >
-                Yes
+                <span aria-hidden="true">✓</span> Yes
               </button>
               <button
                 type="button"
                 aria-label="Vote no"
                 onClick={() => void handleVote(false)}
                 disabled={hasVoted}
-                style={{ ...primaryButtonStyle(hasVoted), background: hasVoted ? 'rgba(255,255,255,0.15)' : 'var(--danger)', flex: 1 }}
+                style={{
+                  flex: 1,
+                  minHeight: 56,
+                  borderRadius: 12,
+                  border: 'none',
+                  background: hasVoted ? tokens.card : tokens.danger,
+                  color: hasVoted ? tokens.textMuted : '#fff',
+                  fontSize: 20,
+                  fontWeight: 800,
+                  cursor: hasVoted ? 'default' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
               >
-                No
+                <span aria-hidden="true">✗</span> No
               </button>
             </div>
-            {hasVoted && <div style={{ color: 'var(--success)', fontSize: 14 }}>+5 XP for voting</div>}
-            <div style={voteCountStyle}>Votes — Yes: {voteCounts.yes} · No: {voteCounts.no}</div>
-          </section>
+            {hasVoted && (
+              <div style={{ color: tokens.success, fontSize: 14, fontWeight: 600, textAlign: 'center' }}>
+                +5 XP for voting
+              </div>
+            )}
+            <div style={{
+              display: 'flex',
+              gap: 16,
+              justifyContent: 'center',
+              fontSize: 13,
+              color: tokens.textMuted,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              <span style={{ color: tokens.success, fontWeight: 700 }}>✓ {voteCounts.yes}</span>
+              <span style={{ color: tokens.danger, fontWeight: 700 }}>✗ {voteCounts.no}</span>
+            </div>
+          </div>
         )}
 
         {step === 'correction' && (
-          <section style={sectionStyle}>
-            <h2 style={sectionTitleStyle}>Step 3 — Correction</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <StepLabel label="Step 3 — Correction" tokens={tokens} />
             {isSubmitter ? (
               <>
+                <div style={{ fontSize: 14, color: tokens.textMuted }}>
+                  The class voted that spelling needs a fix. Edit your word below.
+                </div>
                 <input
                   type="text"
                   value={correction}
-                  onChange={(event) => setCorrection(event.target.value)}
+                  onChange={(e) => setCorrection(e.target.value)}
                   style={inputStyle}
                   aria-label="Correction input"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                 />
-                <button
-                  type="button"
-                  onClick={() => void handleCorrection()}
-                  disabled={!correction.trim()}
-                  style={primaryButtonStyle(!correction.trim())}
-                >
+                <Button onClick={() => void handleCorrection()} disabled={!correction.trim()} variant="primary">
                   Submit correction
-                </button>
+                </Button>
               </>
             ) : (
-              <div style={{ fontSize: 16, color: '#666' }}>Correction in progress...</div>
+              <div style={{
+                padding: '16px 0',
+                color: tokens.textMuted,
+                fontSize: 15,
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 10,
+              }}>
+                <PulsingDot color={tokens.primary} />
+                The word&apos;s author is making a correction…
+              </div>
             )}
-          </section>
+          </div>
         )}
 
         {step === 'translation' && (
-          <section style={sectionStyle}>
-            <h2 style={sectionTitleStyle}>Step 4 — Translation</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <StepLabel label="Step 4 — Translation" tokens={tokens} />
             <input
               type="text"
               value={translation}
-              onChange={(event) => setTranslation(event.target.value)}
-              placeholder="Type translation"
-              style={inputStyle}
+              onChange={(e) => setTranslation(e.target.value)}
+              placeholder="Type the English meaning…"
+              style={{ ...inputStyle, opacity: translationSubmitted ? 0.5 : 1 }}
               aria-label="Translation input"
               disabled={translationSubmitted}
+              autoCapitalize="off"
+              spellCheck
             />
-            <button
-              type="button"
+            <Button
               onClick={() => void handleTranslation()}
               disabled={!translation.trim() || translationSubmitted}
-              style={primaryButtonStyle(!translation.trim() || translationSubmitted)}
+              variant="primary"
             >
-              {translationSubmitted ? 'Waiting for others...' : 'Submit translation'}
-            </button>
-            <div style={{ fontSize: 14, color: '#444' }}>Class translations:</div>
-            <div style={translationsFeedStyle}>
-              {(currentToken.qc_translations ?? []).map((item, index) => (
-                <div key={`${item.participant_id}-${index}`} style={{ fontSize: 14 }}>
-                  {item.translation}
+              {translationSubmitted ? 'Waiting for others…' : 'Submit translation'}
+            </Button>
+            {(currentToken.qc_translations ?? []).length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>
+                  Class translations
                 </div>
-              ))}
-            </div>
-          </section>
+                <div style={{
+                  borderRadius: 10,
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.bgElevated,
+                  padding: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}>
+                  {currentToken.qc_translations.map((item, index) => (
+                    <div key={`${item.participant_id}-${index}`} style={{ fontSize: 14, color: tokens.text }}>
+                      {item.translation}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
-        {actionError && <div role="alert" style={errorStyle}>{actionError}</div>}
-      </div>
+        {actionError && (
+          <div role="alert" style={{
+            marginTop: 8,
+            background: 'rgba(239,68,68,0.1)',
+            border: `1px solid ${tokens.danger}`,
+            borderRadius: 10,
+            padding: '10px 12px',
+            fontSize: 14,
+            color: tokens.danger,
+          }}>
+            {actionError}
+          </div>
+        )}
+      </Card>
 
+      {/* Teacher controls */}
       {isTeacher && (
-        <div style={teacherPanelStyle}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Teacher controls</h2>
+        <Card highlight>
+          <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12 }}>
+            Teacher controls
+          </div>
           {isLastToken ? (
-            <>
-              <label htmlFor="teacher-star" style={{ fontSize: 14, fontWeight: 600 }}>
-                Assign Teacher&apos;s Star
-              </label>
-              <select
-                id="teacher-star"
-                value={teacherStarParticipant}
-                onChange={(event) => setTeacherStarParticipant(event.target.value)}
-                disabled={teacherStarAssigned}
-                style={inputStyle}
-              >
-                <option value="">Select participant</option>
-                {participants.map((participant) => (
-                  <option key={participant.participant_id} value={participant.participant_id}>
-                    {participant.display_name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <label
+                  htmlFor="teacher-star"
+                  style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: tokens.textMuted }}
+                >
+                  Assign Teacher&apos;s Star
+                </label>
+                <select
+                  id="teacher-star"
+                  value={teacherStarParticipant}
+                  onChange={(e) => setTeacherStarParticipant(e.target.value)}
+                  disabled={teacherStarAssigned}
+                  style={{
+                    width: '100%',
+                    minHeight: 48,
+                    padding: '0 12px',
+                    background: tokens.bg,
+                    color: tokens.text,
+                    border: `1.5px solid ${tokens.border}`,
+                    borderRadius: 12,
+                    fontSize: 16,
+                    appearance: 'none',
+                    opacity: teacherStarAssigned ? 0.5 : 1,
+                  }}
+                  aria-label="Select participant to award Teacher's Star"
+                >
+                  <option value="">Select a student…</option>
+                  {participants.map((p) => (
+                    <option key={p.participant_id} value={p.participant_id}>
+                      {p.display_name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Avatar preview for selected participant */}
+                {teacherStarParticipant && !teacherStarAssigned && (() => {
+                  const p = participants.find((x) => x.participant_id === teacherStarParticipant)
+                  return p ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                      <Avatar seed={p.display_name} size={36} />
+                      <span style={{ fontSize: 14, color: tokens.text }}>{p.display_name}</span>
+                    </div>
+                  ) : null
+                })()}
+              </div>
+
+              <Button
                 onClick={() => void handleAssignTeacherStar()}
                 disabled={!teacherStarParticipant || teacherStarAssigned}
-                style={primaryButtonStyle(!teacherStarParticipant || teacherStarAssigned)}
+                variant={teacherStarAssigned ? 'ghost' : 'primary'}
               >
-                {teacherStarAssigned ? 'Teacher’s Star assigned' : 'Assign Teacher’s Star'}
-              </button>
-              <button type="button" onClick={onGoCeremony} style={primaryButtonStyle(false)}>
-                Start ceremony
-              </button>
-            </>
+                {teacherStarAssigned ? "Teacher's Star assigned ✓" : "Assign Teacher's Star"}
+              </Button>
+
+              <Button onClick={onGoCeremony} variant="soft">
+                Start ceremony →
+              </Button>
+            </div>
           ) : (
-            <button type="button" onClick={handleNextToken} style={primaryButtonStyle(false)}>
-              Next word
-            </button>
+            <Button onClick={handleNextToken} variant="primary">
+              Next word →
+            </Button>
           )}
-        </div>
+        </Card>
       )}
+    </div>
+  )
+}
+
+function StepLabel({ label, tokens }: { label: string; tokens: { primary: string } }) {
+  return (
+    <div style={{ fontSize: 16, fontWeight: 800, color: tokens.primary }}>{label}</div>
+  )
+}
+
+function PulsingDot({ color }: { color: string }) {
+  return (
+    <div style={{ position: 'relative', width: 16, height: 16 }}>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: '50%',
+        background: color,
+        opacity: 0.3,
+        animation: 'spx-sync-pulse 1.4s ease-in-out infinite',
+      }} />
+      <div style={{ position: 'absolute', inset: 4, borderRadius: '50%', background: color }} />
     </div>
   )
 }
@@ -330,133 +546,30 @@ function getDefaultCounts(token: QcVoteToken, dimension: VotePayload['dimension'
   return token.vote_orthography
 }
 
-function FullScreenMessage({ title, subtitle }: { title: string; subtitle: string }) {
+function FullScreenMessage({
+  title,
+  subtitle,
+  tokens,
+}: {
+  title: string
+  subtitle: string
+  tokens: { bg: string; text: string; textMuted: string }
+}) {
   return (
-    <div style={fullScreenMessageStyle}>
+    <div style={{
+      minHeight: '100dvh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      background: tokens.bg,
+      color: tokens.text,
+      textAlign: 'center',
+      padding: 24,
+    }}>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
-      <div style={{ fontSize: 15, color: 'var(--text-secondary)' }}>{subtitle}</div>
+      <div style={{ fontSize: 15, color: tokens.textMuted }}>{subtitle}</div>
     </div>
   )
 }
-
-const wrapStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  background: 'var(--bg)',
-  color: 'var(--text-primary)',
-  padding: 16,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-}
-
-const headerStyle: React.CSSProperties = {
-  background: 'linear-gradient(135deg, rgba(255,45,120,0.2) 0%, rgba(168,85,247,0.12) 100%)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 14,
-}
-
-const panelStyle: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 14,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-}
-
-const sectionStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 18,
-  color: 'var(--accent-primary)',
-  fontWeight: 700,
-}
-
-const placeholderStyle: React.CSSProperties = {
-  border: '2px dashed var(--border)',
-  borderRadius: 12,
-  padding: 24,
-  textAlign: 'center',
-  color: 'var(--text-secondary)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  alignItems: 'center',
-  justifyContent: 'center',
-}
-
-const voteCountStyle: React.CSSProperties = {
-  fontSize: 15,
-  color: 'var(--text-secondary)',
-  fontWeight: 600,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  minHeight: 44,
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'rgba(255,255,255,0.05)',
-  color: 'var(--text-primary)',
-  padding: '10px 12px',
-  fontSize: 16,
-}
-
-const translationsFeedStyle: React.CSSProperties = {
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'rgba(255,255,255,0.03)',
-  padding: 10,
-  minHeight: 88,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-}
-
-const errorStyle: React.CSSProperties = {
-  background: 'rgba(239,68,68,0.1)',
-  border: '1px solid rgba(239,68,68,0.4)',
-  borderRadius: 8,
-  padding: '10px 12px',
-  fontSize: 14,
-  color: '#fecaca',
-}
-
-const teacherPanelStyle: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 14,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-}
-
-const fullScreenMessageStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  background: 'var(--bg)',
-  textAlign: 'center',
-  padding: 16,
-}
-
-const primaryButtonStyle = (disabled: boolean): React.CSSProperties => ({
-  minHeight: 52,
-  borderRadius: 10,
-  border: 'none',
-  background: disabled ? 'rgba(255,255,255,0.15)' : 'var(--accent-primary)',
-  color: 'var(--text-primary)',
-  fontSize: 16,
-  fontWeight: 700,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-})
