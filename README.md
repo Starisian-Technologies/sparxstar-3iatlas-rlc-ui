@@ -15,16 +15,16 @@ promotion, page mount) — the UI never calls WordPress directly.
 
 **Current (as of this commit):** `src/api/client.ts` still calls the WordPress
 plugin at `/aiwa/v1/` via `window.RLC_API_BASE`. The backend retarget lands in
-PR #3.
+the **Backend Retarget** migration step (see below).
 
 ## Stack
 
 - React 19 + TypeScript
 - Vite 6
-- i18next + react-i18next — every student-facing string will be a localization key (extraction in PR #6)
+- i18next + react-i18next — every student-facing string will be a localization key (key extraction is the **Localization Extraction** migration step)
 - IndexedDB offline queue
 - PWA — installs on mobile, works offline
-- socket.io-client — *planned for PR #4*; not yet installed
+- socket.io-client — *planned for the **Socket Introduction** migration step; not yet installed*
 
 ## Canonical spec
 
@@ -45,15 +45,15 @@ single source of truth across all three repos. Repo-specific contract lives in
 ```bash
 cp .env.example .env.local
 # Set VITE_WP_URL to your WordPress dev site (current dev setup).
-# PR #3 retargets this to a Node backend URL.
+# The Backend Retarget step retargets this to a Node backend URL.
 
 npm install
 npm run dev
 ```
 
 **Current dev proxy:** Vite proxies `/aiwa/v1/*` to the WordPress plugin
-(see `vite.config.ts`). PR #3 switches this to `/api/v1/*` against the Node
-backend.
+(see `vite.config.ts`). The Backend Retarget step switches this to `/api/v1/*`
+against the Node backend.
 
 **Production:** the orchestrator host page injects `window.RLC_API_BASE`,
 `window.RLC_TEACHER_TOKEN`, and `window.RLC_SCHOOL_ID` at runtime.
@@ -85,17 +85,20 @@ sparxstar-3iatlas-rlc-node-engine  ← Node backend (system of record)
 sparxstar-3iatlas-rlc      ← WordPress orchestrator (myCred + DVE)
 ```
 
-## v4.0 build phase status
+## v4.0 migration steps (UI track)
 
-- [x] Phase 1 of UI track — spec adoption, AGENTS.md / copilot-instructions
-- [ ] PR #2 — Branch hygiene (this PR): drop unused deps, i18n stub, README refresh
-- [ ] PR #3 — Backend retarget: `/aiwa/v1` → `/api/v1`, add `RLC_SCHOOL_ID` host global, dev proxy reset
-- [ ] PR #4 — socket.io introduction
-- [ ] PR #5 — Tier-aware S1 + failure UX
-- [ ] PR #6 — Localization extraction (all strings → i18n keys)
-- [ ] PR #7 — QC rewrite (audio → orthography → semantics, anonymized submitter)
-- [ ] PR #8 — Polish (AccessoryBar IME, ceremony lifetime XP, screen-time, E2E)
+Each step is a single PR. Numbers below are sequence within the migration,
+not GitHub PR numbers (those depend on what else lands in the repo).
 
-PR #3 onward needs the Node backend at least minimally up.
+- [x] **Step 1 — Spec adoption.** Commit v4.0 spec; rewrite AGENTS.md and copilot-instructions
+- [ ] **Step 2 — Branch hygiene (this PR).** Drop unused deps, i18n stub, README refresh
+- [ ] **Step 3 — Backend Retarget.** `/aiwa/v1` → `/api/v1`; add `RLC_SCHOOL_ID` host global; dev proxy reset
+- [ ] **Step 4 — Socket Introduction.** Add socket.io-client; replace `useSessionPoll`
+- [ ] **Step 5 — Tier-aware Sign-in.** S1 LB/UB/SS/Adult flows + failure UX
+- [ ] **Step 6 — Localization Extraction.** All student-facing strings → i18n keys
+- [ ] **Step 7 — QC Rewrite.** Audio → orthography → semantics sequence; anonymized submitter
+- [ ] **Step 8 — Polish.** AccessoryBar IME, ceremony lifetime XP, screen-time UI, E2E
+
+Step 3 onward needs the Node backend at least minimally up.
 
 ## Confidential · Patent Pending · Starisian Technologies

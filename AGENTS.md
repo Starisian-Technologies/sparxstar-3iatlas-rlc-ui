@@ -10,6 +10,15 @@ dependency, no Node server of its own, no database, no game logic**.
 It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 (`/api/v1/`) and socket.io.
 
+> **Status — during migration to v4.0:** the rules below describe the v4.0
+> target. Today, `src/api/client.ts` still reads `window.RLC_API_BASE` with a
+> `/aiwa/v1` fallback and calls the WordPress plugin REST namespace, and
+> `useSessionPoll` is still polling-based. The migration steps that flip these
+> to the Node backend + socket.io are tracked in `README.md`. Treat the v4.0
+> rules below as the contract every new line of code is written *toward*; do
+> not introduce new calls against `/aiwa/v1` or new polling hooks, even though
+> existing ones survive until their migration step lands.
+
 ## The Three Repos
 
 | Repo | Role |
