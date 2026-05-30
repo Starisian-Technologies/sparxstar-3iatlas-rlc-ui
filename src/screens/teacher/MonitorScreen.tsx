@@ -13,7 +13,7 @@ import { useTheme } from '@/theme/useTheme'
 import type { QcToken } from '@/types'
 
 function getTeacherToken(): string | null {
-  const fromWindow = (window as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
   if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
   try { return localStorage.getItem('RLC_TEACHER_TOKEN') } catch { return null }
 }

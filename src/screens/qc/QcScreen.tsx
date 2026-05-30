@@ -12,11 +12,18 @@ import { emitRuntimeEvent } from '@/runtime/events'
 import { useTheme } from '@/theme/useTheme'
 import type { CollectionMode, LeaderboardEntry, VotePayload } from '@/types'
 
+function getTeacherToken(): string | null {
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
+  try { return localStorage.getItem('RLC_TEACHER_TOKEN') } catch { return null }
+}
+
 interface QcScreenProps {
   session_id: string
   participant_id: string
   mode: CollectionMode
   isTeacher: boolean
+  participant_token?: string | null
   onGoCeremony: () => void
 }
 
@@ -29,9 +36,17 @@ export function QcScreen({
   participant_id,
   mode,
   isTeacher,
+  participant_token = null,
   onGoCeremony,
 }: QcScreenProps) {
   const { tokens } = useTheme()
+  const auth = useMemo(() => {
+    if (isTeacher) {
+      const t = getTeacherToken()
+      return t ? { role: 'teacher' as const, token: t, sessionId: session_id } : null
+    }
+    return participant_token ? { token: participant_token } : null
+  }, [isTeacher, participant_token, session_id])
   const {
     qcWords,
     currentIndex,
@@ -41,7 +56,7 @@ export function QcScreen({
     error,
     setCurrentIndex,
     refreshStatus,
-  } = useQcSession(session_id)
+  } = useQcSession(session_id, { auth })
   const { isOnline } = useNetworkStatus()
 
   const [step, setStep] = useState<QcStep>('audio')

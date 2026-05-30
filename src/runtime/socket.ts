@@ -18,7 +18,7 @@ export type SocketAuth =
   | { role: 'teacher'; token: string; sessionId: string }
 
 function getSocketUrl(): string {
-  const apiBase = (window as Record<string, unknown>)['RLC_API_BASE']
+  const apiBase = (window as unknown as Record<string, unknown>)['RLC_API_BASE']
   if (typeof apiBase === 'string' && apiBase.length > 0) {
     try {
       const { protocol, host } = new URL(apiBase)

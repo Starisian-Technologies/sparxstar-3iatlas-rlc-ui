@@ -302,6 +302,7 @@ export function App() {
           participant_id={state.participant_id}
           mode={state.mode}
           isTeacher={false}
+          participant_token={state.participant_token}
           onGoCeremony={() => {
             emitRuntimeEvent('CEREMONY_ENTERED', {
               sessionId: state.session_id,

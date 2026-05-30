@@ -51,10 +51,6 @@ function getTeacherToken(): string | null {
   }
 }
 
-function getSchoolId(): string | null {
-  if (typeof window === 'undefined') return null
-  return window.RLC_SCHOOL_ID ?? null
-}
 
 function teacherAuthHeaders(): Record<string, string> {
   const token = getTeacherToken()
