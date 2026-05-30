@@ -4,17 +4,31 @@
   padding: 0;
 }
 
+/*
+ * Theme tokens are owned by src/theme/ThemeProvider.tsx — it sets
+ * <html data-theme="dark|light"> and writes custom properties at runtime.
+ * The seed values below are the warm-dark palette so the first paint, before
+ * React hydrates, matches the default theme instead of flashing white.
+ */
 :root {
-  --bg: #0D0A1A;
-  --card: #1A1428;
-  --accent-primary: #FF2D78;
-  --accent-secondary: #A855F7;
-  --gold: #F59E0B;
-  --text-primary: #FFFFFF;
-  --text-secondary: #9B8EC4;
-  --border: rgba(255,255,255,0.08);
+  --bg: #160001;
+  --bg-elevated: #1F0608;
+  --card: #26090C;
+  --card-elevated: #310C10;
+  --border: rgba(255, 200, 210, 0.10);
+  --text: #FFF6F4;
+  --text-muted: #B8A3A6;
+  --text-inverse: #160001;
+  --primary: #FF2D78;
+  --primary-soft: rgba(255, 45, 120, 0.18);
+  --primary-deep: #FF7AA8;
+  --secondary: #A855F7;
+  --gold: #F5C842;
   --success: #22c55e;
+  --warning: #f59e0b;
   --danger: #ef4444;
+  --glow: rgba(255, 45, 120, 0.45);
+
   font-family: 'Noto Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -29,7 +43,7 @@ html, body, #root {
 
 body {
   background: var(--bg);
-  color: var(--text-primary);
+  color: var(--text);
   overscroll-behavior: none;
 }
 
