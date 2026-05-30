@@ -64,6 +64,7 @@ export function App() {
     role: 'none',
     session_id: null,
     participant_id: null,
+    participant_token: null,
     join_code: null,
     display_name: null,
     mode: null,
@@ -147,6 +148,7 @@ export function App() {
             ...s,
             session_id: result.session_id,
             participant_id: result.participant_id,
+            participant_token: result.participant_token ?? null,
             display_name: result.display_name,
             mode: result.mode as CollectionMode,
             collection_depth: result.collection_depth as CollectionDepth,
@@ -173,6 +175,7 @@ export function App() {
       <LobbyScreen
         session_id={state.session_id}
         display_name={state.display_name}
+        participant_token={state.participant_token}
         onEnterRound={() => {
           const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
           emitRuntimeEvent('ROUND_STARTED', {
@@ -197,6 +200,7 @@ export function App() {
       <RwcCollectionScreen
         session_id={state.session_id}
         participant_id={state.participant_id}
+        participant_token={state.participant_token}
         collection_depth={state.collection_depth}
         language={state.language}
         display_name={state.display_name ?? 'You'}
@@ -223,6 +227,7 @@ export function App() {
       <RscCollectionScreen
         session_id={state.session_id}
         participant_id={state.participant_id}
+        participant_token={state.participant_token}
         collection_depth={state.collection_depth}
         language={state.language}
         onSubmitted={() => {

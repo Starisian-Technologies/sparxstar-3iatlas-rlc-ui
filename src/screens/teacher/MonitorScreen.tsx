@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { api } from '@/api/client'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
+import { createSocket } from '@/runtime/socket'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { SpellingSignalDot } from '@/components/SpellingSignalDot'
@@ -12,6 +12,12 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useTheme } from '@/theme/useTheme'
 import type { QcToken } from '@/types'
 
+function getTeacherToken(): string | null {
+  const fromWindow = (window as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
+  try { return localStorage.getItem('RLC_TEACHER_TOKEN') } catch { return null }
+}
+
 interface MonitorScreenProps {
   session_id: string
   join_code: string
@@ -21,28 +27,31 @@ interface MonitorScreenProps {
 
 export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRound }: MonitorScreenProps) {
   const { tokens } = useTheme()
-  const { session, error } = useSessionPoll(session_id, true)
+  const teacherToken = useMemo(() => getTeacherToken(), [])
+  const auth = useMemo(
+    () => teacherToken ? { role: 'teacher' as const, token: teacherToken, sessionId: session_id } : null,
+    [teacherToken, session_id],
+  )
+  const { session, error } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const [liveFeed, setLiveFeed] = useState<QcToken[]>([])
+  const liveFeedRef = useRef(liveFeed)
+  liveFeedRef.current = liveFeed
 
+  // Live feed via socket token:submitted events; REST fallback on disconnect
   useEffect(() => {
-    let mounted = true
-    const loadFeed = async () => {
-      try {
-        const words = await api.session.qcWords(session_id)
-        if (!mounted) return
-        setLiveFeed(words.slice(-8).reverse())
-      } catch {
-        // No-op; session polling state already handles network messaging.
-      }
-    }
-    void loadFeed()
-    const interval = setInterval(() => void loadFeed(), 2000)
-    return () => {
-      mounted = false
-      clearInterval(interval)
-    }
-  }, [session_id])
+    if (!teacherToken) return
+    const socket = createSocket({ role: 'teacher', token: teacherToken, sessionId: session_id })
+
+    socket.on('token:submitted', (token: QcToken) => {
+      setLiveFeed((prev) => {
+        const without = prev.filter((t) => t.token_id !== token.token_id)
+        return [token, ...without].slice(0, 8)
+      })
+    })
+
+    return () => { socket.disconnect() }
+  }, [session_id, teacherToken])
 
   const round = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5

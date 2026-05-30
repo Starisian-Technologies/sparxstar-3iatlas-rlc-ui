@@ -28,31 +28,34 @@ interface CeremonyScreenProps {
   onReturnToSession: () => void
 }
 
-/** Reveal order — backend may return stars in any order; this is the on-stage sequence. */
+/** Reveal order — backend category strings, displayed in this sequence. */
 const STAR_ORDER = [
-  'Most Words / Sentences',
-  'Best Accuracy',
-  'Discovery Star',
-  'Speed Star',
-  'Audio Star',
-  "Teacher's Star",
-  'Teacher Award',
+  'most_words',
+  'most_sentences',
+  'best_spelling',
+  'discovery',
+  'speed',
+  'audio',
+  'teacher',
+  'teacher_award',
 ] as const
 
 const STAR_REVEAL_INTERVAL_MS = 2000
 const FIREWORKS_DURATION_MS = 4500
 
-/** Maps a backend star category to the neon variant used by StarBadge. */
+/** Maps backend category strings (spec §6.5) to StarBadge variants. */
 function variantForCategory(category: string): StarVariant {
-  const c = category.toLowerCase()
-  if (c.includes('words') || c.includes('crown')) return 'crown'
-  if (c.includes('accuracy') || c.includes('silver') || c.includes('perfect')) return 'silver'
-  if (c.includes('discovery') || c.includes('rare')) return 'discovery'
-  if (c.includes('speed') || c.includes('lightning')) return 'lightning'
-  if (c.includes('audio') || c.includes('voice')) return 'golden'
-  if (c.includes('teacher') || c.includes('elder')) return 'elder'
-  if (c.includes('community') || c.includes('helping')) return 'helping'
-  return 'gold'
+  switch (category) {
+    case 'most_words':     return 'crown'
+    case 'most_sentences': return 'crown'
+    case 'best_spelling':  return 'perfect'
+    case 'discovery':      return 'discovery'
+    case 'speed':          return 'lightning'
+    case 'audio':          return 'golden'
+    case 'teacher':        return 'elder'
+    case 'teacher_award':  return 'helping'
+    default:               return 'gold'
+  }
 }
 
 export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreenProps) {

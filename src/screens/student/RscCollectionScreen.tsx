@@ -6,7 +6,7 @@ import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import { useTheme } from '@/theme/useTheme'
@@ -16,6 +16,7 @@ import type { CollectionDepth, SaveTokenResponse, SessionStatus } from '@/types'
 interface RscCollectionScreenProps {
   session_id: string
   participant_id: string
+  participant_token: string | null
   collection_depth: CollectionDepth
   language: string
   onSubmitted: (result: SaveTokenResponse) => void
@@ -28,6 +29,7 @@ type Step = 'sentence' | 'translation' | 'recording' | 'done'
 export function RscCollectionScreen({
   session_id,
   participant_id,
+  participant_token,
   collection_depth,
   language,
   onSubmitted,
@@ -46,7 +48,11 @@ export function RscCollectionScreen({
   const translationRef = useRef<HTMLInputElement>(null)
   const hasCollectionEndedRef = useRef(false)
   const processedReceiptsRef = useRef<Set<string>>(new Set())
-  const { session, error: pollError } = useSessionPoll(session_id, true)
+  const auth = useMemo(
+    () => participant_token ? { token: participant_token } : null,
+    [participant_token],
+  )
+  const { session, error: pollError } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
 

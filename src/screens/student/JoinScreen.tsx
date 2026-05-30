@@ -64,31 +64,34 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     setError(null)
     try {
       const result = await api.session.join({ join_code: joinCode })
-      if (result.session_screen_names && result.session_screen_names.length > 0) {
-        // Lower Basic: server returned roster without full join
-        setRoster(result.session_screen_names)
+      if (result.requires_screen_name) {
+        // Lower Basic (spec §6.3): server returns roster, student picks a name
+        setRoster(result.session_screen_names ?? [])
         setPhase('roster')
       } else if (result.participant_id) {
-        // Unexpected: server fully joined on code-only probe (anonymous guest mode)
+        // Fully joined on code-only probe (anonymous / guest mode)
         onJoined({ ...result, display_name: result.display_name ?? '' })
       } else {
-        // No roster, no participant — tier info should tell us what to show
+        // Tier info without roster — show name + credential form
         const mode = tierToCredMode(result.tier)
         setCredMode(mode)
         setPhase(mode === 'none' ? 'simple_name' : 'credentials')
         requestAnimationFrame(() => nameRef.current?.focus())
       }
     } catch (err) {
-      // Server may return 403 with tier info for Upper Basic / Senior Secondary.
-      // Try to parse the error body; fall back to simple name form.
-      const tier = extractTierFromError(err)
-      if (tier) {
-        const mode = tierToCredMode(tier)
+      // Server may return a structured error with tier info (Upper Basic / SS).
+      // Also handle 423 (account locked) and 410 (session unavailable).
+      const parsed = parseJoinError(err)
+      if (parsed.type === 'tier') {
+        const mode = tierToCredMode(parsed.tier)
         setCredMode(mode)
         setPhase(mode === 'none' ? 'simple_name' : 'credentials')
         requestAnimationFrame(() => nameRef.current?.focus())
+      } else if (parsed.type === 'session_unavailable') {
+        setError('This session has ended or the code has expired.')
+        setPhase('code')
+        requestAnimationFrame(() => codeRef.current?.focus())
       } else {
-        // Code invalid or session closed
         setError('Code not found. Check the board and try again.')
         setPhase('code')
         requestAnimationFrame(() => codeRef.current?.focus())
@@ -120,14 +123,24 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
         ...(credMode === 'password' && password ? { password } : {}),
       })
       onJoined({ ...result, display_name: result.display_name ?? name.trim() })
-    } catch {
-      setError(
-        credMode === 'pin'
-          ? 'Wrong PIN. Try again or ask your teacher.'
-          : credMode === 'password'
-          ? 'Wrong password. Try again.'
+    } catch (err) {
+      const parsed = parseJoinError(err)
+      if (parsed.type === 'locked') {
+        setError('Account locked after too many attempts. Ask your teacher to unlock it.')
+      } else if (parsed.type === 'invalid_credential') {
+        const remaining = parsed.remaining
+        setError(
+          credMode === 'pin'
+            ? `Wrong PIN.${remaining != null ? ` ${remaining} attempt${remaining !== 1 ? 's' : ''} left.` : ''} Ask your teacher if locked.`
+            : `Wrong password.${remaining != null ? ` ${remaining} attempt${remaining !== 1 ? 's' : ''} left.` : ''}`,
+        )
+      } else {
+        setError(
+          credMode === 'pin' ? 'Wrong PIN. Try again or ask your teacher.'
+          : credMode === 'password' ? 'Wrong password. Try again.'
           : 'Could not join. Check your code and try again.',
-      )
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -525,21 +538,41 @@ function tierToCredMode(tier: string | undefined): CredentialMode {
   return 'none'
 }
 
-function extractTierFromError(err: unknown): StudentTier | null {
-  if (err instanceof Error) {
-    const text = err.message.toLowerCase()
-    if (text.includes('upper_basic')) return 'upper_basic'
-    if (text.includes('senior_secondary')) return 'senior_secondary'
-    // Try JSON parse from API response body embedded in the error message
-    try {
-      const match = err.message.match(/\{.*\}/s)
-      if (match) {
-        const body = JSON.parse(match[0]) as { tier?: StudentTier }
-        if (body.tier) return body.tier
-      }
-    } catch {
-      // Non-JSON error — not tier-related
-    }
+type ParsedJoinError =
+  | { type: 'tier'; tier: StudentTier }
+  | { type: 'locked' }
+  | { type: 'invalid_credential'; remaining: number | null }
+  | { type: 'session_unavailable' }
+  | { type: 'unknown' }
+
+function parseJoinError(err: unknown): ParsedJoinError {
+  if (!(err instanceof Error)) return { type: 'unknown' }
+
+  // API errors are formatted as "API {status}: {body}"
+  const statusMatch = err.message.match(/^API (\d+):/)
+  const status = statusMatch ? Number(statusMatch[1]) : 0
+
+  // Try to extract JSON body from the error message
+  let body: Record<string, unknown> = {}
+  try {
+    const jsonMatch = err.message.match(/\{[\s\S]*\}/)
+    if (jsonMatch) body = JSON.parse(jsonMatch[0]) as Record<string, unknown>
+  } catch { /* non-JSON */ }
+
+  if (status === 423 || body['error'] === 'account_locked') return { type: 'locked' }
+  if (status === 401 || body['error'] === 'credential_invalid') {
+    return { type: 'invalid_credential', remaining: typeof body['remaining_attempts'] === 'number' ? body['remaining_attempts'] : null }
   }
-  return null
+  if (status === 410 || body['error'] === 'session_unavailable') return { type: 'session_unavailable' }
+
+  // tier info returned on an error — Upper Basic / SS needs credentials
+  const tier = body['tier'] as StudentTier | undefined
+  if (tier === 'upper_basic' || tier === 'senior_secondary') return { type: 'tier', tier }
+
+  // Plain-text tier keywords in message body (fallback)
+  const text = err.message.toLowerCase()
+  if (text.includes('upper_basic')) return { type: 'tier', tier: 'upper_basic' }
+  if (text.includes('senior_secondary')) return { type: 'tier', tier: 'senior_secondary' }
+
+  return { type: 'unknown' }
 }

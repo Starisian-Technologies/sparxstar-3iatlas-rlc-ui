@@ -58,12 +58,15 @@ export type StudentTier = 'lower_basic' | 'upper_basic' | 'senior_secondary' | '
 export interface JoinSessionResponse {
   session_id: string
   participant_id: string
+  /** HMAC-signed token for WebSocket auth (spec §3.3). Present only after full join. */
+  participant_token?: string
   display_name?: string
   language: string
   mode: CollectionMode
   collection_depth: CollectionDepth
-  /** Roster of screen names — returned by server on Lower Basic code-only peek.
-   *  Present on first call (no screen_name) so the UI can show the name grid. */
+  /** True on Lower Basic first-pass (code only) — signals the UI to show the roster. */
+  requires_screen_name?: boolean
+  /** Class roster returned on Lower Basic first-pass so the UI can show the name grid. */
   session_screen_names?: string[]
   /** Tier of the class associated with this session */
   tier?: StudentTier
@@ -206,6 +209,8 @@ export interface AppState {
   role: AppRole
   session_id: string | null
   participant_id: string | null
+  /** HMAC-signed participant token for WebSocket authentication (spec §3.3). */
+  participant_token: string | null
   join_code: string | null
   display_name: string | null
   mode: CollectionMode | null

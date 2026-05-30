@@ -7,7 +7,7 @@ import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { Avatar } from '@/components/Avatar'
 import { StarBadge } from '@/components/StarBadge'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import { useTheme } from '@/theme/useTheme'
@@ -16,6 +16,7 @@ import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SessionS
 interface RwcCollectionScreenProps {
   session_id: string
   participant_id: string
+  participant_token: string | null
   collection_depth: CollectionDepth
   language: string
   display_name: string
@@ -28,6 +29,7 @@ interface RwcCollectionScreenProps {
 export function RwcCollectionScreen({
   session_id,
   participant_id,
+  participant_token,
   collection_depth,
   language,
   display_name,
@@ -43,7 +45,11 @@ export function RwcCollectionScreen({
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
-  const { session, error: pollError } = useSessionPoll(session_id, true)
+  const auth = useMemo(
+    () => participant_token ? { token: participant_token } : null,
+    [participant_token],
+  )
+  const { session, error: pollError } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
   const wordInputRef = useRef<HTMLInputElement>(null)

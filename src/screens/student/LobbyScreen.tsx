@@ -10,7 +10,7 @@
  * without touching this file's UI surface.
  */
 import { useMemo } from 'react'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { Screen } from '@/components/Screen'
@@ -28,12 +28,17 @@ const LEVEL_XP_REQUIREMENT = 1200
 interface LobbyScreenProps {
   session_id: string
   display_name: string
+  participant_token: string | null
   onEnterRound: () => void
 }
 
-export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScreenProps) {
+export function LobbyScreen({ session_id, display_name, participant_token, onEnterRound }: LobbyScreenProps) {
   const { tokens } = useTheme()
-  const { session, error } = useSessionPoll(session_id, true)
+  const auth = useMemo(
+    () => participant_token ? { token: participant_token } : null,
+    [participant_token],
+  )
+  const { session, error } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const seconds = session?.next_round_starts_in_seconds ?? session?.time_remaining_seconds ?? 0
   const canEnterRound = session?.round_status === 'active'
