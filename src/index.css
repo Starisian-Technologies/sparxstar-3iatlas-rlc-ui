@@ -29,6 +29,13 @@
   --danger: #ef4444;
   --glow: rgba(255, 45, 120, 0.45);
 
+  /* Backwards-compat aliases for screens not yet migrated to the new names.
+     Remove once every screen reads --primary / --text / --text-muted directly. */
+  --accent-primary: var(--primary);
+  --accent-secondary: var(--secondary);
+  --text-primary: var(--text);
+  --text-secondary: var(--text-muted);
+
   font-family: 'Noto Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
