@@ -45,7 +45,7 @@ export default defineConfig({
     // Set VITE_RLC_BACKEND_URL in .env.local to your Node backend URL.
     proxy: {
       '/api': {
-        target: process.env.VITE_RLC_BACKEND_URL || 'http://localhost:3000',
+        target: process.env.VITE_RLC_BACKEND_URL || 'http://localhost:3001',
         changeOrigin: true,
       },
     },

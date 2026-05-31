@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
 import { RoundCompleteScreen } from '@/screens/student/RoundCompleteScreen'
+import { TeacherLoginScreen } from '@/screens/teacher/TeacherLoginScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
@@ -15,10 +17,23 @@ import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
 import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary, SessionStatus } from '@/types'
 
+function hasTeacherToken(): boolean {
+  if (typeof window === 'undefined') return false
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
+  if (typeof fromWindow === 'string' && fromWindow.length > 0) return true
+  try {
+    const stored = localStorage.getItem('RLC_TEACHER_TOKEN')
+    return typeof stored === 'string' && stored.length > 0
+  } catch {
+    return false
+  }
+}
+
 const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
 
 type Screen =
   | 'landing'
+  | 'teacher_login'
   | 'teacher_setup'
   | 'teacher_monitor'
   | 'student_join'
@@ -49,6 +64,7 @@ export function App() {
     role: 'none',
     session_id: null,
     participant_id: null,
+    participant_token: null,
     join_code: null,
     display_name: null,
     mode: null,
@@ -58,42 +74,24 @@ export function App() {
   // ── Landing ────────────────────────────────────────────────────────────────
   if (screen === 'landing') {
     return (
-      <div style={{
-        minHeight: '100dvh', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        background: '#1B3A6B', padding: 24, gap: 20,
-      }}>
-        <div style={{ textAlign: 'center', color: '#ffffff' }}>
-          <div style={{ fontSize: 36, fontWeight: 700 }}>3iAtlas</div>
-          <div style={{ fontSize: 16, opacity: 0.8, marginTop: 4 }}>Rapid Language Collection</div>
-        </div>
+      <LandingScreen
+        onJoin={() => { setState(s => ({ ...s, role: 'student' })); setScreen('student_join') }}
+        onTeacher={() => {
+          setState(s => ({ ...s, role: 'teacher' }))
+          // Skip login if a token already exists (orchestrator-injected or prior session).
+          setScreen(hasTeacherToken() ? 'teacher_setup' : 'teacher_login')
+        }}
+      />
+    )
+  }
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 320 }}>
-          <button
-            type="button"
-            onClick={() => { setState(s => ({ ...s, role: 'student' })); setScreen('student_join') }}
-            style={{
-              minHeight: 56, fontSize: 18, fontWeight: 700,
-              background: '#ffffff', color: '#1B3A6B',
-              border: 'none', borderRadius: 12, cursor: 'pointer',
-            }}
-          >
-            Join a session
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setState(s => ({ ...s, role: 'teacher' })); setScreen('teacher_setup') }}
-            style={{
-              minHeight: 56, fontSize: 18, fontWeight: 700,
-              background: 'rgba(255,255,255,0.15)', color: '#ffffff',
-              border: '2px solid rgba(255,255,255,0.4)', borderRadius: 12, cursor: 'pointer',
-            }}
-          >
-            Start a session (teacher)
-          </button>
-        </div>
-      </div>
+  // ── Teacher login ──────────────────────────────────────────────────────────
+  if (screen === 'teacher_login') {
+    return (
+      <TeacherLoginScreen
+        onLoggedIn={() => setScreen('teacher_setup')}
+        onBack={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }}
+      />
     )
   }
 
@@ -150,6 +148,7 @@ export function App() {
             ...s,
             session_id: result.session_id,
             participant_id: result.participant_id,
+            participant_token: result.participant_token ?? null,
             display_name: result.display_name,
             mode: result.mode as CollectionMode,
             collection_depth: result.collection_depth as CollectionDepth,
@@ -176,6 +175,7 @@ export function App() {
       <LobbyScreen
         session_id={state.session_id}
         display_name={state.display_name}
+        participant_token={state.participant_token}
         onEnterRound={() => {
           const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
           emitRuntimeEvent('ROUND_STARTED', {
@@ -200,6 +200,7 @@ export function App() {
       <RwcCollectionScreen
         session_id={state.session_id}
         participant_id={state.participant_id}
+        participant_token={state.participant_token}
         collection_depth={state.collection_depth}
         language={state.language}
         display_name={state.display_name ?? 'You'}
@@ -226,6 +227,7 @@ export function App() {
       <RscCollectionScreen
         session_id={state.session_id}
         participant_id={state.participant_id}
+        participant_token={state.participant_token}
         collection_depth={state.collection_depth}
         language={state.language}
         onSubmitted={() => {
@@ -300,6 +302,7 @@ export function App() {
           participant_id={state.participant_id}
           mode={state.mode}
           isTeacher={false}
+          participant_token={state.participant_token}
           onGoCeremony={() => {
             emitRuntimeEvent('CEREMONY_ENTERED', {
               sessionId: state.session_id,

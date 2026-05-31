@@ -8,10 +8,12 @@
  */
 
 import type {
+  AudioSubmitResponse,
   AuthLoginPayload,
   AuthLoginResponse,
   CreateSessionPayload,
   CreateSessionResponse,
+  JoinSessionPayload,
   JoinSessionResponse,
   SaveTokenPayload,
   SaveTokenResponse,
@@ -48,11 +50,6 @@ function getTeacherToken(): string | null {
   } catch {
     return null
   }
-}
-
-function getSchoolId(): string | null {
-  if (typeof window === 'undefined') return null
-  return window.RLC_SCHOOL_ID ?? null
 }
 
 function teacherAuthHeaders(): Record<string, string> {
@@ -100,17 +97,17 @@ export const api = {
       })
     },
 
-    // Tier-aware join — PIN/password fields added in Step 5 (Tier-aware Sign-in).
-    // school_id is read from window.RLC_SCHOOL_ID per spec §3.2.
-    join(join_code: string, display_name: string): Promise<JoinSessionResponse> {
-      const school_id = getSchoolId()
+    // Tier-aware join (spec §6.3):
+    //   Lower Basic  — first call: { join_code } only → server returns session_screen_names roster
+    //                  second call: { join_code, screen_name } → returns participant token
+    //   Upper Basic  — { join_code, screen_name, pin }
+    //   SS / Adult   — { join_code, screen_name, password }
+    // school_id is injected by the host page (window.RLC_SCHOOL_ID) per spec §3.2,
+    // never sent in the request body.
+    join(payload: JoinSessionPayload): Promise<JoinSessionResponse> {
       return request('/session/join', {
         method: 'POST',
-        body: JSON.stringify({
-          join_code,
-          display_name,
-          ...(school_id ? { school_id } : {}),
-        }),
+        body: JSON.stringify(payload),
       })
     },
 
@@ -169,6 +166,20 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ corrected_text, participant_id }),
       })
+    },
+
+    // POST /token/:id/audio — multipart upload; backend forwards to Yahura,
+    // discards the blob, returns transcription + confidence.
+    // Does NOT use request() because multipart must not have Content-Type: application/json.
+    async submitAudio(token_id: string, blob: Blob, participantToken: string | null): Promise<AudioSubmitResponse> {
+      const form = new FormData()
+      const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+      form.append('audio', blob, `recording.${ext}`)
+      const headers: Record<string, string> = {}
+      if (participantToken) headers['Authorization'] = `Bearer ${participantToken}`
+      const res = await fetch(`${BASE}/token/${token_id}/audio`, { method: 'POST', headers, body: form })
+      if (!res.ok) { const body = await res.text(); throw new Error(`API ${res.status}: ${body}`) }
+      return res.json() as Promise<AudioSubmitResponse>
     },
   },
 

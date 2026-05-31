@@ -5,10 +5,24 @@ export interface AuthLoginPayload {
   password: string
 }
 
+/**
+ * School-level deployment context returned with the teacher JWT.
+ * `recording_enabled` is the kill-switch the UI uses to hide the
+ * `full` collection depth option in T1 setup — e.g. low-bandwidth
+ * deployments or Lower Basic classes where audio capture is not
+ * approved.
+ */
+export interface SchoolContext {
+  school_id: string
+  name?: string
+  recording_enabled: boolean
+}
+
 export interface AuthLoginResponse {
   token: string
   role: 'teacher' | 'school_admin' | 'adult'
   expires_in: number
+  school?: SchoolContext
 }
 
 // ─── Session ────────────────────────────────────────────────────────────────
@@ -53,13 +67,33 @@ export interface CreateSessionResponse {
   qr_code_url?: string
 }
 
+export type StudentTier = 'lower_basic' | 'upper_basic' | 'senior_secondary' | 'adult'
+
 export interface JoinSessionResponse {
   session_id: string
   participant_id: string
+  /** HMAC-signed token for WebSocket auth (spec §3.3). Present only after full join. */
+  participant_token?: string
   display_name?: string
   language: string
   mode: CollectionMode
   collection_depth: CollectionDepth
+  /** True on Lower Basic first-pass (code only) — signals the UI to show the roster. */
+  requires_screen_name?: boolean
+  /** Class roster returned on Lower Basic first-pass so the UI can show the name grid. */
+  session_screen_names?: string[]
+  /** Tier of the class associated with this session */
+  tier?: StudentTier
+}
+
+export interface JoinSessionPayload {
+  join_code: string
+  /** Not sent for Lower Basic first-pass roster peek */
+  screen_name?: string
+  /** Upper Basic only */
+  pin?: string
+  /** Senior Secondary / Adult only */
+  password?: string
 }
 
 // ─── Token (Submission) ──────────────────────────────────────────────────────
@@ -100,6 +134,8 @@ export interface QcToken {
   submitter_id: string
   collection_mode?: CollectionMode
   grammar_domain?: string
+  /** Yahura transcription set when qc:audio-ready event arrives */
+  yahura_transcription?: string
   /** True when submission has audio AND passed the QC vote — spec §8.2 */
   speaker_affirmed?: boolean
 }
@@ -112,6 +148,11 @@ export interface VotePayload {
 export interface VoteResponse {
   success: boolean
   vote_counts: { yes: number; no: number }
+}
+
+export interface AudioSubmitResponse {
+  yahura_transcription: string
+  confidence: number
 }
 
 // ─── Awards ──────────────────────────────────────────────────────────────────
@@ -189,6 +230,8 @@ export interface AppState {
   role: AppRole
   session_id: string | null
   participant_id: string | null
+  /** HMAC-signed participant token for WebSocket authentication (spec §3.3). */
+  participant_token: string | null
   join_code: string | null
   display_name: string | null
   mode: CollectionMode | null

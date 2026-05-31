@@ -1,4 +1,18 @@
+/**
+ * RoundCompleteScreen — the celebration moment after a round closes.
+ *
+ * This is one of the two "wow" beats in the game loop (Ceremony is the other).
+ * Visual hierarchy: huge word count → reward chips → top words → rank, with
+ * fireworks in the background. Designed to feel rewarding even on a Tecno
+ * Spark, so the celebration is pure SVG + a single drop-shadow glow on the
+ * primary number, no expensive blur/filter chains.
+ */
 import { Fireworks } from '@/components/Fireworks'
+import { Screen } from '@/components/Screen'
+import { Card } from '@/components/Card'
+import { Button } from '@/components/Button'
+import { StarBadge } from '@/components/StarBadge'
+import { useTheme } from '@/theme/useTheme'
 import type { RoundCompleteSummary } from '@/types'
 
 interface RoundCompleteScreenProps {
@@ -8,138 +22,128 @@ interface RoundCompleteScreenProps {
 }
 
 export function RoundCompleteScreen({ summary, onNextRound, onBackToLobby }: RoundCompleteScreenProps) {
+  const { tokens, resolved } = useTheme()
+  const isDark = resolved === 'dark'
+
   return (
-    <div style={wrapStyle}>
+    <Screen
+      footer={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Button onClick={onNextRound} large>Next round</Button>
+          <Button onClick={onBackToLobby} variant="ghost">Back to lobby</Button>
+        </div>
+      }
+    >
       <Fireworks />
-      <header style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 32, fontWeight: 800 }}>Round Complete! 🎉</div>
-        <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>You collected</div>
-        <div style={{ fontSize: 78, lineHeight: 1, fontWeight: 900, color: 'var(--accent-primary)' }}>
+
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 8 }}>
+        <div style={{ fontSize: 13, letterSpacing: 2, color: tokens.primary, fontWeight: 800 }}>
+          ROUND {summary.round} COMPLETE
+        </div>
+        <div style={{ color: tokens.textMuted, fontSize: 15 }}>You collected</div>
+        <div
+          style={{
+            fontSize: 96,
+            lineHeight: 1,
+            fontWeight: 900,
+            color: tokens.primary,
+            margin: '6px 0 0 0',
+            letterSpacing: -4,
+            textShadow: isDark ? `0 0 36px ${tokens.glow}` : 'none',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
           {summary.words_collected}
         </div>
-        <div style={{ fontSize: 40, color: 'var(--accent-primary)', fontWeight: 800 }}>words</div>
-      </header>
-
-      <section style={cardRowStyle}>
-        <div style={metricCardStyle}>
-          <div style={{ fontSize: 30 }}>⭐</div>
-          <div style={{ fontSize: 32, fontWeight: 800 }}>+{summary.points_earned}</div>
-          <div style={{ color: 'var(--text-secondary)' }}>Points earned</div>
+        <div style={{ fontSize: 28, color: tokens.text, fontWeight: 700, marginTop: -4 }}>
+          {summary.words_collected === 1 ? 'word' : 'words'}
         </div>
-        <div style={metricCardStyle}>
-          <div style={{ fontSize: 30 }}>✨</div>
-          <div style={{ fontSize: 32, fontWeight: 800 }}>+{summary.stars_earned}</div>
-          <div style={{ color: 'var(--text-secondary)' }}>Stars earned</div>
-        </div>
-      </section>
+      </div>
 
-      <section style={panelStyle}>
-        <div style={{ fontSize: 20, fontWeight: 700 }}>Top Words</div>
-        {summary.top_words.map((word) => (
-          <div key={word.id} style={topWordRowStyle}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700 }}>{word.word}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{word.translation ?? '—'}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10 }}>
+        <RewardChip
+          icon={<StarBadge variant="gold" size={28} />}
+          value={`+${summary.points_earned}`}
+          label="Points earned"
+        />
+        <RewardChip
+          icon={<StarBadge variant="discovery" size={28} />}
+          value={`+${summary.stars_earned}`}
+          label={summary.stars_earned === 1 ? 'Star earned' : 'Stars earned'}
+        />
+      </div>
+
+      {summary.top_words.length > 0 && (
+        <Card highlight>
+          <div style={{ fontWeight: 800, fontSize: 18, color: tokens.text, marginBottom: 10 }}>Your top words</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {summary.top_words.map((word) => (
+              <div
+                key={word.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 12px',
+                  border: `1px solid ${tokens.border}`,
+                  borderRadius: 10,
+                  background: tokens.bg,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {word.word}
+                  </div>
+                  <div style={{ color: tokens.textMuted, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {word.translation ?? 'No translation yet'}
+                  </div>
+                </div>
+                <StarBadge variant="gold" count={`+${word.xp_awarded}`} label={`${word.xp_awarded} XP`} />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: tokens.textMuted, fontSize: 12, letterSpacing: 0.5, fontWeight: 600 }}>YOUR SCORE</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: tokens.text, fontVariantNumeric: 'tabular-nums' }}>
+              {summary.player_score.toLocaleString()}
+              <span style={{ color: tokens.gold, marginLeft: 6 }}>XP</span>
             </div>
-            <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{word.xp_awarded} ⭐</div>
           </div>
-        ))}
-      </section>
-
-      <section style={scoreRowStyle}>
-        <div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Your Score</div>
-          <div style={{ fontSize: 34, fontWeight: 800 }}>{summary.player_score} ⭐</div>
-        </div>
-        <div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Ranking</div>
-          <div style={{ fontSize: 34, fontWeight: 800 }}>
-            {summary.player_rank}
-            <span style={{ fontSize: 18, color: 'var(--text-secondary)' }}> / {summary.total_players}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: tokens.textMuted, fontSize: 12, letterSpacing: 0.5, fontWeight: 600 }}>RANK</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: tokens.text, fontVariantNumeric: 'tabular-nums' }}>
+              #{summary.player_rank}
+              <span style={{ color: tokens.textMuted, fontSize: 16, marginLeft: 4 }}>of {summary.total_players}</span>
+            </div>
           </div>
         </div>
-      </section>
-
-      <button type="button" onClick={onNextRound} style={primaryBtnStyle}>Next Round</button>
-      <button type="button" onClick={onBackToLobby} style={secondaryBtnStyle}>Back to Lobby</button>
-    </div>
+      </Card>
+    </Screen>
   )
 }
 
-const wrapStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  background: 'var(--bg)',
-  color: 'var(--text-primary)',
-  padding: 16,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-}
-
-const cardRowStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 10,
-}
-
-const metricCardStyle: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: 12,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 2,
-}
-
-const panelStyle: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 12,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-}
-
-const topWordRowStyle: React.CSSProperties = {
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'rgba(255,255,255,0.03)',
-  padding: '8px 10px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-}
-
-const scoreRowStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 14,
-}
-
-const primaryBtnStyle: React.CSSProperties = {
-  minHeight: 52,
-  borderRadius: 12,
-  border: 'none',
-  background: 'var(--accent-primary)',
-  color: 'var(--text-primary)',
-  fontSize: 18,
-  fontWeight: 700,
-  cursor: 'pointer',
-}
-
-const secondaryBtnStyle: React.CSSProperties = {
-  minHeight: 52,
-  borderRadius: 12,
-  border: '1px solid var(--border)',
-  background: 'transparent',
-  color: 'var(--text-primary)',
-  fontSize: 18,
-  fontWeight: 700,
-  cursor: 'pointer',
+function RewardChip({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  const { tokens, resolved } = useTheme()
+  return (
+    <Card pad={14} style={{ alignItems: 'center', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ marginBottom: 2 }}>{icon}</div>
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 900,
+          color: tokens.text,
+          textShadow: resolved === 'dark' ? `0 0 12px ${tokens.glow}` : 'none',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </div>
+      <div style={{ color: tokens.textMuted, fontSize: 12 }}>{label}</div>
+    </Card>
+  )
 }

@@ -1,6 +1,25 @@
+/**
+ * CeremonyScreen — the closing celebration of a session.
+ *
+ * Three beats:
+ *   1. Podium (top 3) with Adinkra avatars + crown for first place.
+ *   2. Stars reveal one-by-one (2s cadence) so each award lands its own
+ *      attention, not a wall of text.
+ *   3. Final leaderboard + return button once all stars have landed.
+ *
+ * Fireworks only fire once at the end of the reveal so we don't pin a
+ * 2014-era GPU for the full screen lifetime.
+ */
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api/client'
 import { Fireworks } from '@/components/Fireworks'
+import { Screen } from '@/components/Screen'
+import { Card } from '@/components/Card'
+import { Button } from '@/components/Button'
+import { Avatar } from '@/components/Avatar'
+import { StarBadge, type StarVariant } from '@/components/StarBadge'
+import { TenantLogo } from '@/components/TenantLogo'
+import { useTheme } from '@/theme/useTheme'
 import { emitRuntimeEvent } from '@/runtime/events'
 import type { AwardsResponse, LeaderboardEntry, Star } from '@/types'
 
@@ -9,30 +28,38 @@ interface CeremonyScreenProps {
   onReturnToSession: () => void
 }
 
+/** Reveal order — backend category strings, displayed in this sequence. */
 const STAR_ORDER = [
-  'Most Words / Sentences',
-  'Best Accuracy',
-  'Discovery Star',
-  'Speed Star',
-  'Audio Star',
-  "Teacher's Star",
-  'Teacher Award',
+  'most_words',
+  'most_sentences',
+  'best_spelling',
+  'discovery',
+  'speed',
+  'audio',
+  'teacher',
+  'teacher_award',
 ] as const
 
 const STAR_REVEAL_INTERVAL_MS = 2000
-const FIREWORKS_DURATION_MS = 4000
+const FIREWORKS_DURATION_MS = 4500
 
-const AWARD_EMOJI: Record<string, string> = {
-  'Most Words / Sentences': '👑',
-  'Best Accuracy': '🌊',
-  'Discovery Star': '💎',
-  'Speed Star': '⚡',
-  'Audio Star': '🎙️',
-  "Teacher's Star": '🏆',
-  'Teacher Award': '🏆',
+/** Maps backend category strings (spec §6.5) to StarBadge variants. */
+function variantForCategory(category: string): StarVariant {
+  switch (category) {
+    case 'most_words':     return 'crown'
+    case 'most_sentences': return 'crown'
+    case 'best_spelling':  return 'perfect'
+    case 'discovery':      return 'discovery'
+    case 'speed':          return 'lightning'
+    case 'audio':          return 'golden'
+    case 'teacher':        return 'elder'
+    case 'teacher_award':  return 'helping'
+    default:               return 'gold'
+  }
 }
 
 export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreenProps) {
+  const { tokens, resolved } = useTheme()
   const [awards, setAwards] = useState<AwardsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +94,6 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
       const star = awards.stars.find((item) => item.category === label || item.label === label)
       if (star) sorted.push(star)
     }
-    // Append any remaining stars not in the canonical order
     for (const star of awards.stars) {
       if (!sorted.some((s) => s.participant_id === star.participant_id && s.category === star.category)) {
         sorted.push(star)
@@ -78,9 +104,7 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
 
   const top3 = useMemo((): LeaderboardEntry[] => {
     if (!awards) return []
-    return [...awards.leaderboard]
-      .filter((e) => e.rank >= 1 && e.rank <= 3)
-      .sort((a, b) => a.rank - b.rank)
+    return [...awards.leaderboard].filter((e) => e.rank >= 1 && e.rank <= 3).sort((a, b) => a.rank - b.rank)
   }, [awards])
 
   useEffect(() => {
@@ -122,264 +146,271 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
   }, [awards, orderedStars.length, revealedCount])
 
   if (loading) {
-    return <FullScreenMessage title="Loading ceremony…" subtitle="Gathering class results." />
+    return (
+      <Screen centered>
+        <div style={{ textAlign: 'center', color: tokens.textMuted }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>Loading ceremony…</div>
+          <div style={{ fontSize: 14 }}>Gathering class results.</div>
+        </div>
+      </Screen>
+    )
   }
   if (!awards) {
-    return <FullScreenMessage title="Ceremony unavailable" subtitle={error ?? 'No awards data received.'} />
+    return (
+      <Screen centered>
+        <div style={{ textAlign: 'center', color: tokens.textMuted }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>Ceremony unavailable</div>
+          <div style={{ fontSize: 14 }}>{error ?? 'No awards data received.'}</div>
+        </div>
+      </Screen>
+    )
   }
 
   const revealedStars = orderedStars.slice(0, revealedCount)
   const starsDone = revealedCount >= orderedStars.length
 
   return (
-    <div style={wrapStyle}>
+    <Screen
+      header={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <TenantLogo size="medium" />
+        </div>
+      }
+      footer={starsDone ? <Button onClick={onReturnToSession} large>Return to session</Button> : undefined}
+    >
       {showFireworks && <Fireworks />}
 
-      {/* ── Hero header ── */}
-      <header style={heroStyle}>
-        <div style={{ fontSize: 13, letterSpacing: 2, color: 'var(--accent-primary)', fontWeight: 700 }}>
+      {/* Hero header */}
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0' }}>
+        <div style={{ fontSize: 13, letterSpacing: 3, color: tokens.primary, fontWeight: 800 }}>
           AWARDS CEREMONY
         </div>
-        <div style={{ fontSize: 28, fontWeight: 800 }}>Great game!</div>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 15 }}>Here are your champions</div>
-      </header>
-
-      {/* ── Podium top-3 ── */}
-      {top3.length > 0 && <PodiumSection top3={top3} />}
-
-      {/* ── Session stats ── */}
-      <section style={panelStyle}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          <StatChip icon="💬" label="Words Collected" value={String(awards.total_tokens)} />
-          <StatChip icon="🎯" label="Discoveries" value={String(awards.discovery_count)} />
-          <StatChip icon="👥" label="Players" value={String(awards.leaderboard.length)} />
+        <div
+          style={{
+            fontSize: 32,
+            fontWeight: 900,
+            color: tokens.text,
+            letterSpacing: -0.5,
+            textShadow: resolved === 'dark' ? `0 0 24px ${tokens.glow}` : 'none',
+          }}
+        >
+          Great game!
         </div>
-      </section>
+        <div style={{ color: tokens.textMuted, fontSize: 15 }}>Here are your champions</div>
+      </div>
 
-      {/* ── Star announcements ── */}
+      {/* Podium top-3 */}
+      {top3.length > 0 && <Podium top3={top3} />}
+
+      {/* Session stats */}
+      <Card>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <StatChip label="Words" value={String(awards.total_tokens)} />
+          <StatChip label="New discoveries" value={String(awards.discovery_count)} variant="discovery" />
+          <StatChip label="Players" value={String(awards.leaderboard.length)} />
+        </div>
+      </Card>
+
+      {/* Star announcements */}
       {revealedStars.length > 0 && (
-        <section style={panelStyle}>
-          <div style={sectionTitleStyle}>🏅 Award Announcements</div>
+        <Card>
+          <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>Award announcements</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {revealedStars.map((star) => (
-              <StarCard key={`${star.category}-${star.participant_id}`} star={star} />
+              <StarRow key={`${star.category}-${star.participant_id}`} star={star} />
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
-      {/* ── Final leaderboard (after all stars revealed) ── */}
+      {/* Final leaderboard */}
       {starsDone && awards.leaderboard.length > 0 && (
-        <section style={panelStyle}>
-          <div style={sectionTitleStyle}>Final Leaderboard</div>
+        <Card>
+          <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>Final leaderboard</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {awards.leaderboard.map((entry) => (
-              <div key={entry.participant_id} style={leaderRowStyle(entry.rank === 1)}>
-                <span style={{ minWidth: 28, fontWeight: 700, color: rankColor(entry.rank) }}>
-                  {rankIcon(entry.rank)}
-                </span>
-                <span style={{ flex: 1, fontWeight: entry.rank === 1 ? 700 : 400 }}>{entry.display_name}</span>
-                <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
-              </div>
+              <LeaderRow key={entry.participant_id} entry={entry} />
             ))}
           </div>
-        </section>
+        </Card>
       )}
-
-      {starsDone && (
-        <button type="button" onClick={onReturnToSession} style={playAgainBtnStyle}>
-          Return to session
-        </button>
-      )}
-    </div>
+    </Screen>
   )
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function PodiumSection({ top3 }: { top3: LeaderboardEntry[] }) {
+function Podium({ top3 }: { top3: LeaderboardEntry[] }) {
+  const { tokens } = useTheme()
   const first = top3.find((e) => e.rank === 1)
   const second = top3.find((e) => e.rank === 2)
   const third = top3.find((e) => e.rank === 3)
 
   return (
-    <section style={{ ...panelStyle, alignItems: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 10, width: '100%' }}>
-        {/* 2nd */}
-        {second && <PodiumBlock entry={second} height={88} crown="🥈" />}
-        {/* 1st */}
-        {first && <PodiumBlock entry={first} height={110} crown="👑" highlight />}
-        {/* 3rd */}
-        {third && <PodiumBlock entry={third} height={72} crown="🥉" />}
+    <Card highlight pad={20}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 12 }}>
+        {second && <PodiumBlock entry={second} height={88} barColor={tokens.starSilver} />}
+        {first && <PodiumBlock entry={first} height={120} barColor={tokens.primary} crown />}
+        {third && <PodiumBlock entry={third} height={68} barColor={tokens.starBronze} />}
       </div>
-    </section>
+    </Card>
   )
 }
 
 function PodiumBlock({
-  entry, height, crown, highlight = false,
+  entry,
+  height,
+  barColor,
+  crown = false,
 }: {
   entry: LeaderboardEntry
   height: number
-  crown: string
-  highlight?: boolean
+  barColor: string
+  crown?: boolean
 }) {
+  const { tokens, resolved } = useTheme()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1 }}>
-      <div style={{ fontSize: 20 }}>{crown}</div>
-      <div style={{
-        width: 48, height: 48, borderRadius: '50%',
-        background: highlight ? 'rgba(255,45,120,0.35)' : 'rgba(168,85,247,0.2)',
-        border: `2px solid ${highlight ? 'var(--accent-primary)' : 'var(--accent-secondary)'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 22,
-      }}>👤</div>
-      <div style={{ fontWeight: 700, fontSize: 13, textAlign: 'center', maxWidth: 80, wordBreak: 'break-word' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, maxWidth: 120 }}>
+      {crown && (
+        <svg width={28} height={20} viewBox="0 0 24 18" aria-label="First place" role="img">
+          <path d="M2 16h20l-2-12-5 5-5-7-5 7-5-5L2 16z" fill={tokens.starCrown} />
+        </svg>
+      )}
+      <Avatar seed={entry.display_name} size={crown ? 64 : 52} highlight={crown} />
+      <div
+        style={{
+          fontWeight: crown ? 800 : 700,
+          fontSize: crown ? 14 : 13,
+          textAlign: 'center',
+          color: tokens.text,
+          maxWidth: 110,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          width: '100%',
+        }}
+      >
         {entry.display_name}
       </div>
-      <div style={{ color: 'var(--gold)', fontSize: 13, fontWeight: 700 }}>{entry.xp} ⭐</div>
-      <div style={{
-        width: '100%', height, borderRadius: '10px 10px 0 0',
-        background: highlight
-          ? 'linear-gradient(180deg, rgba(255,45,120,0.4) 0%, rgba(255,45,120,0.1) 100%)'
-          : 'rgba(255,255,255,0.06)',
-        border: '1px solid var(--border)',
-      }} />
-    </div>
-  )
-}
-
-function StarCard({ star }: { star: Star }) {
-  const emoji = AWARD_EMOJI[star.category] ?? '⭐'
-  return (
-    <div style={starCardStyle}>
-      <div style={{ fontSize: 28 }}>{emoji}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}>{star.category}</div>
-        <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)' }}>{star.display_name}</div>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>+{star.gold_bonus} Gold</div>
+      <StarBadge variant="gold" count={entry.xp} size={14} label={`${entry.xp} XP`} />
+      <div
+        style={{
+          width: '100%',
+          height,
+          borderRadius: '10px 10px 0 0',
+          background: barColor,
+          opacity: resolved === 'dark' ? 0.85 : 1,
+          boxShadow: resolved === 'dark' && crown ? `0 -8px 32px ${tokens.glow}` : undefined,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: tokens.textInverse,
+          fontWeight: 900,
+          fontSize: crown ? 24 : 18,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {entry.rank}
       </div>
     </div>
   )
 }
 
-function StatChip({ icon, label, value }: { icon: string; label: string; value: string }) {
+function StarRow({ star }: { star: Star }) {
+  const { tokens } = useTheme()
+  const variant = variantForCategory(star.category)
   return (
-    <div style={{
-      background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
-      borderRadius: 10, padding: '10px 8px', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', gap: 4,
-    }}>
-      <div style={{ fontSize: 20 }}>{icon}</div>
-      <div style={{ fontWeight: 800, fontSize: 22 }}>{value}</div>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 11, textAlign: 'center' }}>{label}</div>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 14px',
+        background: tokens.bg,
+        border: `1px solid ${tokens.border}`,
+        borderRadius: 12,
+      }}
+    >
+      <Avatar seed={star.display_name} size={44} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: tokens.textMuted, fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          {star.category}
+        </div>
+        <div style={{ fontWeight: 800, fontSize: 17, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {star.display_name}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+        <StarBadge variant={variant} size={22} />
+        {star.gold_bonus > 0 && (
+          <span style={{ color: tokens.textMuted, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+            +{star.gold_bonus} gold
+          </span>
+        )}
+      </div>
     </div>
   )
 }
 
-function FullScreenMessage({ title, subtitle }: { title: string; subtitle: string }) {
+function LeaderRow({ entry }: { entry: LeaderboardEntry }) {
+  const { tokens } = useTheme()
+  const isFirst = entry.rank === 1
   return (
-    <div style={messageWrapStyle}>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
-      <div style={{ fontSize: 15, color: 'var(--text-secondary)' }}>{subtitle}</div>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 10px',
+        background: isFirst ? tokens.primarySoft : tokens.bg,
+        border: `1px solid ${isFirst ? tokens.primary : tokens.border}`,
+        borderRadius: 10,
+        minHeight: 48,
+      }}
+    >
+      <div
+        style={{
+          minWidth: 28,
+          textAlign: 'center',
+          fontWeight: 800,
+          color: rankAccent(entry.rank, tokens.text, tokens.textMuted),
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {entry.rank}
+      </div>
+      <Avatar seed={entry.display_name} size={36} />
+      <div style={{ flex: 1, fontWeight: isFirst ? 800 : 600, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {entry.display_name}
+      </div>
+      <StarBadge variant="gold" count={entry.xp} size={14} label={`${entry.xp} XP`} />
     </div>
   )
 }
 
-function rankColor(rank: number) {
+function StatChip({ label, value, variant }: { label: string; value: string; variant?: StarVariant }) {
+  const { tokens } = useTheme()
+  return (
+    <div
+      style={{
+        background: tokens.bg,
+        border: `1px solid ${tokens.border}`,
+        borderRadius: 10,
+        padding: '12px 8px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+      }}
+    >
+      {variant ? <StarBadge variant={variant} size={20} /> : <div style={{ height: 20 }} />}
+      <div style={{ fontWeight: 900, fontSize: 22, color: tokens.text, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ color: tokens.textMuted, fontSize: 11, textAlign: 'center' }}>{label}</div>
+    </div>
+  )
+}
+
+function rankAccent(rank: number, text: string, muted: string): string {
   if (rank === 1) return '#FFD700'
   if (rank === 2) return '#C0C0C0'
   if (rank === 3) return '#CD7F32'
-  return 'var(--text-secondary)'
-}
-
-function rankIcon(rank: number) {
-  if (rank === 1) return '👑'
-  if (rank === 2) return '🥈'
-  if (rank === 3) return '🥉'
-  return String(rank)
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const wrapStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  padding: 16,
-  background: 'var(--bg)',
-  color: 'var(--text-primary)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-  position: 'relative',
-}
-
-const heroStyle: React.CSSProperties = {
-  borderRadius: 14,
-  padding: '18px 16px',
-  background: 'linear-gradient(135deg, rgba(255,45,120,0.18) 0%, rgba(168,85,247,0.12) 100%)',
-  border: '1px solid var(--border)',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 4,
-  textAlign: 'center',
-}
-
-const panelStyle: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 14,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 700,
-}
-
-const starCardStyle: React.CSSProperties = {
-  borderRadius: 12,
-  border: '1px solid rgba(245,158,11,0.35)',
-  background: 'rgba(245,158,11,0.08)',
-  padding: '10px 14px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-}
-
-const leaderRowStyle = (isFirst: boolean): React.CSSProperties => ({
-  minHeight: 44,
-  borderRadius: 10,
-  border: `1px solid ${isFirst ? 'rgba(255,215,0,0.4)' : 'var(--border)'}`,
-  background: isFirst ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.03)',
-  padding: '8px 10px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-})
-
-const playAgainBtnStyle: React.CSSProperties = {
-  minHeight: 52,
-  borderRadius: 12,
-  border: 'none',
-  background: 'var(--accent-primary)',
-  color: 'var(--text-primary)',
-  fontSize: 18,
-  fontWeight: 700,
-  cursor: 'pointer',
-}
-
-const messageWrapStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  textAlign: 'center',
-  background: 'var(--bg)',
-  padding: 16,
+  return rank <= 5 ? text : muted
 }

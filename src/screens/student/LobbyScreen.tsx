@@ -1,21 +1,44 @@
+/**
+ * Student lobby — the room a student lands in after joining.
+ *
+ * Shows: who you are (avatar + screen name), the active session at a glance
+ * (topic / mode / round / players / words / countdown), and the primary CTA
+ * to enter the round when the teacher opens one.
+ *
+ * Real-time updates currently come from `useSessionPoll`. The Socket
+ * Introduction migration step replaces the poll with socket.io events
+ * without touching this file's UI surface.
+ */
 import { useMemo } from 'react'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
-import { AiGuidePanel } from '@/components/AiGuidePanel'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { Screen } from '@/components/Screen'
+import { Card } from '@/components/Card'
+import { Button } from '@/components/Button'
+import { Avatar } from '@/components/Avatar'
+import { XpBar } from '@/components/XpBar'
+import { TenantLogo } from '@/components/TenantLogo'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { StarBadge } from '@/components/StarBadge'
+import { useTheme } from '@/theme/useTheme'
 
 const LEVEL_XP_REQUIREMENT = 1200
-const MIN_PROGRESS_PERCENT = 8
-const MAX_PROGRESS_PERCENT = 100
 
 interface LobbyScreenProps {
   session_id: string
   display_name: string
+  participant_token: string | null
   onEnterRound: () => void
 }
 
-export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScreenProps) {
-  const { session, error } = useSessionPoll(session_id, true)
+export function LobbyScreen({ session_id, display_name, participant_token, onEnterRound }: LobbyScreenProps) {
+  const { tokens } = useTheme()
+  const auth = useMemo(
+    () => participant_token ? { token: participant_token } : null,
+    [participant_token],
+  )
+  const { session, error } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const seconds = session?.next_round_starts_in_seconds ?? session?.time_remaining_seconds ?? 0
   const canEnterRound = session?.round_status === 'active'
@@ -27,241 +50,104 @@ export function LobbyScreen({ session_id, display_name, onEnterRound }: LobbyScr
     return {
       stars: me?.gold ?? 0,
       score: me?.xp ?? 0,
-      rank: me?.rank ?? '-',
+      rank: me?.rank ?? null,
     }
   }, [display_name, session?.leaderboard])
 
-  return (
-    <div style={wrapStyle}>
-      <header style={headerStyle}>
-        <div style={logoStyle}>AiWA</div>
-        <select style={langSelectStyle} defaultValue={session?.language ?? 'mandinka'} aria-label="Language selector">
-          <option value="mandinka">Mandinka</option>
-          <option value="wolof">Wolof</option>
-          <option value="fula">Fula</option>
-        </select>
-      </header>
+  const topic = (session?.semantic_domain_id ?? 'Loading…').toUpperCase()
+  const playerCount = session?.participant_count ?? 0
+  const wordCount = session?.token_count ?? 0
 
+  return (
+    <Screen
+      header={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <TenantLogo size="medium" />
+          <ThemeToggle />
+        </div>
+      }
+      footer={
+        <Button onClick={onEnterRound} disabled={!canEnterRound} large>
+          {canEnterRound ? `Enter Round ${currentRound}` : 'Waiting for the next round…'}
+        </Button>
+      }
+    >
       <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
 
-      <section style={cardStyle}>
+      {/* Player card — avatar, name, stars */}
+      <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={avatarStyle}>👤</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700 }}>{display_name}</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Word Explorer</div>
+          <Avatar seed={display_name} size={56} highlight />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 18, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {display_name}
+            </div>
+            <div style={{ color: tokens.textMuted, fontSize: 13 }}>Word Collector</div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontWeight: 700, color: 'var(--gold)' }}>⭐ {profile.stars}</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{profile.score} pts</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <StarBadge variant="gold" count={profile.stars} label={`${profile.stars} stars`} />
+            <div style={{ color: tokens.textMuted, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+              {profile.score} XP
+            </div>
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section style={cardStyle}>
-        <div style={sectionTitleStyle}>Play Game</div>
-        <ActionCard
-          title="Join a Game"
-          subtitle={canEnterRound ? 'Play with a group' : 'Waiting for the teacher to start the round'}
-          enabled={canEnterRound}
-          onClick={onEnterRound}
+      {/* Session summary */}
+      <Card highlight>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>TODAY&rsquo;S TOPIC</div>
+          <div style={{ fontSize: 12, color: tokens.textMuted }}>
+            Round {currentRound} / {totalRounds}
+          </div>
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: tokens.primary, marginBottom: 12, lineHeight: 1.1 }}>
+          {topic}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8 }}>
+          <Stat label="Players" value={`${playerCount}`} />
+          <Stat label="Words" value={`${wordCount}`} />
+          <Stat label="Starts in" value={canEnterRound ? 'Now' : `${String(Math.max(0, seconds)).padStart(2, '0')}s`} />
+        </div>
+      </Card>
+
+      {/* Player progress */}
+      <Card>
+        <XpBar
+          current={profile.score % LEVEL_XP_REQUIREMENT}
+          target={LEVEL_XP_REQUIREMENT}
+          level={Math.floor(profile.score / LEVEL_XP_REQUIREMENT) + 1}
+          title="Word Collector"
         />
-        <ActionCard title="Solo Mode" subtitle="Coming soon" />
-        <ActionCard title="Practice" subtitle="Coming soon" />
-      </section>
+        {profile.rank !== null && (
+          <div style={{ marginTop: 10, fontSize: 13, color: tokens.textMuted }}>
+            Currently rank{' '}
+            <span style={{ color: tokens.text, fontWeight: 700 }}>#{profile.rank}</span>
+            {' '}of {session?.leaderboard.length ?? 0}
+          </div>
+        )}
+      </Card>
+    </Screen>
+  )
+}
 
-      <section style={cardStyle}>
-        <div style={sectionTitleStyle}>Active Session</div>
-        <div style={activeGridStyle}>
-          <Metric label="Topic" value={(session?.semantic_domain_id ?? 'WATER SOURCES').toUpperCase()} />
-          <Metric label="Mode" value={(session?.mode ?? 'rwc').toUpperCase()} />
-          <Metric label="Round" value={`${currentRound}/${totalRounds}`} />
-          <Metric label="Players" value={`${session?.participant_count ?? 0}`} />
-          <Metric label="Words" value={`${session?.token_count ?? 0}`} />
-          <Metric label="Starts in" value={`${String(Math.max(0, seconds)).padStart(2, '0')}s`} />
-        </div>
-        <button type="button" onClick={onEnterRound} disabled={!canEnterRound} style={primaryBtnStyle(!canEnterRound)}>
-          {canEnterRound ? `Enter Round ${currentRound}` : 'Waiting for next round…'}
-        </button>
-      </section>
-
-      <section style={cardStyle}>
-        <div style={sectionTitleStyle}>Your Progress</div>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 8 }}>Level 7 · Word Collector</div>
-        <div style={progressTrackStyle}>
-          <div
-            style={{
-              ...progressFillStyle,
-              width: `${Math.min(
-                MAX_PROGRESS_PERCENT,
-                Math.max(MIN_PROGRESS_PERCENT, ((profile.score % LEVEL_XP_REQUIREMENT) / LEVEL_XP_REQUIREMENT) * 100),
-              )}%`,
-            }}
-          />
-        </div>
-        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-          Rank {profile.rank} of {session?.leaderboard.length ?? 0}
-        </div>
-      </section>
-
-      <AiGuidePanel compact context={{ language: session?.language }} />
-
-      <nav style={bottomNavStyle} aria-label="Bottom navigation">
-        {['Lobby', 'Games', 'Progress', 'Awards', 'Profile'].map((item) => (
-          <button key={item} type="button" style={navItemStyle} disabled={item !== 'Lobby'}>
-            {item}
-          </button>
-        ))}
-      </nav>
+function Stat({ label, value }: { label: string; value: string }) {
+  const { tokens } = useTheme()
+  return (
+    <div
+      style={{
+        background: tokens.bg,
+        border: `1px solid ${tokens.border}`,
+        borderRadius: 10,
+        padding: '8px 10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        minHeight: 56,
+      }}
+    >
+      <div style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.4 }}>{label}</div>
+      <div style={{ color: tokens.text, fontWeight: 800, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </div>
   )
-}
-
-function ActionCard({ title, subtitle, onClick, enabled = false }: { title: string; subtitle: string; onClick?: () => void; enabled?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} disabled={!enabled} style={actionCardStyle(enabled)}>
-      <span>{title}</span>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{subtitle}</span>
-    </button>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={metricStyle}>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{label}</div>
-      <div style={{ fontWeight: 700, fontSize: 14 }}>{value}</div>
-    </div>
-  )
-}
-
-const wrapStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  padding: 16,
-  background: 'var(--bg)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-}
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-}
-
-const logoStyle: React.CSSProperties = {
-  fontSize: 24,
-  fontWeight: 900,
-  background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-}
-
-const langSelectStyle: React.CSSProperties = {
-  minHeight: 44,
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'var(--card)',
-  color: 'var(--text-primary)',
-  padding: '0 10px',
-}
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: 14,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 24,
-  fontWeight: 700,
-}
-
-const avatarStyle: React.CSSProperties = {
-  width: 48,
-  height: 48,
-  borderRadius: '50%',
-  background: 'rgba(255,45,120,0.2)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}
-
-const activeGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-  gap: 8,
-}
-
-const metricStyle: React.CSSProperties = {
-  borderRadius: 10,
-  background: 'rgba(255,255,255,0.03)',
-  border: '1px solid var(--border)',
-  minHeight: 58,
-  padding: 8,
-}
-
-const actionCardStyle = (enabled: boolean): React.CSSProperties => ({
-  minHeight: 56,
-  borderRadius: 12,
-  border: `1px solid ${enabled ? 'rgba(255,45,120,0.38)' : 'var(--border)'}`,
-  background: enabled ? 'rgba(255,45,120,0.15)' : 'rgba(255,255,255,0.03)',
-  color: 'var(--text-primary)',
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'center',
-  flexDirection: 'column',
-  gap: 3,
-  padding: '8px 12px',
-  cursor: enabled ? 'pointer' : 'not-allowed',
-})
-
-const progressTrackStyle: React.CSSProperties = {
-  width: '100%',
-  height: 10,
-  borderRadius: 999,
-  background: 'rgba(255,255,255,0.08)',
-  overflow: 'hidden',
-}
-
-const progressFillStyle: React.CSSProperties = {
-  height: '100%',
-  borderRadius: 999,
-  background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))',
-}
-
-const primaryBtnStyle = (disabled: boolean): React.CSSProperties => ({
-  minHeight: 48,
-  width: '100%',
-  borderRadius: 12,
-  border: 'none',
-  background: disabled ? 'rgba(255,255,255,0.15)' : 'var(--accent-primary)',
-  color: 'var(--text-primary)',
-  fontWeight: 700,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-})
-
-const bottomNavStyle: React.CSSProperties = {
-  marginTop: 'auto',
-  display: 'grid',
-  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-  gap: 6,
-  borderRadius: 14,
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  padding: 8,
-}
-
-const navItemStyle: React.CSSProperties = {
-  minHeight: 44,
-  borderRadius: 8,
-  border: 'none',
-  background: 'transparent',
-  color: 'var(--text-primary)',
-  fontSize: 12,
 }

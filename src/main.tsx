@@ -9,12 +9,15 @@ import '@fontsource/noto-sans/latin-900.css'
 import './index.css'
 import './i18n'
 import { App } from './App'
+import { ThemeProvider } from '@/theme/ThemeProvider'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('Root element not found')
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>,
 )

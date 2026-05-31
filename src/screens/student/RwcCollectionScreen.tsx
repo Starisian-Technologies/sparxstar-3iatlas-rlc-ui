@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessoryBar } from '@/components/AccessoryBar'
+import { RlcRecorder } from '@/components/RlcRecorder'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { Avatar } from '@/components/Avatar'
+import { StarBadge } from '@/components/StarBadge'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
+import { useTheme } from '@/theme/useTheme'
 import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SessionStatus, SubmittedWord } from '@/types'
 
 interface RwcCollectionScreenProps {
   session_id: string
   participant_id: string
+  participant_token: string | null
   collection_depth: CollectionDepth
   language: string
   display_name: string
@@ -25,6 +30,7 @@ interface RwcCollectionScreenProps {
 export function RwcCollectionScreen({
   session_id,
   participant_id,
+  participant_token,
   collection_depth,
   language,
   display_name,
@@ -33,13 +39,19 @@ export function RwcCollectionScreen({
   onClose,
   onCollectionEnded,
 }: RwcCollectionScreenProps) {
+  const { tokens } = useTheme()
   const [word, setWord] = useState('')
   const [translation, setTranslation] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
-  const { session, error: pollError } = useSessionPoll(session_id, true)
+  const [pendingAudioToken, setPendingAudioToken] = useState<{ token_id: string; word: string } | null>(null)
+  const auth = useMemo(
+    () => participant_token ? { token: participant_token } : null,
+    [participant_token],
+  )
+  const { session, error: pollError } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
   const wordInputRef = useRef<HTMLInputElement>(null)
@@ -50,8 +62,8 @@ export function RwcCollectionScreen({
   const sessionEndedRef = useRef(false)
   // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
   const processedReceiptsRef = useRef<Set<string>>(new Set())
-  // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event.
-  const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean }>>(new Map())
+  // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event and audio prompt.
+  const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean; word: string }>>(new Map())
 
   const currentRound = session?.current_round ?? 1
   const totalRounds = session?.total_rounds ?? 5
@@ -114,12 +126,14 @@ export function RwcCollectionScreen({
     // Notify parent and emit runtime events for newly confirmed submissions.
     // processedReceiptsRef prevents duplicate calls across re-renders.
     let latestResult: SaveTokenResponse | null = null
+    let latestLocalId: string | null = null
     for (const receipt of myReceipts) {
       if (processedReceiptsRef.current.has(receipt.localId)) continue
       processedReceiptsRef.current.add(receipt.localId)
       const meta = submissionMetaRef.current.get(receipt.localId)
       onSubmitted(receipt.result)
       latestResult = receipt.result
+      latestLocalId = receipt.localId
       emitRuntimeEvent('WORD_SUBMITTED', {
         sessionId:     session_id,
         participantId: participant_id,
@@ -131,8 +145,14 @@ export function RwcCollectionScreen({
         },
       })
     }
-    if (latestResult) setLastResult(latestResult)
-  }, [syncedSubmissions, onSubmitted, session_id, participant_id])
+    if (latestResult) {
+      setLastResult(latestResult)
+      if (latestLocalId && collection_depth === 'full') {
+        const meta = submissionMetaRef.current.get(latestLocalId)
+        if (meta) setPendingAudioToken({ token_id: latestResult.token_id, word: meta.word })
+      }
+    }
+  }, [syncedSubmissions, onSubmitted, session_id, participant_id, collection_depth])
 
   const myLeaderboard = useMemo(
     () => session?.leaderboard.find((entry) => entry.participant_id === participant_id || entry.display_name === display_name),
@@ -215,8 +235,8 @@ export function RwcCollectionScreen({
         collection_mode: 'rwc',
       }, localId)
 
-      // Store metadata for WORD_SUBMITTED event (used when the sync receipt arrives).
-      submissionMetaRef.current.set(localId, { hasTranslation })
+      // Store metadata for WORD_SUBMITTED event and audio prompt (used when the sync receipt arrives).
+      submissionMetaRef.current.set(localId, { hasTranslation, word: wordValue })
     } catch {
       setError('Could not submit. Try again.')
     } finally {
@@ -227,10 +247,24 @@ export function RwcCollectionScreen({
   return (
     <div style={wrapStyle}>
       <header style={headerStyle}>
-        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Back to lobby">✕</button>
-        <div style={chipStyle}>🕘 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</div>
-        <div style={chipStyle}>👥 {session?.participant_count ?? 0}</div>
-        <div style={chipStyle}>⭐ {myLeaderboard?.xp ?? 0}</div>
+        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Back to lobby">
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <div style={chipStyle} aria-label={`Time remaining ${minutes} minutes ${seconds} seconds`}>
+          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>TIME</span>
+          <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+            {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+          </span>
+        </div>
+        <div style={chipStyle} aria-label={`${session?.participant_count ?? 0} players`}>
+          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>PLAYERS</span>
+          <span style={{ fontWeight: 800 }}>{session?.participant_count ?? 0}</span>
+        </div>
+        <div style={chipStyle} aria-label={`${myLeaderboard?.xp ?? 0} XP`}>
+          <StarBadge variant="gold" size={14} count={myLeaderboard?.xp ?? 0} />
+        </div>
         <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} />
       </header>
 
@@ -259,9 +293,18 @@ export function RwcCollectionScreen({
             placeholder={`Type a word in ${language}`}
             style={inputStyle}
             aria-label="Word input"
+            // Indigenous-language words must not be "corrected" to English.
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck={false}
+            inputMode="text"
+            lang={language}
           />
-          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle}>
-            ➤
+          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle} aria-label="Submit word">
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
         {needsTranslation && (
@@ -273,6 +316,13 @@ export function RwcCollectionScreen({
             placeholder="Type translation (required)"
             style={inputStyle}
             aria-label="Translation input"
+            // The translation field accepts English — leave autocorrect on,
+            // but turn off autoCapitalize so common-noun glosses aren't
+            // sentence-cased.
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck
+            inputMode="text"
           />
         )}
         {lastResult && (
@@ -283,6 +333,16 @@ export function RwcCollectionScreen({
           </div>
         )}
       </section>
+
+      {pendingAudioToken && (
+        <RlcRecorder
+          token_id={pendingAudioToken.token_id}
+          word={pendingAudioToken.word}
+          participant_token={participant_token}
+          onComplete={() => setPendingAudioToken(null)}
+          onSkip={() => setPendingAudioToken(null)}
+        />
+      )}
 
       <section style={panelStyle}>
         <div style={sectionTitleStyle}>Your words</div>
@@ -298,7 +358,7 @@ export function RwcCollectionScreen({
               </div>
               {entry.syncStatus === 'queued'
                 ? <span style={queuedBadgeStyle}>queued</span>
-                : <div style={{ color: 'var(--gold)', fontWeight: 700 }}>+{entry.xp_awarded} ⭐</div>
+                : <StarBadge variant="gold" count={`+${entry.xp_awarded}`} label={`${entry.xp_awarded} XP`} />
               }
             </div>
           ))}
@@ -317,12 +377,13 @@ export function RwcCollectionScreen({
                 background: entry.participant_id === participant_id ? 'rgba(255,45,120,0.2)' : 'rgba(255,255,255,0.03)',
               }}
             >
-              <span style={{ minWidth: 22, color: 'var(--text-secondary)' }}>{entry.rank}</span>
-              <span style={{ flex: 1 }}>
+              <span style={{ minWidth: 22, color: tokens.textMuted, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{entry.rank}</span>
+              <Avatar seed={entry.display_name} size={28} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {entry.display_name}
                 {entry.participant_id === participant_id ? ' (You)' : ''}
               </span>
-              <span style={{ color: 'var(--gold)' }}>{entry.xp} ⭐</span>
+              <StarBadge variant="gold" count={entry.xp} size={13} label={`${entry.xp} XP`} />
             </div>
           ))}
         </div>
@@ -402,12 +463,15 @@ const closeBtnStyle: React.CSSProperties = {
 
 const chipStyle: React.CSSProperties = {
   minHeight: 44,
-  borderRadius: 999,
+  borderRadius: 12,
   background: 'var(--card)',
   border: '1px solid var(--border)',
   display: 'flex',
+  flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
+  padding: '4px 6px',
+  gap: 2,
   fontWeight: 600,
 }
 

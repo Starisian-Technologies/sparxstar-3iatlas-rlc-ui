@@ -1,6 +1,24 @@
+/**
+ * useQcSession — QC phase state via socket.io + REST fallback.
+ *
+ * Loads the ordered QC token list once via REST, then keeps vote counts and
+ * the session status up-to-date via socket events:
+ *   qc:vote        → merge updated vote_counts into the relevant token
+ *   qc:correction  → update corrected_text on the relevant token
+ *   qc:translation → append to qc_translations on the relevant token
+ *   qc:audio-ready → set yahura_transcription + audio vote counts
+ *   session:status → update session metadata (status, leaderboard, etc.)
+ *
+ * If the socket is unavailable, a 2s REST poll provides the same updates.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
+import { createSocket, type SocketAuth } from '@/runtime/socket'
 import type { QcToken, Session } from '@/types'
+
+interface UseQcSessionOptions {
+  auth?: SocketAuth | null
+}
 
 interface UseQcSessionResult {
   qcWords: QcToken[]
@@ -13,30 +31,56 @@ interface UseQcSessionResult {
   refreshStatus: () => Promise<void>
 }
 
-/**
- * QC session state:
- * - load qc words once (fixed ordered list)
- * - poll /session/{id}/status every 2 seconds
- */
-export function useQcSession(session_id: string | null): UseQcSessionResult {
+interface QcVoteEvent {
+  token_id: string
+  dimension: 'orthography' | 'semantics' | 'audio'
+  vote_counts: { yes: number; no: number }
+}
+
+interface QcCorrectionEvent {
+  token_id: string
+  corrected_text: string
+}
+
+interface QcTranslationEvent {
+  token_id: string
+  participant_id: string
+  translation: string
+}
+
+interface QcAudioReadyEvent {
+  token_id: string
+  yahura_transcription: string
+  vote_audio: { yes: number; no: number }
+}
+
+export function useQcSession(
+  session_id: string | null,
+  options: UseQcSessionOptions = {},
+): UseQcSessionResult {
   const [qcWords, setQcWords] = useState<QcToken[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const socketConnectedRef = useRef(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sessionIdRef = useRef(session_id)
+  sessionIdRef.current = session_id
 
   const refreshStatus = useCallback(async () => {
-    if (!session_id) return
+    const sid = sessionIdRef.current
+    if (!sid) return
     try {
-      const status = await api.session.status(session_id)
+      const status = await api.session.status(sid)
       setSession(status)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not refresh QC status')
     }
-  }, [session_id])
+  }, [])
 
+  // Load QC words once
   useEffect(() => {
     let active = true
     if (!session_id) return
@@ -54,19 +98,93 @@ export function useQcSession(session_id: string | null): UseQcSessionResult {
         if (active) setLoading(false)
       }
     })()
-    return () => {
-      active = false
-    }
+    return () => { active = false }
   }, [session_id])
 
+  // Socket + polling fallback for live vote updates
   useEffect(() => {
     if (!session_id) return
-    void refreshStatus()
-    intervalRef.current = setInterval(() => void refreshStatus(), 2000)
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
+
+    const startPoll = () => {
+      if (pollRef.current || socketConnectedRef.current) return
+      void refreshStatus()
+      pollRef.current = setInterval(() => void refreshStatus(), 2000)
     }
-  }, [refreshStatus, session_id])
+
+    const stopPoll = () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
+
+    if (!options.auth) {
+      startPoll()
+      return () => stopPoll()
+    }
+
+    const socket = createSocket(options.auth)
+
+    socket.on('connect', () => {
+      socketConnectedRef.current = true
+      stopPoll()
+      setError(null)
+    })
+
+    socket.on('disconnect', () => {
+      socketConnectedRef.current = false
+      startPoll()
+    })
+
+    socket.on('connect_error', (err: Error) => {
+      setError(err.message)
+      startPoll()
+    })
+
+    socket.on('session:status', (data: Session) => {
+      setSession(data)
+    })
+
+    socket.on('qc:vote', (ev: QcVoteEvent) => {
+      setQcWords((words) => words.map((w) => {
+        if (w.token_id !== ev.token_id) return w
+        const updated = { ...w }
+        if (ev.dimension === 'orthography') updated.vote_orthography = ev.vote_counts
+        else if (ev.dimension === 'semantics') updated.vote_semantics = ev.vote_counts
+        else if (ev.dimension === 'audio') updated.vote_audio = ev.vote_counts
+        return updated
+      }))
+    })
+
+    socket.on('qc:correction', (ev: QcCorrectionEvent) => {
+      setQcWords((words) => words.map((w) =>
+        w.token_id === ev.token_id ? { ...w, corrected_text: ev.corrected_text } : w,
+      ))
+    })
+
+    socket.on('qc:translation', (ev: QcTranslationEvent) => {
+      setQcWords((words) => words.map((w) => {
+        if (w.token_id !== ev.token_id) return w
+        const already = w.qc_translations.some((t) => t.participant_id === ev.participant_id)
+        if (already) return w
+        return { ...w, qc_translations: [...w.qc_translations, { participant_id: ev.participant_id, translation: ev.translation }] }
+      }))
+    })
+
+    socket.on('qc:audio-ready', (ev: QcAudioReadyEvent) => {
+      setQcWords((words) => words.map((w) =>
+        w.token_id === ev.token_id
+          ? { ...w, yahura_transcription: ev.yahura_transcription, vote_audio: ev.vote_audio }
+          : w,
+      ))
+    })
+
+    // Fallback poll until socket connects
+    startPoll()
+
+    return () => {
+      socket.disconnect()
+      stopPoll()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session_id, JSON.stringify(options.auth), refreshStatus])
 
   const currentToken = useMemo(
     () => qcWords[currentIndex] ?? null,

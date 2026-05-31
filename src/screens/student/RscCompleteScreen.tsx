@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { TenantLogo } from '@/components/TenantLogo'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { useTheme } from '@/theme/useTheme'
 import type { SessionStatus } from '@/types'
 
 interface RscCompleteScreenProps {
@@ -9,6 +12,7 @@ interface RscCompleteScreenProps {
 }
 
 export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnded }: RscCompleteScreenProps) {
+  const { tokens } = useTheme()
   const hasCollectionEndedRef = useRef(false)
   const [pollingEnabled, setPollingEnabled] = useState(true)
   const { session } = useSessionPoll(session_id, pollingEnabled)
@@ -23,51 +27,121 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
   }, [onCollectionEnded, session?.status])
 
   return (
-    <div style={wrapStyle}>
-      <svg aria-hidden="true" width={48} height={48} viewBox="0 0 48 48" fill="none">
-        <circle cx={24} cy={24} r={22} fill="var(--success)" opacity={0.15} />
-        <circle cx={24} cy={24} r={22} stroke="var(--success)" strokeWidth={2} />
-        <path d="M14 24l8 8 12-14" stroke="var(--success)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <div style={{ fontSize: 22, fontWeight: 800 }}>You finished!</div>
-      <div style={{ fontSize: 15, color: 'var(--text-secondary)', marginTop: 6 }}>
-        All {submittedCount} sentences submitted. Waiting for the class…
+    <div style={{
+      minHeight: '100dvh',
+      background: tokens.bg,
+      color: tokens.text,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+        borderBottom: `1px solid ${tokens.border}`,
+      }}>
+        <TenantLogo size="small" />
+        <ThemeToggle />
       </div>
-      <div style={pulseWrapStyle}>
-        <div style={pulseStyle} />
-        <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-          The teacher will start the review when everyone is ready
+
+      {/* Main content — centered */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 24,
+        padding: 24,
+        textAlign: 'center',
+      }}>
+        {/* Success icon */}
+        <div style={{
+          width: 96,
+          height: 96,
+          borderRadius: '50%',
+          background: `rgba(34,197,94,0.15)`,
+          border: `2px solid ${tokens.success}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <svg aria-hidden="true" width={48} height={48} viewBox="0 0 48 48" fill="none">
+            <path d="M12 24l9 9 15-16" stroke={tokens.success} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 30, fontWeight: 900, color: tokens.text, letterSpacing: -0.5 }}>
+            All done!
+          </div>
+          <div style={{
+            fontSize: 18,
+            color: tokens.primary,
+            fontWeight: 700,
+          }}>
+            {submittedCount} sentence{submittedCount !== 1 ? 's' : ''} submitted
+          </div>
+          <div style={{ fontSize: 15, color: tokens.textMuted, maxWidth: 280, lineHeight: 1.5 }}>
+            You contributed to the class language record. Waiting for everyone else to finish…
+          </div>
+        </div>
+
+        {/* Waiting pulse card */}
+        <div style={{
+          background: tokens.card,
+          border: `1px solid ${tokens.border}`,
+          borderRadius: 16,
+          padding: '20px 28px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          width: '100%',
+          maxWidth: 320,
+        }}>
+          <PulsingDot color={tokens.primary} />
+          <div style={{ fontSize: 14, color: tokens.textMuted, lineHeight: 1.5 }}>
+            Your teacher will start the review when everyone is ready.
+          </div>
+        </div>
+
+        {/* Motivational XP note */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 13,
+          color: tokens.textMuted,
+        }}>
+          <span style={{ fontSize: 16 }}>⭐</span>
+          <span>XP for each sentence will appear after the review</span>
         </div>
       </div>
     </div>
   )
 }
 
-const wrapStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  background: 'var(--bg)',
-  color: 'var(--text-primary)',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 16,
-  padding: 24,
-  textAlign: 'center',
-}
-
-const pulseWrapStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 12,
-  marginTop: 8,
-}
-
-const pulseStyle: React.CSSProperties = {
-  width: 16,
-  height: 16,
-  borderRadius: '50%',
-  background: 'var(--accent-primary)',
-  animation: 'spx-sync-pulse 1.4s ease-in-out infinite',
+function PulsingDot({ color }: { color: string }) {
+  return (
+    <div style={{ position: 'relative', width: 20, height: 20 }}>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: '50%',
+        background: color,
+        opacity: 0.3,
+        animation: 'spx-sync-pulse 1.4s ease-in-out infinite',
+      }} />
+      <div style={{
+        position: 'absolute',
+        inset: 4,
+        borderRadius: '50%',
+        background: color,
+      }} />
+    </div>
+  )
 }

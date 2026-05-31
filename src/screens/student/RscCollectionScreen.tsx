@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
+import { StarBadge } from '@/components/StarBadge'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { TenantLogo } from '@/components/TenantLogo'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
-import { useSessionPoll } from '@/hooks/useSessionPoll'
+import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
+import { useTheme } from '@/theme/useTheme'
 import { GRAMMAR_DOMAINS } from '@/types'
 import type { CollectionDepth, SaveTokenResponse, SessionStatus } from '@/types'
 
 interface RscCollectionScreenProps {
   session_id: string
   participant_id: string
+  participant_token: string | null
   collection_depth: CollectionDepth
   language: string
   onSubmitted: (result: SaveTokenResponse) => void
@@ -24,12 +29,14 @@ type Step = 'sentence' | 'translation' | 'recording' | 'done'
 export function RscCollectionScreen({
   session_id,
   participant_id,
+  participant_token,
   collection_depth,
   language,
   onSubmitted,
   onCollectionCompleted,
   onCollectionEnded,
 }: RscCollectionScreenProps) {
+  const { tokens } = useTheme()
   const [step, setStep] = useState<Step>('sentence')
   const [sentence, setSentence] = useState('')
   const [translation, setTranslation] = useState('')
@@ -40,10 +47,12 @@ export function RscCollectionScreen({
   const sentenceRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
   const hasCollectionEndedRef = useRef(false)
-  // Tracks which synced receipts have already triggered onSubmitted to prevent
-  // duplicate calls on re-render (mirrors the pattern in RwcCollectionScreen).
   const processedReceiptsRef = useRef<Set<string>>(new Set())
-  const { session, error: pollError } = useSessionPoll(session_id, true)
+  const auth = useMemo(
+    () => participant_token ? { token: participant_token } : null,
+    [participant_token],
+  )
+  const { session, error: pollError } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
   const { submit, syncState, pendingCount, syncedSubmissions } = useSubmissionQueue(session_id, participant_id)
 
@@ -64,9 +73,6 @@ export function RscCollectionScreen({
     [completedDomains],
   )
 
-  // Drive onSubmitted and the result banner from server-confirmation receipts (spec §12.5).
-  // processedReceiptsRef prevents duplicate calls if the effect fires with the same
-  // logical receipts across re-renders.
   useEffect(() => {
     if (syncedSubmissions.length === 0) return
     const myReceipts = syncedSubmissions.filter((r) => r.participantId === participant_id)
@@ -131,7 +137,6 @@ export function RscCollectionScreen({
       const sentenceValue = sentence.trim()
       const translationValue = needsTranslation ? translation.trim() : undefined
 
-      // Emit RLC_SENTENCE_CAPTURED immediately (spec §13.4: events at moment of action).
       emitRlcEvent(RlcEventType.RLC_SENTENCE_CAPTURED, session_id, participant_id, {
         text:               sentenceValue,
         language,
@@ -154,8 +159,6 @@ export function RscCollectionScreen({
         grammar_domain:  currentDomain.slug,
       })
 
-      // Advance domain regardless of sync state (offline-first UX).
-      // onSubmitted / lastResult are driven by the syncedSubmissions effect when the server confirms.
       const nextCompleted = new Set(completedDomains)
       nextCompleted.add(currentDomain.index)
       setCompletedDomains(nextCompleted)
@@ -174,37 +177,95 @@ export function RscCollectionScreen({
 
   if (!currentDomain) {
     return (
-      <div style={waitingWrap}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: '#1B3A6B' }}>All 12 sentences submitted</div>
-        <div style={{ fontSize: 16, color: '#555' }}>Waiting for teacher to start QC…</div>
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 12,
+        padding: 24,
+        textAlign: 'center',
+        background: tokens.bg,
+        color: tokens.text,
+      }}>
+        <div style={{ fontSize: 22, fontWeight: 800 }}>All 12 sentences submitted</div>
+        <div style={{ fontSize: 15, color: tokens.textMuted }}>Waiting for the teacher to start the review…</div>
       </div>
     )
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    fontSize: 18,
+    padding: '14px 16px',
+    border: `1.5px solid ${tokens.border}`,
+    borderRadius: 12,
+    background: tokens.bg,
+    color: tokens.text,
+    boxSizing: 'border-box',
+    outline: 'none',
+  }
+
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: '#f4f4f4' }}>
-      <div style={{ background: '#1B3A6B', padding: '12px 16px', color: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div style={{ fontSize: 14, opacity: 0.85 }}>{completedCount} of {totalDomains} sentences complete</div>
-          <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }} />
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: tokens.bg }}>
+      {/* Header */}
+      <div style={{
+        background: tokens.bgElevated,
+        borderBottom: `1px solid ${tokens.border}`,
+        padding: '10px 16px',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}>
+        {/* Top row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <TenantLogo size="small" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} />
+            <ThemeToggle />
+          </div>
         </div>
-        <div style={{ marginTop: 4, display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
+
+        {/* Progress info */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 13, color: tokens.textMuted, fontWeight: 600 }}>
+            {completedCount} of {totalDomains} done
+          </div>
+          {lastResult && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <StarBadge variant="gold" count={`+${lastResult.xp_awarded}`} size={13} label={`${lastResult.xp_awarded} XP`} />
+            </div>
+          )}
+        </div>
+
+        {/* Domain progress tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 5 }}>
           {GRAMMAR_DOMAINS.map((domain) => {
             const done = completedDomains.has(domain.index)
             const active = domain.index === currentDomain.index
             return (
               <div
                 key={domain.slug}
+                title={domain.label}
                 style={{
-                  minHeight: 44,
+                  minHeight: 36,
                   borderRadius: 8,
-                  fontSize: 12,
+                  fontSize: 11,
+                  fontWeight: 800,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 700,
-                  background: done ? '#62ad4b' : active ? '#C9A84C' : 'rgba(255,255,255,0.2)',
-                  color: done || active ? '#1B3A6B' : '#fff',
+                  background: done
+                    ? tokens.success
+                    : active
+                    ? tokens.primary
+                    : tokens.card,
+                  color: done || active ? '#fff' : tokens.textMuted,
+                  border: active ? `2px solid ${tokens.primaryDeep}` : `1px solid ${tokens.border}`,
+                  boxShadow: active ? `0 0 10px ${tokens.glow}` : 'none',
+                  transition: 'background 200ms ease',
                 }}
               >
                 {domain.index}
@@ -214,34 +275,68 @@ export function RscCollectionScreen({
         </div>
       </div>
 
+      {/* Feedback banner */}
       {lastResult && (
         <div style={{
-          background: lastResult.saturation_signal === 'saturated' ? '#fff7e4' : '#e6f1fb',
-          color: lastResult.saturation_signal === 'saturated' ? '#8a6208' : '#0c447c',
+          background: lastResult.saturation_signal === 'saturated'
+            ? `rgba(245,200,66,0.15)`
+            : `rgba(34,197,94,0.12)`,
+          color: lastResult.saturation_signal === 'saturated'
+            ? tokens.warning
+            : tokens.success,
           padding: '10px 16px',
           fontSize: 14,
+          fontWeight: 600,
+          borderBottom: `1px solid ${tokens.border}`,
         }}>
           {lastResult.saturation_signal === 'saturated'
-            ? 'Great! We have lots of that word — try a different one.'
-            : `Sentence saved. +${lastResult.xp_awarded} XP`}
+            ? 'Great! We have lots of that — try a different sentence.'
+            : `Sentence saved — you earned ${lastResult.xp_awarded} XP!`}
         </div>
       )}
 
-      <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Main content */}
+      <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <ContinuityBanner
           isOnline={isOnline}
           hasConnectionIssue={Boolean(pollError)}
           hasDraft={Boolean(sentence.trim() || translation.trim())}
         />
-        <div style={{ fontSize: 15, color: '#555' }}>Current domain</div>
-        <div style={{ fontSize: 20, color: '#1B3A6B', fontWeight: 700 }}>{currentDomain.label}</div>
-        <div style={{ fontSize: 16, color: '#1a1a1a' }}>{currentDomain.prompt}</div>
-        <div style={{ fontSize: 14, color: '#666' }}>Focus element: {currentDomain.focus_element}</div>
+
+        {/* Domain card */}
+        <div style={{
+          background: tokens.card,
+          border: `1px solid ${tokens.border}`,
+          borderRadius: 14,
+          padding: '14px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: tokens.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+            Grammar type
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: tokens.primary }}>
+            {currentDomain.label}
+          </div>
+          <div style={{ fontSize: 15, color: tokens.text, lineHeight: 1.4 }}>
+            {currentDomain.prompt}
+          </div>
+          <div style={{ fontSize: 13, color: tokens.textMuted }}>
+            Focus: <span style={{ color: tokens.text, fontWeight: 600 }}>{currentDomain.focus_element}</span>
+          </div>
+        </div>
 
         {step === 'sentence' && (
           <>
-            <label style={labelStyle}>Type a sentence in {language}</label>
+            <label
+              htmlFor="rsc-sentence"
+              style={{ fontSize: 15, fontWeight: 700, color: tokens.text }}
+            >
+              Type a sentence in {language}
+            </label>
             <input
+              id="rsc-sentence"
               ref={sentenceRef}
               type="text"
               value={sentence}
@@ -250,13 +345,19 @@ export function RscCollectionScreen({
               placeholder="Type your sentence…"
               style={inputStyle}
               aria-label="Sentence input"
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode="text"
+              lang={language}
             />
-            <FocusPreview sentence={sentence} focusWord={focusWord} />
+            <FocusPreview sentence={sentence} focusWord={focusWord} tokens={tokens} />
             <button
               type="button"
               onClick={() => setStep(needsTranslation ? 'translation' : needsRecording ? 'recording' : 'done')}
               disabled={!canProceedFromSentence}
-              style={primaryButtonStyle(!canProceedFromSentence)}
+              style={primaryBtnStyle(tokens, !canProceedFromSentence)}
             >
               {needsTranslation ? 'Next →' : 'Submit'}
             </button>
@@ -265,8 +366,14 @@ export function RscCollectionScreen({
 
         {step === 'translation' && (
           <>
-            <label style={labelStyle}>What does this sentence mean in English or French?</label>
+            <label
+              htmlFor="rsc-translation"
+              style={{ fontSize: 15, fontWeight: 700, color: tokens.text }}
+            >
+              What does this sentence mean in English?
+            </label>
             <input
+              id="rsc-translation"
               ref={translationRef}
               type="text"
               value={translation}
@@ -275,14 +382,34 @@ export function RscCollectionScreen({
               placeholder="Translation…"
               style={inputStyle}
               aria-label="Translation input"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck
+              inputMode="text"
             />
             <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => setStep('sentence')} style={backBtnStyle}>← Back</button>
+              <button
+                type="button"
+                onClick={() => setStep('sentence')}
+                style={{
+                  minHeight: 52,
+                  padding: '0 20px',
+                  borderRadius: 12,
+                  border: `1.5px solid ${tokens.border}`,
+                  background: 'transparent',
+                  color: tokens.textMuted,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 16,
+                }}
+              >
+                ← Back
+              </button>
               <button
                 type="button"
                 onClick={() => setStep(needsRecording ? 'recording' : 'done')}
                 disabled={!canProceedFromTranslation}
-                style={{ ...primaryButtonStyle(!canProceedFromTranslation), flex: 1 }}
+                style={{ ...primaryBtnStyle(tokens, !canProceedFromTranslation), flex: 1 }}
               >
                 {needsRecording ? 'Next →' : 'Submit'}
               </button>
@@ -292,19 +419,49 @@ export function RscCollectionScreen({
 
         {step === 'recording' && (
           <>
-            <label style={labelStyle}>Record yourself saying the sentence</label>
-            <div style={recorderPlaceholderStyle}>
-              <div style={{ fontSize: 48 }}>🎙</div>
-              <div>Starmus recorder mounts here</div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>(@sparxstar/starmus-audio — to be wired in)</div>
+            <label style={{ fontSize: 15, fontWeight: 700, color: tokens.text }}>
+              Record yourself saying the sentence
+            </label>
+            <div style={{
+              border: `2px dashed ${tokens.border}`,
+              borderRadius: 14,
+              padding: 40,
+              textAlign: 'center',
+              color: tokens.textMuted,
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+            }}>
+              <span style={{ fontSize: 44 }}>🎙</span>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Starmus recorder</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>(@sparxstar/starmus-audio — wiring in progress)</div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => setStep(needsTranslation ? 'translation' : 'sentence')} style={backBtnStyle}>← Back</button>
+              <button
+                type="button"
+                onClick={() => setStep(needsTranslation ? 'translation' : 'sentence')}
+                style={{
+                  minHeight: 52,
+                  padding: '0 20px',
+                  borderRadius: 12,
+                  border: `1.5px solid ${tokens.border}`,
+                  background: 'transparent',
+                  color: tokens.textMuted,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 16,
+                }}
+              >
+                ← Back
+              </button>
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
                 disabled={loading}
-                style={{ ...primaryButtonStyle(loading), flex: 1 }}
+                style={{ ...primaryBtnStyle(tokens, loading), flex: 1 }}
               >
                 {loading ? 'Submitting…' : 'Submit'}
               </button>
@@ -313,13 +470,30 @@ export function RscCollectionScreen({
         )}
 
         {step === 'done' && !loading && (
-          <button type="button" onClick={() => void handleSubmit()} style={primaryButtonStyle(false)}>
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            style={primaryBtnStyle(tokens, false)}
+          >
             Submit sentence
           </button>
         )}
 
+        {loading && step !== 'recording' && (
+          <div style={{ textAlign: 'center', color: tokens.textMuted, fontSize: 14 }}>Submitting…</div>
+        )}
+
         {error && (
-          <div role="alert" style={errorStyle}>{error}</div>
+          <div role="alert" style={{
+            background: 'rgba(239,68,68,0.1)',
+            border: `1px solid ${tokens.danger}`,
+            borderRadius: 10,
+            padding: '10px 14px',
+            fontSize: 14,
+            color: tokens.danger,
+          }}>
+            {error}
+          </div>
         )}
       </div>
 
@@ -328,21 +502,34 @@ export function RscCollectionScreen({
   )
 }
 
-function FocusPreview({ sentence, focusWord }: { sentence: string; focusWord: string | null }) {
+function FocusPreview({
+  sentence,
+  focusWord,
+  tokens,
+}: {
+  sentence: string
+  focusWord: string | null
+  tokens: { text: string; primary: string; textMuted: string }
+}) {
   if (!sentence.trim()) return null
   if (!focusWord) {
-    return <div style={{ fontSize: 14, color: '#666' }}>Keep typing to highlight the focus element.</div>
+    return <div style={{ fontSize: 14, color: tokens.textMuted }}>Keep typing to highlight the focus element.</div>
   }
   const escaped = focusWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = sentence.split(new RegExp(`(${escaped})`, 'i'))
   return (
-    <div style={{ fontSize: 16, color: '#1a1a1a', lineHeight: 1.5 }}>
+    <div style={{ fontSize: 16, color: tokens.text, lineHeight: 1.5 }}>
       {parts.map((part, index) => {
         const isFocus = part.toLowerCase() === focusWord.toLowerCase()
         return (
           <span
             key={`${part}-${index}`}
-            style={isFocus ? { color: '#b30000', textDecoration: 'underline', textDecorationThickness: 2 } : undefined}
+            style={isFocus ? {
+              color: tokens.primary,
+              textDecoration: 'underline',
+              textDecorationThickness: 2,
+              fontWeight: 700,
+            } : undefined}
           >
             {part}
           </span>
@@ -350,6 +537,25 @@ function FocusPreview({ sentence, focusWord }: { sentence: string; focusWord: st
       })}
     </div>
   )
+}
+
+function primaryBtnStyle(
+  tokens: { primary: string; textInverse: string; glow: string; card: string; textMuted: string },
+  disabled: boolean,
+): React.CSSProperties {
+  return {
+    minHeight: 56,
+    width: '100%',
+    borderRadius: 12,
+    border: 'none',
+    background: disabled ? tokens.card : tokens.primary,
+    color: disabled ? tokens.textMuted : tokens.textInverse,
+    fontSize: 18,
+    fontWeight: 800,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    boxShadow: disabled ? 'none' : `0 4px 20px ${tokens.glow}`,
+    transition: 'background 80ms ease, box-shadow 80ms ease',
+  }
 }
 
 function findFocusWord(text: string, domainSlug: string): string | null {
@@ -379,77 +585,4 @@ function findFocusWord(text: string, domainSlug: string): string | null {
     return words.find((word) => /[?]/.test(word)) ?? words[0] ?? null
   }
   return words[0] ?? null
-}
-
-const waitingWrap: React.CSSProperties = {
-  minHeight: '100dvh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexDirection: 'column',
-  gap: 10,
-  padding: 20,
-  textAlign: 'center',
-  background: '#f4f4f4',
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 600,
-  color: '#1a1a1a',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  fontSize: 18,
-  padding: '14px 16px',
-  border: '2px solid #b4b2a9',
-  borderRadius: 10,
-  boxSizing: 'border-box',
-}
-
-const primaryButtonStyle = (disabled: boolean): React.CSSProperties => ({
-  minHeight: 52,
-  width: '100%',
-  borderRadius: 10,
-  border: 'none',
-  background: disabled ? '#b4b2a9' : '#1B3A6B',
-  color: '#fff',
-  fontSize: 18,
-  fontWeight: 700,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-})
-
-const backBtnStyle: React.CSSProperties = {
-  minHeight: 52,
-  padding: '0 20px',
-  borderRadius: 10,
-  border: '2px solid #b4b2a9',
-  background: '#fff',
-  color: '#1a1a1a',
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-
-const recorderPlaceholderStyle: React.CSSProperties = {
-  border: '2px dashed #b4b2a9',
-  borderRadius: 12,
-  padding: 40,
-  textAlign: 'center',
-  color: '#888',
-  flex: 1,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-}
-
-const errorStyle: React.CSSProperties = {
-  background: '#ffeded',
-  border: '1px solid #f09595',
-  borderRadius: 8,
-  padding: '10px 14px',
-  fontSize: 14,
-  color: '#a32d2d',
 }
