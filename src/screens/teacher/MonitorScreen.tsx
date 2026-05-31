@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { createSocket } from '@/runtime/socket'
 import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
-import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { Avatar } from '@/components/Avatar'
 import { StarBadge } from '@/components/StarBadge'
 import { TenantLogo } from '@/components/TenantLogo'
@@ -37,22 +36,23 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
   )
   const { session, error } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
-  const [liveFeed, setLiveFeed] = useState<{ participant_id: string; completeness_signal: string; account_lifetime_xp: number }[]>([])
+  const [liveFeed, setLiveFeed] = useState<(TokenSubmittedEvent & { id: string })[]>([])
 
-  // Live feed via socket token:submitted events; REST fallback on disconnect
+  // Live feed via socket token:submitted events
   useEffect(() => {
     if (!teacherToken) return
     const socket = createSocket({ role: 'teacher', token: teacherToken, sessionId: session_id })
 
     socket.on('token:submitted', (ev: TokenSubmittedEvent) => {
-      setLiveFeed((prev) => [ev, ...prev].slice(0, 8))
+      setLiveFeed((prev) => [
+        { ...ev, id: `${ev.participant_id}-${Date.now()}-${Math.random()}` },
+        ...prev,
+      ].slice(0, 8))
     })
 
     return () => { socket.disconnect() }
   }, [session_id, teacherToken])
 
-  const round = session?.current_round ?? 1
-  const totalRounds = session?.total_rounds ?? 5
   const minutes = Math.floor((session?.time_remaining_seconds ?? 0) / 60)
   const seconds = (session?.time_remaining_seconds ?? 0) % 60
   const timeDisplay = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
@@ -83,9 +83,6 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ color: tokens.text, fontWeight: 800, fontSize: 16 }}>
-            Round {round}/{totalRounds}
-          </div>
           <div style={{ color: tokens.textMuted, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{timeDisplay}</div>
         </div>
       </section>
@@ -107,19 +104,13 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
           {liveFeed.length === 0 && (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Waiting for submissions…</div>
           )}
-          {liveFeed.map((token) => (
-            <div key={token.token_id} style={rowStyle}>
+          {liveFeed.map((ev) => (
+            <div key={ev.id} style={rowStyle}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {token.text}
-                  <SpellingSignalDot signal={token.spelling_signal} />
-                  {token.speaker_affirmed && (
-                    <span title="Speaker affirmed — recorded and QC vote passed" aria-label="Speaker affirmed" style={{ color: tokens.success, fontSize: 12, fontWeight: 700 }}>✓ audio</span>
-                  )}
-                </div>
-                <div style={{ color: tokens.textMuted, fontSize: 12 }}>{token.translation ?? 'No translation'}</div>
+                <div style={{ fontWeight: 700, color: tokens.text }}>{ev.participant_id}</div>
+                <div style={{ color: tokens.textMuted, fontSize: 12 }}>{ev.completeness_signal}</div>
               </div>
-              <StarBadge variant="gold" count={`+${token.xp_awarded ?? 10}`} size={14} label={`${token.xp_awarded ?? 10} XP`} />
+              <StarBadge variant="gold" count={`+${ev.account_lifetime_xp}`} size={14} label={`${ev.account_lifetime_xp} XP`} />
             </div>
           ))}
         </section>
@@ -147,16 +138,6 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
 
       {/* ── Teacher action buttons ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
-        {onNextRound && (
-          <button
-            type="button"
-            onClick={onNextRound}
-            aria-label="Start next round"
-            style={nextRoundBtnStyle}
-          >
-            Next round
-          </button>
-        )}
         <button type="button" onClick={onEndCollection} style={endBtnStyle}>
           End collection &amp; start QC
         </button>
@@ -230,17 +211,6 @@ const rowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-}
-
-const nextRoundBtnStyle: React.CSSProperties = {
-  minHeight: 52,
-  borderRadius: 12,
-  border: 'none',
-  background: 'var(--accent-secondary)',
-  color: 'var(--text-primary)',
-  fontSize: 17,
-  fontWeight: 700,
-  cursor: 'pointer',
 }
 
 const endBtnStyle: React.CSSProperties = {

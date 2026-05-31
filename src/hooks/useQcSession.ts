@@ -160,16 +160,13 @@ export function useQcSession(
     })
 
     // { token_id } only — re-fetch to get updated qc_translations list
-    socket.on('qc:translation', (ev: QcTokenIdEvent) => {
+    socket.on('qc:translation', () => {
       void refreshQcWords()
-      // Suppress unused var warning — ev.token_id used implicitly for logging/debugging
-      void ev
     })
 
     // { token_id } only — re-fetch to get yahura_transcription + audio vote counts
-    socket.on('qc:audio-ready', (ev: QcTokenIdEvent) => {
+    socket.on('qc:audio-ready', () => {
       void refreshQcWords()
-      void ev
     })
 
     // Fallback poll until socket connects

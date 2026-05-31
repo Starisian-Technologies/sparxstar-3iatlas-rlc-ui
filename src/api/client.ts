@@ -128,12 +128,9 @@ export const api = {
     },
 
     async status(session_id: string): Promise<Session> {
-      const result = await request<Session & { participant_token?: string }>(`/session/${session_id}/status`)
-      // Silently refresh participant token when server rotates it near expiry
-      if (result.participant_token) {
-        setParticipantToken(result.participant_token)
-      }
-      return result
+      const { participant_token, ...session } = await request<Session & { participant_token?: string }>(`/session/${session_id}/status`)
+      if (participant_token) setParticipantToken(participant_token)
+      return session
     },
 
     close(session_id: string): Promise<void> {
