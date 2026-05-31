@@ -160,10 +160,13 @@ export const api = {
 
   token: {
     save(payload: SaveTokenPayload): Promise<SaveTokenResponse> {
+      // participant_id is for offline queue scoping only — never sent to the server
+      const { participant_id: _pid, ...body } = payload
+      void _pid
       return request('/token/save', {
         method: 'POST',
         headers: participantAuthHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       })
     },
 

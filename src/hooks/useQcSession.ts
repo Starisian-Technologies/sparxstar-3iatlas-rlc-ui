@@ -34,7 +34,11 @@ interface UseQcSessionResult {
 interface QcVoteEvent {
   token_id: string
   dimension: 'orthography' | 'semantics' | 'audio'
-  vote_counts: { yes: number; no: number }
+  vote_counts: {
+    orthography: { yes: number; no: number }
+    semantics: { yes: number; no: number }
+    audio: { yes: number; no: number }
+  }
 }
 
 interface QcTokenIdEvent {
@@ -144,11 +148,12 @@ export function useQcSession(
     socket.on('qc:vote', (ev: QcVoteEvent) => {
       setQcWords((words) => words.map((w) => {
         if (w.token_id !== ev.token_id) return w
-        const updated = { ...w }
-        if (ev.dimension === 'orthography') updated.vote_orthography = ev.vote_counts
-        else if (ev.dimension === 'semantics') updated.vote_semantics = ev.vote_counts
-        else if (ev.dimension === 'audio') updated.vote_audio = ev.vote_counts
-        return updated
+        return {
+          ...w,
+          vote_orthography: ev.vote_counts.orthography,
+          vote_semantics: ev.vote_counts.semantics,
+          vote_audio: ev.vote_counts.audio,
+        }
       }))
     })
 

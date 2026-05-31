@@ -337,6 +337,8 @@ export function RwcCollectionScreen({
       {pendingAudioToken && (
         <RlcRecorder
           token_id={pendingAudioToken.token_id}
+          session_id={session_id}
+          language={language}
           word={pendingAudioToken.word}
           participant_token={participant_token}
           onComplete={() => setPendingAudioToken(null)}

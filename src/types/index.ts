@@ -68,17 +68,17 @@ export type StudentTier = 'lower_basic' | 'upper_basic' | 'senior_secondary' | '
 export interface JoinSessionResponse {
   session_id: string
   participant_id: string
-  /** HMAC-signed token for WebSocket auth (spec §3.3). Present only after full join. */
+  account_id?: string
+  /** Present only after full join (absent on Lower Basic step 1). */
   participant_token?: string
-  display_name?: string
   language: string
+  locale?: string
   mode: CollectionMode
   collection_depth: CollectionDepth
-  /** True on Lower Basic first-pass (code only) — signals the UI to show the roster. */
+  /** True on Lower Basic first-pass — signals UI to show the roster. */
   requires_screen_name?: boolean
-  /** Class roster returned on Lower Basic first-pass so the UI can show the name grid. */
+  /** Roster returned on Lower Basic first-pass. */
   session_screen_names?: string[]
-  /** Tier of the class associated with this session */
   tier?: StudentTier
 }
 
@@ -99,6 +99,7 @@ export type SaturationSignal = 'continue' | 'saturated'
 
 export interface SaveTokenPayload {
   session_id: string
+  participant_id: string  // used by offline queue for scoping; stripped from API body by client
   text: string
   translation?: string
   collection_mode: CollectionMode
@@ -110,7 +111,9 @@ export interface SaveTokenResponse {
   spelling_signal: SpellingSignal
   saturation_signal: SaturationSignal
   spelling_score: number
+  completeness_signal: 'basic' | 'partial' | 'complete' | 'verified' | 'promoted'
   xp_awarded: number
+  account_lifetime_xp: number
 }
 
 export interface QcToken {
@@ -136,13 +139,18 @@ export interface QcToken {
 }
 
 export interface VotePayload {
-  dimension: 'orthography' | 'semantics'
+  dimension: 'orthography' | 'semantics' | 'audio'
   vote_yes: boolean
 }
 
 export interface VoteResponse {
-  success: boolean
-  vote_counts: { yes: number; no: number }
+  success: true
+  vote_counts: {
+    orthography: { yes: number; no: number }
+    semantics: { yes: number; no: number }
+    audio: { yes: number; no: number }
+  }
+  has_voted: boolean
 }
 
 // ─── Awards ──────────────────────────────────────────────────────────────────

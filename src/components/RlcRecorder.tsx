@@ -1,23 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from '@/api/client'
 import { useTheme } from '@/theme/useTheme'
-import type { AudioSubmitResponse } from '@/types'
 
 type Status = 'idle' | 'requesting' | 'recording' | 'uploading' | 'done' | 'error'
 
+export interface RlcRecorderResult {
+  yahura_transcription: string
+  confidence: number
+}
+
 interface RlcRecorderProps {
   token_id: string
+  session_id: string
+  language: string
   word: string
   participant_token: string | null
-  /** Maximum recording length in seconds (default 5). */
   maxSeconds?: number
-  onComplete: (result: AudioSubmitResponse) => void
+  onComplete: (result: RlcRecorderResult) => void
+  onError?: (error: 'mic_denied' | 'upload_failed' | 'yahura_unavailable') => void
   onSkip: () => void
 }
 
+const YAHURA_BASE: string =
+  (window as unknown as Record<string, unknown>)['YAHURA_URL'] as string | undefined ??
+  (import.meta.env['VITE_YAHURA_URL'] as string | undefined) ??
+  ''
+
+const RLC_BASE: string =
+  (window as unknown as Record<string, unknown>)['RLC_API_BASE'] as string | undefined ??
+  '/api/v1'
+
 function getSupportedMimeType(): string {
   if (typeof MediaRecorder === 'undefined') return ''
-  for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']) {
+  for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']) {
     if (MediaRecorder.isTypeSupported(t)) return t
   }
   return ''
@@ -25,10 +39,13 @@ function getSupportedMimeType(): string {
 
 export function RlcRecorder({
   token_id,
+  session_id,
+  language,
   word,
   participant_token,
   maxSeconds = 5,
   onComplete,
+  onError,
   onSkip,
 }: RlcRecorderProps) {
   const { tokens } = useTheme()
@@ -45,6 +62,8 @@ export function RlcRecorder({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
 
   useEffect(() => {
     return () => {
@@ -70,8 +89,10 @@ export function RlcRecorder({
     } catch (err) {
       if (!mountedRef.current) return
       const denied = err instanceof Error && err.name === 'NotAllowedError'
-      setErrorMsg(denied ? 'Microphone blocked — tap Skip.' : 'Microphone unavailable — tap Skip.')
+      const msg = denied ? 'Microphone blocked — tap Skip.' : 'Microphone unavailable — tap Skip.'
+      setErrorMsg(msg)
       setStatus('error')
+      onErrorRef.current?.('mic_denied')
       return
     }
 
@@ -90,17 +111,47 @@ export function RlcRecorder({
       chunksRef.current = []
       if (!mountedRef.current) return
       setStatus('uploading')
+
       try {
-        const result = await api.token.submitAudio(token_id, blob, participant_token)
+        // Step 1: send audio directly to Yahura
+        if (!YAHURA_BASE) throw new Error('yahura_unavailable')
+        const form = new FormData()
+        const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm'
+        form.append('audio', blob, `recording.${ext}`)
+        form.append('token_id', token_id)
+        form.append('session_id', session_id)
+        form.append('language', language)
+
+        const yahuraRes = await fetch(`${YAHURA_BASE}/v1/transcribe`, {
+          method: 'POST',
+          headers: participant_token ? { Authorization: `Participant ${participant_token}` } : {},
+          body: form,
+        })
+        if (!yahuraRes.ok) throw new Error('yahura_unavailable')
+        const { yahura_transcription, confidence } = await yahuraRes.json() as { yahura_transcription: string; confidence: number }
+        // blob is now out of scope — GC collects it
+
+        // Step 2: report result to node engine
+        await fetch(`${RLC_BASE}/token/${token_id}/audio-routed`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(participant_token ? { Authorization: `Participant ${participant_token}` } : {}),
+          },
+          body: JSON.stringify({ yahura_transcription, yahura_confidence: confidence }),
+        })
+
         if (!mountedRef.current) return
-        setTranscription(result.yahura_transcription)
+        setTranscription(yahura_transcription)
         setStatus('done')
         await new Promise<void>(resolve => setTimeout(resolve, 1500))
-        if (mountedRef.current) onCompleteRef.current(result)
-      } catch {
+        if (mountedRef.current) onCompleteRef.current({ yahura_transcription, confidence })
+      } catch (err) {
         if (!mountedRef.current) return
+        const isYahura = err instanceof Error && err.message === 'yahura_unavailable'
         setErrorMsg('Upload failed — tap Skip to continue.')
         setStatus('error')
+        onErrorRef.current?.(isYahura ? 'yahura_unavailable' : 'upload_failed')
       }
     }
 
