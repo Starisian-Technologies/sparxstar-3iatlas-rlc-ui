@@ -10,7 +10,11 @@ import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useTheme } from '@/theme/useTheme'
-import type { QcToken } from '@/types'
+interface TokenSubmittedEvent {
+  participant_id: string
+  completeness_signal: string
+  account_lifetime_xp: number
+}
 
 function getTeacherToken(): string | null {
   const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
@@ -22,10 +26,9 @@ interface MonitorScreenProps {
   session_id: string
   join_code: string
   onEndCollection: () => void
-  onNextRound?: () => void
 }
 
-export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRound }: MonitorScreenProps) {
+export function MonitorScreen({ session_id, join_code, onEndCollection }: MonitorScreenProps) {
   const { tokens } = useTheme()
   const teacherToken = useMemo(() => getTeacherToken(), [])
   const auth = useMemo(
@@ -34,20 +37,15 @@ export function MonitorScreen({ session_id, join_code, onEndCollection, onNextRo
   )
   const { session, error } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
-  const [liveFeed, setLiveFeed] = useState<QcToken[]>([])
-  const liveFeedRef = useRef(liveFeed)
-  liveFeedRef.current = liveFeed
+  const [liveFeed, setLiveFeed] = useState<{ participant_id: string; completeness_signal: string; account_lifetime_xp: number }[]>([])
 
   // Live feed via socket token:submitted events; REST fallback on disconnect
   useEffect(() => {
     if (!teacherToken) return
     const socket = createSocket({ role: 'teacher', token: teacherToken, sessionId: session_id })
 
-    socket.on('token:submitted', (token: QcToken) => {
-      setLiveFeed((prev) => {
-        const without = prev.filter((t) => t.token_id !== token.token_id)
-        return [token, ...without].slice(0, 8)
-      })
+    socket.on('token:submitted', (ev: TokenSubmittedEvent) => {
+      setLiveFeed((prev) => [ev, ...prev].slice(0, 8))
     })
 
     return () => { socket.disconnect() }

@@ -44,11 +44,7 @@ export interface Session {
   participant_count: number
   token_count: number
   time_remaining_seconds: number
-  current_round?: number
-  total_rounds?: number
-  round_status?: 'waiting' | 'active' | 'complete'
-  round_goal?: number
-  next_round_starts_in_seconds?: number
+  class_xp_total?: number
   leaderboard: LeaderboardEntry[]
   participants?: Participant[]
 }
@@ -103,7 +99,6 @@ export type SaturationSignal = 'continue' | 'saturated'
 
 export interface SaveTokenPayload {
   session_id: string
-  participant_id: string
   text: string
   translation?: string
   collection_mode: CollectionMode
@@ -148,11 +143,6 @@ export interface VotePayload {
 export interface VoteResponse {
   success: boolean
   vote_counts: { yes: number; no: number }
-}
-
-export interface AudioSubmitResponse {
-  yahura_transcription: string
-  confidence: number
 }
 
 // ─── Awards ──────────────────────────────────────────────────────────────────
