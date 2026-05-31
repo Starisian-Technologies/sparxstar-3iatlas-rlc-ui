@@ -116,7 +116,7 @@ export function QcScreen({
     if (hasVoted) return
     setActionError(null)
     try {
-      const response = await api.token.vote(currentToken.token_id, participant_id, {
+      const response = await api.token.vote(currentToken.token_id, {
         dimension: voteDimension,
         vote_yes,
       })
@@ -131,9 +131,10 @@ export function QcScreen({
           voteYes: vote_yes,
         },
       })
+      const dimensionCounts = response.vote_counts[voteDimension]
       setHasVotedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
-      setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: response.vote_counts }))
-      const correctionRequired = response.vote_counts.no > response.vote_counts.yes
+      setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: dimensionCounts }))
+      const correctionRequired = dimensionCounts.no > dimensionCounts.yes
       setStep(correctionRequired ? 'correction' : 'translation')
       await refreshStatus()
     } catch {
@@ -145,7 +146,7 @@ export function QcScreen({
     if (!correction.trim()) return
     setActionError(null)
     try {
-      await api.token.correct(currentToken.token_id, participant_id, correction.trim())
+      await api.token.correct(currentToken.token_id, correction.trim())
       setStep('translation')
     } catch {
       setActionError('Could not submit correction. Try again.')
@@ -156,7 +157,7 @@ export function QcScreen({
     if (!translation.trim()) return
     setActionError(null)
     try {
-      await api.token.submitTranslation(currentToken.token_id, participant_id, translation.trim())
+      await api.token.submitTranslation(currentToken.token_id, translation.trim())
       setTranslationSubmittedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
       await refreshStatus()
     } catch {

@@ -83,9 +83,11 @@ export function useSessionSocket(
       startPoll()
     })
 
-    socket.on('session:status', (data: Session) => {
-      setSession(data)
-      setError(null)
+    // Server sends { status } only — re-fetch for full session object
+    socket.on('session:status', () => {
+      const id = sessionIdRef.current
+      if (!id) return
+      void api.session.status(id).then((s) => { setSession(s); setError(null) }).catch(() => {})
     })
 
     // Start poll immediately as fallback; socket.on('connect') will cancel it

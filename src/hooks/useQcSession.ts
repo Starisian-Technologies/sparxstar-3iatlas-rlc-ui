@@ -34,24 +34,15 @@ interface UseQcSessionResult {
 interface QcVoteEvent {
   token_id: string
   dimension: 'orthography' | 'semantics' | 'audio'
-  vote_counts: { yes: number; no: number }
+  vote_counts: {
+    orthography: { yes: number; no: number }
+    semantics: { yes: number; no: number }
+    audio: { yes: number; no: number }
+  }
 }
 
-interface QcCorrectionEvent {
+interface QcTokenIdEvent {
   token_id: string
-  corrected_text: string
-}
-
-interface QcTranslationEvent {
-  token_id: string
-  participant_id: string
-  translation: string
-}
-
-interface QcAudioReadyEvent {
-  token_id: string
-  yahura_transcription: string
-  vote_audio: { yes: number; no: number }
 }
 
 export function useQcSession(
@@ -77,6 +68,17 @@ export function useQcSession(
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not refresh QC status')
+    }
+  }, [])
+
+  const refreshQcWords = useCallback(async () => {
+    const sid = sessionIdRef.current
+    if (!sid) return
+    try {
+      const words = await api.session.qcWords(sid)
+      setQcWords(words)
+    } catch {
+      // best-effort; retain current list
     }
   }, [])
 
@@ -138,42 +140,38 @@ export function useQcSession(
       startPoll()
     })
 
-    socket.on('session:status', (data: Session) => {
-      setSession(data)
+    // Server sends { status } only — re-fetch for full session object
+    socket.on('session:status', () => {
+      void refreshStatus()
     })
 
     socket.on('qc:vote', (ev: QcVoteEvent) => {
       setQcWords((words) => words.map((w) => {
         if (w.token_id !== ev.token_id) return w
-        const updated = { ...w }
-        if (ev.dimension === 'orthography') updated.vote_orthography = ev.vote_counts
-        else if (ev.dimension === 'semantics') updated.vote_semantics = ev.vote_counts
-        else if (ev.dimension === 'audio') updated.vote_audio = ev.vote_counts
-        return updated
+        return {
+          ...w,
+          vote_orthography: ev.vote_counts.orthography,
+          vote_semantics: ev.vote_counts.semantics,
+          vote_audio: ev.vote_counts.audio,
+        }
       }))
     })
 
-    socket.on('qc:correction', (ev: QcCorrectionEvent) => {
-      setQcWords((words) => words.map((w) =>
-        w.token_id === ev.token_id ? { ...w, corrected_text: ev.corrected_text } : w,
-      ))
+    // { token_id, correction_needed?: true } OR { token_id, corrected?: true }
+    socket.on('qc:correction', (ev: QcTokenIdEvent & { correction_needed?: boolean; corrected?: boolean }) => {
+      if (ev.corrected) {
+        void refreshQcWords()
+      }
     })
 
-    socket.on('qc:translation', (ev: QcTranslationEvent) => {
-      setQcWords((words) => words.map((w) => {
-        if (w.token_id !== ev.token_id) return w
-        const already = w.qc_translations.some((t) => t.participant_id === ev.participant_id)
-        if (already) return w
-        return { ...w, qc_translations: [...w.qc_translations, { participant_id: ev.participant_id, translation: ev.translation }] }
-      }))
+    // { token_id } only — re-fetch to get updated qc_translations list
+    socket.on('qc:translation', () => {
+      void refreshQcWords()
     })
 
-    socket.on('qc:audio-ready', (ev: QcAudioReadyEvent) => {
-      setQcWords((words) => words.map((w) =>
-        w.token_id === ev.token_id
-          ? { ...w, yahura_transcription: ev.yahura_transcription, vote_audio: ev.vote_audio }
-          : w,
-      ))
+    // { token_id } only — re-fetch to get yahura_transcription + audio vote counts
+    socket.on('qc:audio-ready', () => {
+      void refreshQcWords()
     })
 
     // Fallback poll until socket connects
@@ -184,7 +182,7 @@ export function useQcSession(
       stopPoll()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session_id, JSON.stringify(options.auth), refreshStatus])
+  }, [session_id, JSON.stringify(options.auth), refreshStatus, refreshQcWords])
 
   const currentToken = useMemo(
     () => qcWords[currentIndex] ?? null,

@@ -8,7 +8,6 @@
  */
 
 import type {
-  AudioSubmitResponse,
   AuthLoginPayload,
   AuthLoginResponse,
   CreateSessionPayload,
@@ -32,17 +31,28 @@ export type EventsBatchFlushResponse = {
 }
 
 // Base URL — injected by the host page or falls back to the Vite dev proxy
-const BASE = window.RLC_API_BASE ?? '/api/v1'
+const BASE = (window as unknown as Record<string, unknown>)['RLC_API_BASE'] as string ?? '/api/v1'
+
+// ─── Participant token (in-memory only, never persisted) ──────────────────────
+
+let _participantToken: string | null = null
+
+export function setParticipantToken(token: string | null): void {
+  _participantToken = token
+}
+
+function participantAuthHeaders(): Record<string, string> {
+  return _participantToken ? { Authorization: `Participant ${_participantToken}` } : {}
+}
 
 /**
  * Teacher endpoints require a backend-issued JWT. The host page injects
- * `window.RLC_TEACHER_TOKEN` after the teacher authenticates via
- * POST /api/v1/auth/login. For local dev, localStorage.RLC_TEACHER_TOKEN
- * is accepted as a fallback so a developer can set it once in the console.
+ * `window.RLC_TEACHER_TOKEN` after the teacher authenticates via Helios.
+ * For local dev, localStorage.RLC_TEACHER_TOKEN is accepted as a fallback.
  */
 function getTeacherToken(): string | null {
   if (typeof window === 'undefined') return null
-  const fromWindow = window.RLC_TEACHER_TOKEN
+  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
   if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
   try {
     const fromStorage = window.localStorage.getItem('RLC_TEACHER_TOKEN')
@@ -75,9 +85,13 @@ async function request<T>(
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+// Teacher auth is Helios JWT (RS256/JWKS) — injected by the orchestrator.
+// The login endpoint does not exist; this stub is retained for local dev
+// token-entry flows only.
 
 export const api = {
   auth: {
+    /** Dev-only: exchange credentials for a Helios-compatible token. Not a real backend endpoint. */
     login(payload: AuthLoginPayload): Promise<AuthLoginResponse> {
       return request('/auth/login', {
         method: 'POST',
@@ -102,17 +116,21 @@ export const api = {
     //                  second call: { join_code, screen_name } → returns participant token
     //   Upper Basic  — { join_code, screen_name, pin }
     //   SS / Adult   — { join_code, screen_name, password }
-    // school_id is injected by the host page (window.RLC_SCHOOL_ID) per spec §3.2,
-    // never sent in the request body.
-    join(payload: JoinSessionPayload): Promise<JoinSessionResponse> {
-      return request('/session/join', {
+    async join(payload: JoinSessionPayload): Promise<JoinSessionResponse> {
+      const result = await request<JoinSessionResponse>('/session/join', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
+      if (result.participant_token) {
+        setParticipantToken(result.participant_token)
+      }
+      return result
     },
 
-    status(session_id: string): Promise<Session> {
-      return request(`/session/${session_id}/status`)
+    async status(session_id: string): Promise<Session> {
+      const { participant_token, ...session } = await request<Session & { participant_token?: string }>(`/session/${session_id}/status`)
+      if (participant_token) setParticipantToken(participant_token)
+      return session
     },
 
     close(session_id: string): Promise<void> {
@@ -123,7 +141,8 @@ export const api = {
     },
 
     qcWords(session_id: string): Promise<QcToken[]> {
-      return request(`/session/${session_id}/qc-words`)
+      return request<{ qc_words: QcToken[] }>(`/session/${session_id}/qc-words`)
+        .then((data) => data.qc_words)
     },
 
     awards(session_id: string): Promise<AwardsResponse> {
@@ -141,45 +160,38 @@ export const api = {
 
   token: {
     save(payload: SaveTokenPayload): Promise<SaveTokenResponse> {
+      // participant_id is for offline queue scoping only — never sent to the server
+      const { participant_id: _pid, ...body } = payload
+      void _pid
       return request('/token/save', {
         method: 'POST',
+        headers: participantAuthHeaders(),
+        body: JSON.stringify(body),
+      })
+    },
+
+    vote(token_id: string, payload: VotePayload): Promise<VoteResponse> {
+      return request(`/token/${token_id}/vote`, {
+        method: 'POST',
+        headers: participantAuthHeaders(),
         body: JSON.stringify(payload),
       })
     },
 
-    vote(token_id: string, participant_id: string, payload: VotePayload): Promise<VoteResponse> {
-      return request(`/token/${token_id}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ ...payload, participant_id }),
-      })
-    },
-
-    submitTranslation(token_id: string, participant_id: string, translation: string): Promise<void> {
+    submitTranslation(token_id: string, translation: string): Promise<void> {
       return request(`/token/${token_id}/translate`, {
         method: 'POST',
-        body: JSON.stringify({ translation, participant_id }),
+        headers: participantAuthHeaders(),
+        body: JSON.stringify({ translation }),
       })
     },
 
-    correct(token_id: string, participant_id: string, corrected_text: string): Promise<void> {
+    correct(token_id: string, corrected_text: string): Promise<void> {
       return request(`/token/${token_id}/correct`, {
         method: 'POST',
-        body: JSON.stringify({ corrected_text, participant_id }),
+        headers: participantAuthHeaders(),
+        body: JSON.stringify({ corrected_text }),
       })
-    },
-
-    // POST /token/:id/audio — multipart upload; backend forwards to Yahura,
-    // discards the blob, returns transcription + confidence.
-    // Does NOT use request() because multipart must not have Content-Type: application/json.
-    async submitAudio(token_id: string, blob: Blob, participantToken: string | null): Promise<AudioSubmitResponse> {
-      const form = new FormData()
-      const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm'
-      form.append('audio', blob, `recording.${ext}`)
-      const headers: Record<string, string> = {}
-      if (participantToken) headers['Authorization'] = `Bearer ${participantToken}`
-      const res = await fetch(`${BASE}/token/${token_id}/audio`, { method: 'POST', headers, body: form })
-      if (!res.ok) { const body = await res.text(); throw new Error(`API ${res.status}: ${body}`) }
-      return res.json() as Promise<AudioSubmitResponse>
     },
   },
 
@@ -191,6 +203,7 @@ export const api = {
     batchFlush(events: RlcEvent[]): Promise<EventsBatchFlushResponse> {
       return request('/events/batch', {
         method: 'POST',
+        headers: participantAuthHeaders(),
         body: JSON.stringify({ events }),
       })
     },

@@ -40,10 +40,8 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
   )
   const { session, error } = useSessionSocket(session_id, true, { auth })
   const { isOnline } = useNetworkStatus()
-  const seconds = session?.next_round_starts_in_seconds ?? session?.time_remaining_seconds ?? 0
-  const canEnterRound = session?.round_status === 'active'
-  const currentRound = session?.current_round ?? 1
-  const totalRounds = session?.total_rounds ?? 5
+  const seconds = session?.time_remaining_seconds ?? 0
+  const canEnter = session?.status === 'open'
 
   const profile = useMemo(() => {
     const me = session?.leaderboard.find((entry) => entry.display_name === display_name)
@@ -67,8 +65,8 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
         </div>
       }
       footer={
-        <Button onClick={onEnterRound} disabled={!canEnterRound} large>
-          {canEnterRound ? `Enter Round ${currentRound}` : 'Waiting for the next round…'}
+        <Button onClick={onEnterRound} disabled={!canEnter} large>
+          {canEnter ? 'Start collecting' : 'Waiting for teacher to open session…'}
         </Button>
       }
     >
@@ -95,11 +93,8 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
 
       {/* Session summary */}
       <Card highlight>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>TODAY&rsquo;S TOPIC</div>
-          <div style={{ fontSize: 12, color: tokens.textMuted }}>
-            Round {currentRound} / {totalRounds}
-          </div>
         </div>
         <div style={{ fontSize: 26, fontWeight: 800, color: tokens.primary, marginBottom: 12, lineHeight: 1.1 }}>
           {topic}
@@ -107,7 +102,7 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8 }}>
           <Stat label="Players" value={`${playerCount}`} />
           <Stat label="Words" value={`${wordCount}`} />
-          <Stat label="Starts in" value={canEnterRound ? 'Now' : `${String(Math.max(0, seconds)).padStart(2, '0')}s`} />
+          <Stat label="Time left" value={`${String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, '0')}:${String(Math.max(0, seconds) % 60).padStart(2, '0')}`} />
         </div>
       </Card>
 
