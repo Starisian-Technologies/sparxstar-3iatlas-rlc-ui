@@ -52,7 +52,6 @@ function getTeacherToken(): string | null {
   }
 }
 
-
 function teacherAuthHeaders(): Record<string, string> {
   const token = getTeacherToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
