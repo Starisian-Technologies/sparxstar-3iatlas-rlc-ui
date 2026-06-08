@@ -58,8 +58,11 @@ export function useSessionSocket(
       const status = await api.session.status(sid)
       setSession((prev) => mergeSessionStatus(sid, status, metaRef.current, prev))
       setError(null)
-    } catch {
-      // best-effort
+    } catch (err) {
+      // Surface poll failures so screens that read `error` (LobbyScreen's
+      // ContinuityBanner, etc.) can show the connection banner instead of
+      // silently presenting stale state as healthy.
+      setError(err instanceof Error ? err.message : 'Could not refresh session')
     }
   }, [])
 
