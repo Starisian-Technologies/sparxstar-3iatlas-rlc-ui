@@ -1,27 +1,29 @@
 /**
  * useSessionSocket — real-time session state via socket.io.
  *
- * Drop-in replacement for useSessionPoll: exposes the same `{ session, error }`
- * interface so call-sites only need their import changed.
- *
  * Strategy:
  *  1. Connect socket immediately.
- *  2. Start a REST poll as a fallback from the start — cheap, one call every 5s.
+ *  2. Start a REST poll as a fallback from the start (5s).
  *  3. When the socket connects successfully, cancel the poll.
  *  4. If the socket disconnects, restart the poll until socket reconnects.
- *
- * The poll interval intentionally drops from 2s → 5s because the socket now
- * delivers updates in real-time; polling is only a safety net.
+ *  5. `session:status` event from server is `{ status }` only — UI re-fetches
+ *     the full SessionStatusResponse and merges with join-time metadata into
+ *     a UI Session view.
+ *  6. Emit `heartbeat` every 10s while connected (contract §4.2).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { createSocket, type SocketAuth } from '@/runtime/socket'
+import { mergeSessionStatus } from './sessionView'
 import type { Session } from '@/types'
 
 const FALLBACK_POLL_MS = 5000
+const HEARTBEAT_MS = 10_000
 
 interface UseSessionSocketOptions {
   auth?: SocketAuth | null
+  /** Metadata captured at join/create time (mode/language/etc) that's not on the wire status. */
+  initialMeta?: Partial<Session>
 }
 
 export function useSessionSocket(
@@ -33,9 +35,12 @@ export function useSessionSocket(
   const [error, setError] = useState<string | null>(null)
   const [connected, setConnected] = useState(false)
 
-  // Stable refs so effect callbacks don't stale-close over old values
   const sessionIdRef = useRef(session_id)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Ref so we don't restart the effect every time meta changes.
+  const metaRef = useRef(options.initialMeta)
+  metaRef.current = options.initialMeta
 
   sessionIdRef.current = session_id
 
@@ -46,17 +51,23 @@ export function useSessionSocket(
     }
   }, [])
 
-  const startPoll = useCallback(() => {
-    if (pollRef.current) return
+  const fetchOnce = useCallback(async () => {
     const sid = sessionIdRef.current
     if (!sid) return
-    void api.session.status(sid).then(setSession).catch(() => {})
-    pollRef.current = setInterval(() => {
-      const id = sessionIdRef.current
-      if (!id) return
-      void api.session.status(id).then(setSession).catch(() => {})
-    }, FALLBACK_POLL_MS)
+    try {
+      const status = await api.session.status(sid)
+      setSession((prev) => mergeSessionStatus(sid, status, metaRef.current, prev))
+      setError(null)
+    } catch {
+      // best-effort
+    }
   }, [])
+
+  const startPoll = useCallback(() => {
+    if (pollRef.current) return
+    void fetchOnce()
+    pollRef.current = setInterval(() => { void fetchOnce() }, FALLBACK_POLL_MS)
+  }, [fetchOnce])
 
   useEffect(() => {
     if (!enabled || !session_id) return
@@ -71,10 +82,14 @@ export function useSessionSocket(
       setConnected(true)
       setError(null)
       stopPoll()
+      // Start heartbeat
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current)
+      heartbeatRef.current = setInterval(() => { socket.emit('heartbeat') }, HEARTBEAT_MS)
     })
 
     socket.on('disconnect', () => {
       setConnected(false)
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null }
       startPoll()
     })
 
@@ -83,12 +98,8 @@ export function useSessionSocket(
       startPoll()
     })
 
-    // Server sends { status } only — re-fetch for full session object
-    socket.on('session:status', () => {
-      const id = sessionIdRef.current
-      if (!id) return
-      void api.session.status(id).then((s) => { setSession(s); setError(null) }).catch(() => {})
-    })
+    // Server sends { status } only — re-fetch and merge
+    socket.on('session:status', () => { void fetchOnce() })
 
     // Start poll immediately as fallback; socket.on('connect') will cancel it
     startPoll()
@@ -96,11 +107,10 @@ export function useSessionSocket(
     return () => {
       socket.disconnect()
       stopPoll()
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null }
     }
-    // auth is derived from tokens that change at most once (join → token issued);
-    // stringify gives a stable dep without deep-equal logic.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session_id, enabled, JSON.stringify(options.auth), startPoll, stopPoll])
+  }, [session_id, enabled, JSON.stringify(options.auth), startPoll, stopPoll, fetchOnce])
 
   return { session, error, connected }
 }

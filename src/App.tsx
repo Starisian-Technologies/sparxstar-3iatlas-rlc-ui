@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
-import { RoundCompleteScreen } from '@/screens/student/RoundCompleteScreen'
-import { TeacherLoginScreen } from '@/screens/teacher/TeacherLoginScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
@@ -15,7 +13,7 @@ import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
-import type { AppState, CollectionMode, CollectionDepth, RoundCompleteSummary, SessionStatus } from '@/types'
+import type { AppState, CollectionMode, CollectionDepth, SessionStatus } from '@/types'
 
 function hasTeacherToken(): boolean {
   if (typeof window === 'undefined') return false
@@ -33,7 +31,7 @@ const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
 
 type Screen =
   | 'landing'
-  | 'teacher_login'
+  | 'teacher_missing_token'
   | 'teacher_setup'
   | 'teacher_monitor'
   | 'student_join'
@@ -41,7 +39,6 @@ type Screen =
   | 'student_rwc_collection'
   | 'student_rsc_collection'
   | 'student_rsc_complete'
-  | 'student_round_complete'
   | 'qc'
   | 'ceremony'
 
@@ -58,7 +55,6 @@ function nextScreenAfterCollection(status: SessionStatus): Screen {
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('landing')
-  const [roundSummary, setRoundSummary] = useState<RoundCompleteSummary | null>(null)
   const [rscSubmittedCount, setRscSubmittedCount] = useState(0)
   const [state, setState] = useState<AppState>({
     role: 'none',
@@ -78,20 +74,35 @@ export function App() {
         onJoin={() => { setState(s => ({ ...s, role: 'student' })); setScreen('student_join') }}
         onTeacher={() => {
           setState(s => ({ ...s, role: 'teacher' }))
-          // Skip login if a token already exists (orchestrator-injected or prior session).
-          setScreen(hasTeacherToken() ? 'teacher_setup' : 'teacher_login')
+          // Teacher token must come from the orchestrator (window.RLC_TEACHER_TOKEN).
+          // There is no /auth/login endpoint per contract §2.1.
+          setScreen(hasTeacherToken() ? 'teacher_setup' : 'teacher_missing_token')
         }}
       />
     )
   }
 
-  // ── Teacher login ──────────────────────────────────────────────────────────
-  if (screen === 'teacher_login') {
+  // ── Teacher missing token ─────────────────────────────────────────────────
+  // No /auth/login endpoint — teacher token must be injected by the orchestrator.
+  if (screen === 'teacher_missing_token') {
     return (
-      <TeacherLoginScreen
-        onLoggedIn={() => setScreen('teacher_setup')}
-        onBack={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }}
-      />
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#160001', color: '#fff' }}>
+        <div style={{ maxWidth: 420, textAlign: 'center' }}>
+          <h1 style={{ fontSize: 22, marginBottom: 8 }}>Teacher token missing</h1>
+          <p style={{ opacity: 0.8, marginBottom: 16, lineHeight: 1.5 }}>
+            This app needs a teacher token from the orchestrator (`window.RLC_TEACHER_TOKEN`).
+            Open this page from the WordPress orchestrator, or set the token in localStorage
+            (`RLC_TEACHER_TOKEN`) for local dev.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }}
+            style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: '#FF2D78', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Back
+          </button>
+        </div>
+      </div>
     )
   }
 
@@ -207,10 +218,6 @@ export function App() {
         onSubmitted={() => {
           // Stay on collection screen — student keeps submitting until timer ends
         }}
-        onRoundComplete={(summary) => {
-          setRoundSummary(summary)
-          setScreen('student_round_complete')
-        }}
         onClose={() => setScreen('student_lobby')}
         onCollectionEnded={(status) => setScreen(nextScreenAfterCollection(status))}
       />
@@ -248,29 +255,6 @@ export function App() {
         session_id={state.session_id}
         submittedCount={rscSubmittedCount}
         onCollectionEnded={(status) => setScreen(nextScreenAfterCollection(status))}
-      />
-    )
-  }
-
-  // ── Student round complete ───────────────────────────────────────────────────
-  if (screen === 'student_round_complete' && roundSummary) {
-    return (
-      <RoundCompleteScreen
-        summary={roundSummary}
-        onNextRound={() => {
-          const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
-          emitRuntimeEvent('ROUND_STARTED', {
-            sessionId: state.session_id,
-            participantId: state.participant_id,
-            mode: state.mode,
-            screen: nextScreen,
-            metadata: {
-              source: 'round_complete',
-            },
-          })
-          setScreen(nextScreen)
-        }}
-        onBackToLobby={() => setScreen('student_lobby')}
       />
     )
   }

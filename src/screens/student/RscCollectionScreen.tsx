@@ -150,13 +150,16 @@ export function RscCollectionScreen({
         })
       }
 
+      // Contract §3.5: RSC requires translation: string (use '' for basic depth)
+      // and grammar_domain_index (server derives the canonical grammar_domain).
       await submit({
         session_id,
         participant_id,
-        text:            sentenceValue,
-        translation:     translationValue,
-        collection_mode: 'rsc',
-        grammar_domain:  currentDomain.slug,
+        text:                 sentenceValue,
+        translation:          translationValue ?? '',
+        collection_mode:      'rsc',
+        grammar_domain_index: currentDomain.index,
+        grammar_domain:       currentDomain.slug,
       })
 
       const nextCompleted = new Set(completedDomains)

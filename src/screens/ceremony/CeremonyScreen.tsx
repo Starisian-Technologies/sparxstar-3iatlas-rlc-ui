@@ -21,15 +21,15 @@ import { StarBadge, type StarVariant } from '@/components/StarBadge'
 import { TenantLogo } from '@/components/TenantLogo'
 import { useTheme } from '@/theme/useTheme'
 import { emitRuntimeEvent } from '@/runtime/events'
-import type { AwardsResponse, LeaderboardEntry, Star } from '@/types'
+import type { AwardsResponse, LeaderboardEntry, Star, StarKind } from '@/types'
 
 interface CeremonyScreenProps {
   session_id: string
   onReturnToSession: () => void
 }
 
-/** Reveal order — backend category strings, displayed in this sequence. */
-const STAR_ORDER = [
+/** Reveal order — backend StarKind strings, displayed in this sequence. */
+const STAR_ORDER: StarKind[] = [
   'most_words',
   'most_sentences',
   'best_spelling',
@@ -38,13 +38,12 @@ const STAR_ORDER = [
   'audio',
   'teacher',
   'teacher_award',
-] as const
+]
 
 const STAR_REVEAL_INTERVAL_MS = 2000
 const FIREWORKS_DURATION_MS = 4500
 
-/** Maps backend category strings (spec §6.5) to StarBadge variants. */
-function variantForCategory(category: string): StarVariant {
+function variantForCategory(category: StarKind): StarVariant {
   switch (category) {
     case 'most_words':     return 'crown'
     case 'most_sentences': return 'crown'
@@ -56,6 +55,33 @@ function variantForCategory(category: string): StarVariant {
     case 'teacher_award':  return 'helping'
     default:               return 'gold'
   }
+}
+
+function labelForCategory(category: StarKind): string {
+  switch (category) {
+    case 'most_words':     return 'Most Words'
+    case 'most_sentences': return 'Most Sentences'
+    case 'best_spelling':  return 'Best Spelling'
+    case 'discovery':      return 'Discovery'
+    case 'speed':          return 'Speed'
+    case 'audio':          return 'Audio'
+    case 'teacher':        return "Teacher's Star"
+    case 'teacher_award':  return 'Teacher Award'
+    default:               return category
+  }
+}
+
+/** Map the wire awards leaderboard ({participant_id, screen_name, tokens, session_xp})
+ *  to the UI LeaderboardEntry shape with derived rank. */
+function awardsLeaderboardToUi(
+  rows: AwardsResponse['leaderboard'],
+): LeaderboardEntry[] {
+  return rows.map((row, idx) => ({
+    participant_id: row.participant_id,
+    display_name: row.screen_name,
+    xp: row.session_xp,
+    rank: idx + 1,
+  }))
 }
 
 export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreenProps) {
@@ -90,22 +116,26 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
   const orderedStars = useMemo(() => {
     if (!awards) return []
     const sorted: Star[] = []
-    for (const label of STAR_ORDER) {
-      const star = awards.stars.find((item) => item.category === label || item.label === label)
+    for (const kind of STAR_ORDER) {
+      const star = awards.stars.find((item) => item.star === kind)
       if (star) sorted.push(star)
     }
     for (const star of awards.stars) {
-      if (!sorted.some((s) => s.participant_id === star.participant_id && s.category === star.category)) {
+      if (!sorted.some((s) => s.star === star.star)) {
         sorted.push(star)
       }
     }
     return sorted
   }, [awards])
 
+  const uiLeaderboard = useMemo(
+    () => (awards ? awardsLeaderboardToUi(awards.leaderboard) : []),
+    [awards],
+  )
+
   const top3 = useMemo((): LeaderboardEntry[] => {
-    if (!awards) return []
-    return [...awards.leaderboard].filter((e) => e.rank >= 1 && e.rank <= 3).sort((a, b) => a.rank - b.rank)
-  }, [awards])
+    return uiLeaderboard.slice(0, 3)
+  }, [uiLeaderboard])
 
   useEffect(() => {
     if (orderedStars.length === 0) return
@@ -130,9 +160,9 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
       sessionId: session_id,
       screen: 'ceremony',
       metadata: {
-        category: revealedStar.category,
-        participantId: revealedStar.participant_id,
-        displayName: revealedStar.display_name,
+        category: revealedStar.star,
+        participantIds: revealedStar.participant_ids,
+        screenNames: revealedStar.screen_names,
       },
     })
   }, [orderedStars, revealedCount, session_id])
@@ -207,7 +237,7 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           <StatChip label="Words" value={String(awards.total_tokens)} />
           <StatChip label="New discoveries" value={String(awards.discovery_count)} variant="discovery" />
-          <StatChip label="Players" value={String(awards.leaderboard.length)} />
+          <StatChip label="Players" value={String(uiLeaderboard.length)} />
         </div>
       </Card>
 
@@ -217,18 +247,18 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
           <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>Award announcements</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {revealedStars.map((star) => (
-              <StarRow key={`${star.category}-${star.participant_id}`} star={star} />
+              <StarRow key={`${star.star}-${star.participant_ids[0] ?? 'none'}`} star={star} />
             ))}
           </div>
         </Card>
       )}
 
       {/* Final leaderboard */}
-      {starsDone && awards.leaderboard.length > 0 && (
+      {starsDone && uiLeaderboard.length > 0 && (
         <Card>
           <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>Final leaderboard</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {awards.leaderboard.map((entry) => (
+            {uiLeaderboard.map((entry) => (
               <LeaderRow key={entry.participant_id} entry={entry} />
             ))}
           </div>
@@ -316,7 +346,9 @@ function PodiumBlock({
 
 function StarRow({ star }: { star: Star }) {
   const { tokens } = useTheme()
-  const variant = variantForCategory(star.category)
+  const variant = variantForCategory(star.star)
+  const featured = star.screen_names[0] ?? '—'
+  const extraCount = star.screen_names.length - 1
   return (
     <div
       style={{
@@ -329,20 +361,20 @@ function StarRow({ star }: { star: Star }) {
         borderRadius: 12,
       }}
     >
-      <Avatar seed={star.display_name} size={44} />
+      <Avatar seed={featured} size={44} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: tokens.textMuted, fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-          {star.category}
+          {labelForCategory(star.star)}
         </div>
         <div style={{ fontWeight: 800, fontSize: 17, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {star.display_name}
+          {featured}{extraCount > 0 ? ` +${extraCount} more` : ''}
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
         <StarBadge variant={variant} size={22} />
-        {star.gold_bonus > 0 && (
+        {star.xp_awarded > 0 && (
           <span style={{ color: tokens.textMuted, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
-            +{star.gold_bonus} gold
+            +{star.xp_awarded} XP
           </span>
         )}
       </div>

@@ -14,15 +14,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/api/client'
-import type { EventsBatchFlushResponse } from '@/api/client'
 import {
   queueSubmission,
   markSubmissionSynced,
   markSubmissionFailed,
   getPendingSubmissions,
-  getPendingEvents,
-  markEventsSynced,
-  markEventsFailed,
   queueEvent,
   cleanupSyncedRecords,
   RlcEventType,
@@ -34,35 +30,10 @@ import type { QueuedSubmission } from '@/runtime/offlineQueue'
 
 export type SyncState = 'offline' | 'syncing' | 'synced'
 
-/**
- * Determine which queued event IDs the server confirmed as accepted.
- *
- * Preferred path: server returns `accepted_event_ids` (authoritative IDs).
- * Fallback path: if IDs are absent but accepted===queued and failed===0, treat whole batch as accepted.
- * Partial acceptance always filters against the queued set to avoid syncing unknown IDs.
- */
-function getAcceptedEventIds(
-  result: EventsBatchFlushResponse,
-  queuedEventIds: string[],
-): string[] {
-  if (queuedEventIds.length === 0) return []
-  const acceptedEventIdsRaw = result.accepted_event_ids
-  if (Array.isArray(acceptedEventIdsRaw)) {
-    if (acceptedEventIdsRaw.length === 0) return []
-    if (!acceptedEventIdsRaw.every((id) => typeof id === 'string')) {
-      console.warn('Ignoring malformed accepted_event_ids from /events/batch response')
-      return []
-    }
-    const queuedSet = new Set(queuedEventIds)
-    return acceptedEventIdsRaw.filter((id) => queuedSet.has(id))
-  }
-
-  if (result.accepted === queuedEventIds.length && result.failed === 0) {
-    return queuedEventIds
-  }
-
-  return []
-}
+// Analytics events (RLC_*) stay local in IndexedDB — there is no wire
+// endpoint for them in contract v1.0. /events/batch is for token-operation
+// replay (token.save/vote/translate/correct), which the UI does inline via
+// api.token.save in the loop below.
 
 export interface SubmitResult {
   /** Local queue ID — stable across queued → synced transition */
@@ -98,56 +69,12 @@ export function useSubmissionQueue(
   const [pendingCount, setPendingCount] = useState(0)
   const [syncedSubmissions, setSyncedSubmissions] = useState<SyncedSubmissionReceipt[]>([])
   const isFlushingRef = useRef(false)
-  const isFlushingEventsRef = useRef(false)
 
   const refreshPendingCount = useCallback(async (): Promise<number> => {
     const count = await derivePendingCount(sessionId)
     setPendingCount(count)
     return count
   }, [sessionId])
-
-  /**
-   * Flush queued runtime events.
-   * Returns true when the event batch failed (offline, network error, or server reject); false otherwise.
-   */
-  const flushPendingEvents = useCallback(async (): Promise<boolean> => {
-    if (!isOnline) return true
-    if (isFlushingEventsRef.current) return false
-    isFlushingEventsRef.current = true
-    try {
-      const pendingEvents = await getPendingEvents(sessionId)
-      if (pendingEvents.length === 0) return false
-
-      const eventIds = pendingEvents.map((event) => event.event_id)
-      const eventsPayload = pendingEvents.map((event) => {
-        const { status, ...payload } = event
-        void status
-        return payload
-      })
-
-      try {
-        const result = await api.events.batchFlush(eventsPayload)
-        const acceptedEventIds = getAcceptedEventIds(result, eventIds)
-
-        if (acceptedEventIds.length > 0) {
-          await markEventsSynced(acceptedEventIds)
-          await refreshPendingCount()
-        }
-
-        const acceptedSet = new Set(acceptedEventIds)
-        const rejectedEventIds = eventIds.filter((id) => !acceptedSet.has(id))
-        if (rejectedEventIds.length > 0) {
-          await markEventsFailed(rejectedEventIds)
-        }
-
-        return result.failed > 0
-      } catch {
-        return true
-      }
-    } finally {
-      isFlushingEventsRef.current = false
-    }
-  }, [isOnline, sessionId, refreshPendingCount])
 
   // ── Flush all pending items for this session ──────────────────────────────
 
@@ -197,20 +124,12 @@ export function useSubmissionQueue(
         }
       }
 
-      // Keep 'syncing' while events are being flushed; only set 'synced' when both queues are empty.
-      // participantId is intentionally omitted from deps — it is stable for the lifetime of a session.
       const remainingSubs = await refreshPendingCount()
-      const hadEventSyncError = await flushPendingEvents()
-      const remainingEvents = await getPendingEvents(sessionId)
-      if (hadEventSyncError) {
-        setSyncState('offline')
-      } else {
-        setSyncState(remainingSubs === 0 && remainingEvents.length === 0 ? 'synced' : 'syncing')
-      }
+      setSyncState(remainingSubs === 0 ? 'synced' : 'syncing')
     } finally {
       isFlushingRef.current = false
     }
-  }, [sessionId, isOnline, refreshPendingCount, flushPendingEvents])
+  }, [sessionId, isOnline, refreshPendingCount])
 
   // ── Re-flush when the device comes back online ────────────────────────────
 
@@ -226,10 +145,9 @@ export function useSubmissionQueue(
       const syncFromQueueState = async () => {
         try {
           const remainingSubs = await refreshPendingCount()
-          const remainingEvents = await getPendingEvents(sessionId)
           if (cancelled) return
 
-          if (remainingSubs === 0 && remainingEvents.length === 0) {
+          if (remainingSubs === 0) {
             setSyncState('synced')
             return
           }
@@ -272,15 +190,8 @@ export function useSubmissionQueue(
     const queued = await queueSubmission(payload, callerProvidedId)
 
     const pending = await getPendingSubmissions(sessionId)
-    // Derive queued_event_ids from pending RLC events (spec §13.3) — event IDs, not submission IDs.
-    // Scope to this participant to avoid cross-participant event attribution.
-    const pendingEvents = await getPendingEvents(sessionId)
-    const participantPendingEventIds = pendingEvents
-      .filter((e) => e.participant_id === participantId)
-      .map((e) => e.event_id)
     await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
-      queued_event_ids: participantPendingEventIds,
-      queue_depth:      pending.length,
+      queue_depth: pending.length,
     })
 
     setPendingCount(pending.length)

@@ -20,7 +20,6 @@ import { Avatar } from '@/components/Avatar'
 import { XpBar } from '@/components/XpBar'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { StarBadge } from '@/components/StarBadge'
 import { useTheme } from '@/theme/useTheme'
 
 const LEVEL_XP_REQUIREMENT = 1200
@@ -46,7 +45,6 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
   const profile = useMemo(() => {
     const me = session?.leaderboard.find((entry) => entry.display_name === display_name)
     return {
-      stars: me?.gold ?? 0,
       score: me?.xp ?? 0,
       rank: me?.rank ?? null,
     }
@@ -72,7 +70,7 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
     >
       <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />
 
-      {/* Player card — avatar, name, stars */}
+      {/* Player card — avatar, name, XP */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Avatar seed={display_name} size={56} highlight />
@@ -83,8 +81,7 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
             <div style={{ color: tokens.textMuted, fontSize: 13 }}>Word Collector</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-            <StarBadge variant="gold" count={profile.stars} label={`${profile.stars} stars`} />
-            <div style={{ color: tokens.textMuted, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ color: tokens.text, fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>
               {profile.score} XP
             </div>
           </div>
