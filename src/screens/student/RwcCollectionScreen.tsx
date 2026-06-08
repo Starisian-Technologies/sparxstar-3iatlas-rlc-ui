@@ -176,8 +176,9 @@ export function RwcCollectionScreen({
       syncStatus:  'queued',
     }
 
-    // 1. Show submission immediately (offline-first UX).
-    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
+    // 1. Show submission immediately (offline-first UX). Keep the full list
+    //    here so progressCount is accurate — the rendered list slices to 20.
+    setSubmittedWords((prev) => [tempItem, ...prev])
 
     // 2. Emit RLC_WORD_CAPTURED immediately (spec §13.4: events at moment of action).
     emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
@@ -312,7 +313,7 @@ export function RwcCollectionScreen({
       <section style={panelStyle}>
         <div style={sectionTitleStyle}>Your words</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-          {submittedWords.map((entry) => (
+          {submittedWords.slice(0, 20).map((entry) => (
             <div key={entry.id} style={rowStyle}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>

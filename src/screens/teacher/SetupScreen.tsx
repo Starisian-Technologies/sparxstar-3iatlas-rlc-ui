@@ -21,7 +21,13 @@ import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/t
 function getClassId(): string | null {
   if (typeof window === 'undefined') return null
   const v = (window as unknown as Record<string, unknown>)['RLC_CLASS_ID']
-  return typeof v === 'string' && v.length > 0 ? v : null
+  if (typeof v === 'string' && v.length > 0) return v
+  try {
+    const stored = window.localStorage.getItem('RLC_CLASS_ID')
+    return stored && stored.length > 0 ? stored : null
+  } catch {
+    return null
+  }
 }
 
 interface SetupScreenProps {

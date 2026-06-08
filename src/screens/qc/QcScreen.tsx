@@ -147,8 +147,15 @@ export function QcScreen({
     try {
       await api.token.correct(currentToken.token_id, correction.trim())
       setStep('translation')
-    } catch {
-      setActionError('Could not submit correction. Try again.')
+    } catch (err) {
+      // Server enforces submitter-only correction (contract §3.5). Non-authors
+      // get a 403; surface a specific message instead of a generic retry hint.
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('403')) {
+        setActionError('Only the author of this word can submit a correction.')
+      } else {
+        setActionError('Could not submit correction. Try again.')
+      }
     }
   }
 
