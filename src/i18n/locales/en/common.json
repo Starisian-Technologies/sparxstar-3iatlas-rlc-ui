@@ -126,7 +126,9 @@
       "speed": "Speed",
       "audio": "Audio",
       "teacher": "Teacher's Star",
-      "teacher_award": "Teacher Award"
+      "teacher_award": "Teacher Award",
+      "extra_winners_one": " +{{count}} more",
+      "extra_winners_other": " +{{count}} more"
     }
   },
   "teacher_login": {

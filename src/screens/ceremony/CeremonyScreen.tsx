@@ -357,7 +357,7 @@ function StarRow({ star }: { star: Star }) {
           {t(`ceremony.stars.${star.star}`, { defaultValue: star.star })}
         </div>
         <div style={{ fontWeight: 800, fontSize: 17, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {featured}{extraCount > 0 ? ` +${extraCount} more` : ''}
+          {featured}{extraCount > 0 ? t('ceremony.stars.extra_winners', { count: extraCount }) : ''}
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>

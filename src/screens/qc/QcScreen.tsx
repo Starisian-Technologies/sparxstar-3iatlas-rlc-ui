@@ -150,8 +150,11 @@ export function QcScreen({
     } catch (err) {
       // Server enforces submitter-only correction (contract §3.5). Non-authors
       // get a 403; surface a specific message instead of a generic retry hint.
+      // api/client.ts formats errors as "API <status>: <body>"; match the
+      // prefix rather than substring-matching '403', which could collide
+      // with body text (e.g. a token_id "...403...").
       const msg = err instanceof Error ? err.message : ''
-      if (msg.includes('403')) {
+      if (/^API 403\b/.test(msg)) {
         setActionError('Only the author of this word can submit a correction.')
       } else {
         setActionError('Could not submit correction. Try again.')

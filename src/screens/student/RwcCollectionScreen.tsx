@@ -14,6 +14,9 @@ import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import { useTheme } from '@/theme/useTheme'
 import type { CollectionDepth, SaveTokenResponse, SessionStatus, SubmittedWord } from '@/types'
 
+/** Cap on the "Your words" recent-list — bounds re-render cost on low-end devices. */
+const RECENT_WORDS_LIMIT = 20
+
 interface RwcCollectionScreenProps {
   session_id: string
   participant_id: string
@@ -43,7 +46,10 @@ export function RwcCollectionScreen({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
+  // submittedWords is bounded to RECENT_WORDS_LIMIT to keep re-render cost flat
+  // on low-end devices; totalSubmittedCount tracks the true session count.
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
+  const [totalSubmittedCount, setTotalSubmittedCount] = useState(0)
   const [pendingAudioToken, setPendingAudioToken] = useState<{ token_id: string; word: string } | null>(null)
   const auth = useMemo(
     () => participant_token ? { token: participant_token } : null,
@@ -127,7 +133,7 @@ export function RwcCollectionScreen({
     [display_name, participant_id, session?.leaderboard],
   )
 
-  const progressCount = submittedWords.length
+  const progressCount = totalSubmittedCount
   const trimmedWord = word.trim()
   const trimmedTranslation = translation.trim()
   const canSubmit = trimmedWord.length > 0 && (!needsTranslation || trimmedTranslation.length > 0)
@@ -176,9 +182,11 @@ export function RwcCollectionScreen({
       syncStatus:  'queued',
     }
 
-    // 1. Show submission immediately (offline-first UX). Keep the full list
-    //    here so progressCount is accurate — the rendered list slices to 20.
-    setSubmittedWords((prev) => [tempItem, ...prev])
+    // 1. Show submission immediately (offline-first UX). Cap state at
+    //    RECENT_WORDS_LIMIT to keep re-render cost flat; the accurate total
+    //    lives in totalSubmittedCount.
+    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, RECENT_WORDS_LIMIT))
+    setTotalSubmittedCount((c) => c + 1)
 
     // 2. Emit RLC_WORD_CAPTURED immediately (spec §13.4: events at moment of action).
     emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
@@ -313,7 +321,7 @@ export function RwcCollectionScreen({
       <section style={panelStyle}>
         <div style={sectionTitleStyle}>Your words</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-          {submittedWords.slice(0, 20).map((entry) => (
+          {submittedWords.map((entry) => (
             <div key={entry.id} style={rowStyle}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
