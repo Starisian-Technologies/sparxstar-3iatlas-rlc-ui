@@ -342,8 +342,10 @@ export async function cleanupSyncedRecords(sessionId: string): Promise<void> {
 
   // Phase 1 — collect IDs to delete (readonly, parallel).
   // Submissions: only synced (don't drop pending submissions awaiting reconnect).
-  // Events: ALL for this session — analytics events are local-only since contract
-  // v1.0 removed /events/batch flushing; without this they'd accumulate forever.
+  // Events: ALL for this session. Contract v1.0 /events/batch is for
+  // token-operation replay (token.save/vote/translate/correct) — it does NOT
+  // accept RLC_* analytics events. Those are local-only, never flushed, and
+  // would accumulate forever without this end-of-session GC.
   const [syncedSubIds, allEventIds] = await Promise.all([
     new Promise<string[]>((resolve, reject) => {
       const tx  = db.transaction(STORE_SUBMISSIONS, 'readonly')

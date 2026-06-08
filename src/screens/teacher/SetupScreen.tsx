@@ -169,6 +169,10 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
       setError('Missing class context. Please reload from the orchestrator.')
       return
     }
+    // Resolve rights OUTSIDE the try so placeholderRights()'s production throw
+    // ("consent stage not wired") propagates as a hard failure instead of being
+    // masked as a generic "try again" network error.
+    const rights = placeholderRights()
     setLoading(true)
     setError(null)
     try {
@@ -181,7 +185,7 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
         duration_minutes: duration,
         collection_depth: depth,
         class_id,
-        rights: placeholderRights(),
+        rights,
       })
       onCreated({ ...result, mode, collection_depth: depth, language })
     } catch {
