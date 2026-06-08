@@ -20,16 +20,17 @@ export const DEV_PLACEHOLDER_RIGHTS: Rights = {
   commercial: false,
 }
 
-let warned = false
 export function placeholderRights(): Rights {
-  if (!warned && import.meta.env.PROD) {
-    warned = true
-    // Loud, single-shot warning. If the consent stage is wired up, this
-    // module shouldn't be imported by production code paths at all.
-    console.warn(
-      '[RLC] DEV_PLACEHOLDER_RIGHTS in use in a production build. ' +
-        'This is a pre-consent placeholder and MUST be replaced by per-token ' +
-        'consent values before real student data is collected.',
+  // Forcing function: in production builds this throws hard so the placeholder
+  // cannot silently become the prod default. Rights travel with every token
+  // and cannot be retightened after collection — so the consent stage MUST be
+  // wired up (and this function removed from prod code paths) before a prod
+  // build is allowed to call /session/create. Staging that needs to mirror
+  // prod should ship the consent stage too.
+  if (import.meta.env.PROD) {
+    throw new Error(
+      '[RLC] DEV_PLACEHOLDER_RIGHTS called in a production build. ' +
+        'Wire up the consent stage and route per-token rights from it before shipping.',
     )
   }
   return DEV_PLACEHOLDER_RIGHTS
