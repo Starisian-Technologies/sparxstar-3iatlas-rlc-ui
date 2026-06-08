@@ -187,14 +187,31 @@ export function useSubmissionQueue(
     callerProvidedId?: string,
   ): Promise<SubmitResult> => {
     // 1. Append to IndexedDB — always, regardless of connectivity.
+    //    This is the only step that must succeed for the submit() contract;
+    //    everything after is bookkeeping that we soft-fail so an IndexedDB
+    //    blip on the analytics path can't desync the UI from the queue.
     const queued = await queueSubmission(payload, callerProvidedId)
 
-    const pending = await getPendingSubmissions(sessionId)
-    await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
-      queue_depth: pending.length,
-    })
+    let pendingLen = 0
+    try {
+      const pending = await getPendingSubmissions(sessionId)
+      pendingLen = pending.length
+    } catch {
+      // Non-critical: pendingCount will catch up on the next refresh tick.
+    }
 
-    setPendingCount(pending.length)
+    // RLC_SYNC_QUEUED is local analytics (contract v1.0 has no wire endpoint
+    // for it). Failures here must not propagate to the caller, who treats any
+    // throw as "submission failed".
+    try {
+      await queueEvent(RlcEventType.RLC_SYNC_QUEUED, sessionId, participantId, {
+        queue_depth: pendingLen,
+      })
+    } catch {
+      // swallow — analytics-only
+    }
+
+    setPendingCount(pendingLen)
     setSyncState(isOnline ? 'syncing' : 'offline')
 
     // 2. If offline, skip immediate flush and rely on reconnect flusher.

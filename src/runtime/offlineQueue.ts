@@ -331,8 +331,15 @@ async function updateEventStatus(eventIds: string[], status: QueuedStatus): Prom
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 
 /**
- * Delete all `status: 'synced'` records for the given session from both stores.
- * Call on session end to keep IDB storage bounded (spec §12.5 guidance on GC).
+ * End-of-session GC. Asymmetric per store because the two queues have
+ * different lifecycles under contract v1.0:
+ *
+ *  - Submissions: only `status: 'synced'` are deleted. Pending submissions
+ *    must be preserved across the cleanup so they can sync after reconnect.
+ *  - Events:      ALL events for the session are deleted. Contract v1.0's
+ *    /events/batch is for token-operation replay only; RLC_* analytics
+ *    events are local-only and never get marked synced, so without this
+ *    they would accumulate forever.
  *
  * Reads are done in separate readonly transactions first; deletions are batched
  * into a single readwrite transaction to avoid IDB auto-commit edge cases.
