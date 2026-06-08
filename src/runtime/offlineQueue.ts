@@ -341,7 +341,10 @@ export async function cleanupSyncedRecords(sessionId: string): Promise<void> {
   const db = await getDb()
 
   // Phase 1 — collect IDs to delete (readonly, parallel).
-  const [syncedSubIds, syncedEventIds] = await Promise.all([
+  // Submissions: only synced (don't drop pending submissions awaiting reconnect).
+  // Events: ALL for this session — analytics events are local-only since contract
+  // v1.0 removed /events/batch flushing; without this they'd accumulate forever.
+  const [syncedSubIds, allEventIds] = await Promise.all([
     new Promise<string[]>((resolve, reject) => {
       const tx  = db.transaction(STORE_SUBMISSIONS, 'readonly')
       const req = tx.objectStore(STORE_SUBMISSIONS).index('session_id').getAll(sessionId)
@@ -358,17 +361,14 @@ export async function cleanupSyncedRecords(sessionId: string): Promise<void> {
       const tx  = db.transaction(STORE_EVENTS, 'readonly')
       const req = tx.objectStore(STORE_EVENTS).index('session_id').getAll(sessionId)
       req.onsuccess = () => {
-        const ids: string[] = []
-        for (const i of req.result as QueuedEvent[]) {
-          if (i.status === 'synced') ids.push(i.event_id)
-        }
+        const ids = (req.result as QueuedEvent[]).map((i) => i.event_id)
         resolve(ids)
       }
       req.onerror = () => reject(req.error)
     }),
   ])
 
-  if (syncedSubIds.length === 0 && syncedEventIds.length === 0) return
+  if (syncedSubIds.length === 0 && allEventIds.length === 0) return
 
   // Phase 2 — batch delete (readwrite, single transaction).
   return new Promise((resolve, reject) => {
@@ -379,7 +379,7 @@ export async function cleanupSyncedRecords(sessionId: string): Promise<void> {
     const subStore = tx.objectStore(STORE_SUBMISSIONS)
     for (const id of syncedSubIds) subStore.delete(id)
     const evtStore = tx.objectStore(STORE_EVENTS)
-    for (const id of syncedEventIds) evtStore.delete(id)
+    for (const id of allEventIds) evtStore.delete(id)
   })
 }
 

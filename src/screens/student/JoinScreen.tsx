@@ -68,11 +68,11 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
         // Lower Basic (contract §3.4 step 1): server returns roster, student picks a name
         setRoster(result.session_screen_names ?? [])
         setPhase('roster')
-      } else if ('participant_id' in result) {
-        // Fully joined on code-only probe (anonymous / guest mode)
-        onJoined({ ...result, display_name: '' })
       } else {
-        // No tier info from probe — fall back to credential form
+        // Per contract §3.4, code-only probe is Lower-Basic-step-1 only.
+        // Any other response shape (incl. a full SessionJoinResponse) is
+        // off-contract — fall back to name entry so we don't proceed with
+        // an empty display_name that breaks leaderboard/avatar matching.
         setCredMode('none')
         setPhase('simple_name')
         requestAnimationFrame(() => nameRef.current?.focus())

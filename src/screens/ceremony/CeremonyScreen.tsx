@@ -11,6 +11,7 @@
  * 2014-era GPU for the full screen lifetime.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Fireworks } from '@/components/Fireworks'
 import { Screen } from '@/components/Screen'
@@ -57,19 +58,7 @@ function variantForCategory(category: StarKind): StarVariant {
   }
 }
 
-function labelForCategory(category: StarKind): string {
-  switch (category) {
-    case 'most_words':     return 'Most Words'
-    case 'most_sentences': return 'Most Sentences'
-    case 'best_spelling':  return 'Best Spelling'
-    case 'discovery':      return 'Discovery'
-    case 'speed':          return 'Speed'
-    case 'audio':          return 'Audio'
-    case 'teacher':        return "Teacher's Star"
-    case 'teacher_award':  return 'Teacher Award'
-    default:               return category
-  }
-}
+/** Star labels live in i18n (ceremony.stars.<kind>); the StarKind union maps 1:1. */
 
 /** Map the wire awards leaderboard ({participant_id, screen_name, tokens, session_xp})
  *  to the UI LeaderboardEntry shape with derived rank. */
@@ -346,6 +335,7 @@ function PodiumBlock({
 
 function StarRow({ star }: { star: Star }) {
   const { tokens } = useTheme()
+  const { t } = useTranslation()
   const variant = variantForCategory(star.star)
   const featured = star.screen_names[0] ?? '—'
   const extraCount = star.screen_names.length - 1
@@ -364,7 +354,7 @@ function StarRow({ star }: { star: Star }) {
       <Avatar seed={featured} size={44} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: tokens.textMuted, fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-          {labelForCategory(star.star)}
+          {t(`ceremony.stars.${star.star}`, { defaultValue: star.star })}
         </div>
         <div style={{ fontWeight: 800, fontSize: 17, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {featured}{extraCount > 0 ? ` +${extraCount} more` : ''}
