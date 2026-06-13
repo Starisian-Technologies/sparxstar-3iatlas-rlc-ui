@@ -150,13 +150,17 @@ export function RscCollectionScreen({
         })
       }
 
+      // Contract §3.5: RSC requires translation: string (use '' for basic depth)
+      // and grammar_domain_index (server derives the canonical grammar_domain).
+      // Do NOT send grammar_domain too — the UI's slug may not match the
+      // backend's canonical name and the server returns 400 grammar_domain_mismatch.
       await submit({
         session_id,
         participant_id,
-        text:            sentenceValue,
-        translation:     translationValue,
-        collection_mode: 'rsc',
-        grammar_domain:  currentDomain.slug,
+        text:                 sentenceValue,
+        translation:          translationValue ?? '',
+        collection_mode:      'rsc',
+        grammar_domain_index: currentDomain.index,
       })
 
       const nextCompleted = new Set(completedDomains)

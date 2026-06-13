@@ -14,10 +14,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { createSocket, type SocketAuth } from '@/runtime/socket'
+import { mergeSessionStatus } from './sessionView'
 import type { QcToken, Session } from '@/types'
 
 interface UseQcSessionOptions {
   auth?: SocketAuth | null
+  initialMeta?: Partial<Session>
 }
 
 interface UseQcSessionResult {
@@ -58,13 +60,15 @@ export function useQcSession(
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sessionIdRef = useRef(session_id)
   sessionIdRef.current = session_id
+  const metaRef = useRef(options.initialMeta)
+  metaRef.current = options.initialMeta
 
   const refreshStatus = useCallback(async () => {
     const sid = sessionIdRef.current
     if (!sid) return
     try {
       const status = await api.session.status(sid)
-      setSession(status)
+      setSession((prev) => mergeSessionStatus(sid, status, metaRef.current, prev))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not refresh QC status')

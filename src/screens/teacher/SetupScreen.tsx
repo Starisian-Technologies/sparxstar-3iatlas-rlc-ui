@@ -7,7 +7,7 @@
  * with a baked-in fallback (Mandinka / Agriculture) so the teacher can
  * still start a session if the dictionary endpoint is offline.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '@/api/client'
 import { Screen } from '@/components/Screen'
 import { Card } from '@/components/Card'
@@ -15,15 +15,19 @@ import { Button } from '@/components/Button'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from '@/theme/useTheme'
-import type { CollectionMode, CollectionDepth, CreateSessionResponse, SchoolContext } from '@/types'
+import { placeholderRights } from '@/runtime/rights'
+import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/types'
 
-function getSchoolContext(): SchoolContext | null {
-  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_SCHOOL_CONTEXT']
-  const raw = typeof fromWindow === 'string' && fromWindow.length > 0
-    ? fromWindow
-    : (() => { try { return localStorage.getItem('RLC_SCHOOL_CONTEXT') } catch { return null } })()
-  if (!raw) return null
-  try { return JSON.parse(raw) as SchoolContext } catch { return null }
+function getClassId(): string | null {
+  if (typeof window === 'undefined') return null
+  const v = (window as unknown as Record<string, unknown>)['RLC_CLASS_ID']
+  if (typeof v === 'string' && v.length > 0) return v
+  try {
+    const stored = window.localStorage.getItem('RLC_CLASS_ID')
+    return stored && stored.length > 0 ? stored : null
+  } catch {
+    return null
+  }
 }
 
 interface SetupScreenProps {
@@ -137,16 +141,13 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   const [language, setLanguage] = useState('mandinka')
   const [domain, setDomain] = useState('agriculture-6.2')
   const [duration, setDuration] = useState(15)
-  const recordingEnabled = useMemo(() => getSchoolContext()?.recording_enabled ?? false, [])
+  // First slice: full-depth/audio is its own slice. Only translation_only + basic
+  // are surfaced here; the recording gate (GET /class/:id + 422 backstop) ships
+  // with the full slice.
   const [depth, setDepth] = useState<CollectionDepth>('translation_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { languages, domains, ready } = useDictionarySetup(language)
-
-  // Defensive: if recording is disabled at the school level, never allow `full`.
-  useEffect(() => {
-    if (!recordingEnabled && depth === 'full') setDepth('translation_only')
-  }, [recordingEnabled, depth])
 
   useEffect(() => {
     if (languages.length > 0 && !languages.some((l) => l.slug === language)) {
@@ -163,15 +164,28 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   }, [domains])
 
   const handleCreate = async () => {
+    const class_id = getClassId()
+    if (!class_id) {
+      setError('Missing class context. Please reload from the orchestrator.')
+      return
+    }
+    // Resolve rights OUTSIDE the try so placeholderRights()'s production throw
+    // ("consent stage not wired") propagates as a hard failure instead of being
+    // masked as a generic "try again" network error.
+    const rights = placeholderRights()
     setLoading(true)
     setError(null)
     try {
       const result = await api.session.create({
         mode,
         language,
+        // Locale follows language for this slice — regional variants come later.
+        locale: language,
         semantic_domain_id: domain,
         duration_minutes: duration,
         collection_depth: depth,
+        class_id,
+        rights,
       })
       onCreated({ ...result, mode, collection_depth: depth, language })
     } catch {
@@ -277,18 +291,12 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
           <Field label="Collection depth">
             <SegmentedControl
               options={[
-                ...(recordingEnabled ? [{ value: 'full', label: 'Word + audio' }] : []),
                 { value: 'translation_only', label: 'Word + translation' },
                 { value: 'basic', label: 'Word only' },
               ]}
               value={depth}
               onChange={(v) => setDepth(v as CollectionDepth)}
             />
-            {!recordingEnabled && (
-              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 8 }}>
-                Audio recording is not enabled for this class.
-              </div>
-            )}
           </Field>
         </Card>
 

@@ -117,7 +117,19 @@
   "ceremony": {
     "title": "Session complete!",
     "subtitle": "Here are today's stars",
-    "return": "Return to session"
+    "return": "Return to session",
+    "stars": {
+      "most_words": "Most Words",
+      "most_sentences": "Most Sentences",
+      "best_spelling": "Best Spelling",
+      "discovery": "Discovery",
+      "speed": "Speed",
+      "audio": "Audio",
+      "teacher": "Teacher's Star",
+      "teacher_award": "Teacher Award",
+      "extra_winners_one": " +{{count}} more",
+      "extra_winners_other": " +{{count}} more"
+    }
   },
   "teacher_login": {
     "label": "TEACHER",

@@ -71,25 +71,20 @@ export function QcScreen({
 
   useEffect(() => {
     setStep('audio')
-    setCorrection(currentToken?.corrected_text ?? currentToken?.text ?? '')
+    setCorrection(currentToken?.text ?? '')
     setTranslation('')
     setActionError(null)
-  }, [currentToken?.token_id, currentToken?.corrected_text, currentToken?.text])
+  }, [currentToken?.token_id, currentToken?.text])
 
+  // Wire QcToken doesn't carry participants — leaderboard is the canonical
+  // participant list during QC.
   const participants = useMemo(() => {
-    const fromParticipants = session?.participants ?? []
-    if (fromParticipants.length > 0) {
-      return fromParticipants.map((p) => ({
-        participant_id: p.participant_id,
-        display_name: p.display_name,
-      }))
-    }
     const leaderboard = session?.leaderboard ?? []
     return leaderboard.map((entry: LeaderboardEntry) => ({
       participant_id: entry.participant_id,
       display_name: entry.display_name,
     }))
-  }, [session?.leaderboard, session?.participants])
+  }, [session?.leaderboard])
 
   if (loading) {
     return <FullScreenMessage title="Loading review…" subtitle="Preparing words for the community check." tokens={tokens} />
@@ -108,7 +103,11 @@ export function QcScreen({
   const voteDimension: VotePayload['dimension'] = mode === 'rsc' ? 'semantics' : 'orthography'
   const hasVoted = hasVotedByToken[currentToken.token_id] === true
   const voteCounts = voteCountsByToken[currentToken.token_id] ?? getDefaultCounts(currentToken, voteDimension)
-  const isSubmitter = currentToken.submitter_id === participant_id
+  // QcToken no longer carries submitter_id (anonymized per contract §3.4).
+  // The server enforces submitter-only correction at the /token/:id/correct
+  // endpoint via the participant token; if a non-submitter tries, they get 403.
+  // For the slice, UI shows the correction input to everyone when the vote fails;
+  // the failure mode is a server 403 surfaced as actionError.
   const translationSubmitted = translationSubmittedByToken[currentToken.token_id] === true
   const isLastToken = currentIndex === qcWords.length - 1
 
@@ -148,8 +147,18 @@ export function QcScreen({
     try {
       await api.token.correct(currentToken.token_id, correction.trim())
       setStep('translation')
-    } catch {
-      setActionError('Could not submit correction. Try again.')
+    } catch (err) {
+      // Server enforces submitter-only correction (contract §3.5). Non-authors
+      // get a 403; surface a specific message instead of a generic retry hint.
+      // api/client.ts formats errors as "API <status>: <body>"; match the
+      // prefix rather than substring-matching '403', which could collide
+      // with body text (e.g. a token_id "...403...").
+      const msg = err instanceof Error ? err.message : ''
+      if (/^API 403\b/.test(msg)) {
+        setActionError('Only the author of this word can submit a correction.')
+      } else {
+        setActionError('Could not submit correction. Try again.')
+      }
     }
   }
 
@@ -360,40 +369,22 @@ export function QcScreen({
         {step === 'correction' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <StepLabel label="Step 3 — Correction" tokens={tokens} />
-            {isSubmitter ? (
-              <>
-                <div style={{ fontSize: 14, color: tokens.textMuted }}>
-                  The class voted that spelling needs a fix. Edit your word below.
-                </div>
-                <input
-                  type="text"
-                  value={correction}
-                  onChange={(e) => setCorrection(e.target.value)}
-                  style={inputStyle}
-                  aria-label="Correction input"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                />
-                <Button onClick={() => void handleCorrection()} disabled={!correction.trim()} variant="primary">
-                  Submit correction
-                </Button>
-              </>
-            ) : (
-              <div style={{
-                padding: '16px 0',
-                color: tokens.textMuted,
-                fontSize: 15,
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 10,
-              }}>
-                <PulsingDot color={tokens.primary} />
-                The word&apos;s author is making a correction…
-              </div>
-            )}
+            <div style={{ fontSize: 14, color: tokens.textMuted }}>
+              The class voted that spelling needs a fix. The word&apos;s author can edit it below.
+            </div>
+            <input
+              type="text"
+              value={correction}
+              onChange={(e) => setCorrection(e.target.value)}
+              style={inputStyle}
+              aria-label="Correction input"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+            <Button onClick={() => void handleCorrection()} disabled={!correction.trim()} variant="primary">
+              Submit correction
+            </Button>
           </div>
         )}
 
@@ -418,28 +409,7 @@ export function QcScreen({
             >
               {translationSubmitted ? 'Waiting for others…' : 'Submit translation'}
             </Button>
-            {(currentToken.qc_translations ?? []).length > 0 && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>
-                  Class translations
-                </div>
-                <div style={{
-                  borderRadius: 10,
-                  border: `1px solid ${tokens.border}`,
-                  background: tokens.bgElevated,
-                  padding: 10,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                }}>
-                  {currentToken.qc_translations.map((item, index) => (
-                    <div key={`${item.participant_id}-${index}`} style={{ fontSize: 14, color: tokens.text }}>
-                      {item.translation}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Class translation list is no longer broadcast on the wire (contract §3.4). */}
           </div>
         )}
 
@@ -538,22 +508,6 @@ export function QcScreen({
 function StepLabel({ label, tokens }: { label: string; tokens: { primary: string } }) {
   return (
     <div style={{ fontSize: 16, fontWeight: 800, color: tokens.primary }}>{label}</div>
-  )
-}
-
-function PulsingDot({ color }: { color: string }) {
-  return (
-    <div style={{ position: 'relative', width: 16, height: 16 }}>
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        borderRadius: '50%',
-        background: color,
-        opacity: 0.3,
-        animation: 'spx-sync-pulse 1.4s ease-in-out infinite',
-      }} />
-      <div style={{ position: 'absolute', inset: 4, borderRadius: '50%', background: color }} />
-    </div>
   )
 }
 

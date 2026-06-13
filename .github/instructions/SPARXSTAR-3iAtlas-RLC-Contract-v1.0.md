@@ -349,7 +349,7 @@ Response 200:
 Failure responses:
 ```typescript
 // 403
-{ error: 'unknown_screen_name'; localized_message: string }
+{ error: 'unknown_screen_name' } // UI does the i18n; wire body is just { error }
 // 401
 { error: 'credential_invalid'; remaining_attempts: number }
 // 423

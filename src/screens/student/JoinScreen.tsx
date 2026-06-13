@@ -64,18 +64,17 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     setError(null)
     try {
       const result = await api.session.join({ join_code: joinCode })
-      if (result.requires_screen_name) {
-        // Lower Basic (spec §6.3): server returns roster, student picks a name
+      if ('requires_screen_name' in result && result.requires_screen_name) {
+        // Lower Basic (contract §3.4 step 1): server returns roster, student picks a name
         setRoster(result.session_screen_names ?? [])
         setPhase('roster')
-      } else if (result.participant_id) {
-        // Fully joined on code-only probe (anonymous / guest mode)
-        onJoined({ ...result, display_name: result.display_name ?? '' })
       } else {
-        // Tier info without roster — show name + credential form
-        const mode = tierToCredMode(result.tier)
-        setCredMode(mode)
-        setPhase(mode === 'none' ? 'simple_name' : 'credentials')
+        // Per contract §3.4, code-only probe is Lower-Basic-step-1 only.
+        // Any other response shape (incl. a full SessionJoinResponse) is
+        // off-contract — fall back to name entry so we don't proceed with
+        // an empty display_name that breaks leaderboard/avatar matching.
+        setCredMode('none')
+        setPhase('simple_name')
         requestAnimationFrame(() => nameRef.current?.focus())
       }
     } catch (err) {
@@ -104,7 +103,12 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     setError(null)
     try {
       const result = await api.session.join({ join_code: code, screen_name: screenName })
-      onJoined({ ...result, display_name: result.display_name ?? screenName })
+      if (!('participant_id' in result)) {
+        setError('Unexpected server response. Please try again.')
+        setLoading(false)
+        return
+      }
+      onJoined({ ...result, display_name: screenName })
     } catch {
       setError('Could not join. Please try again.')
       setLoading(false)
@@ -116,13 +120,19 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     setLoading(true)
     setError(null)
     try {
-      const result = await api.session.join({
-        join_code: code,
-        screen_name: name.trim(),
-        ...(credMode === 'pin' && pin ? { pin } : {}),
-        ...(credMode === 'password' && password ? { password } : {}),
-      })
-      onJoined({ ...result, display_name: result.display_name ?? name.trim() })
+      const payload =
+        credMode === 'pin' && pin
+          ? { join_code: code, screen_name: name.trim(), pin }
+          : credMode === 'password' && password
+          ? { join_code: code, screen_name: name.trim(), password }
+          : { join_code: code, screen_name: name.trim() }
+      const result = await api.session.join(payload)
+      if (!('participant_id' in result)) {
+        setError('Unexpected server response. Please try again.')
+        setLoading(false)
+        return
+      }
+      onJoined({ ...result, display_name: name.trim() })
     } catch (err) {
       const parsed = parseJoinError(err)
       if (parsed.type === 'locked') {

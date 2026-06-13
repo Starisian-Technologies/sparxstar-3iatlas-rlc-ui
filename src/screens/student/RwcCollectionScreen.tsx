@@ -12,7 +12,10 @@ import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRlcEvent, emitRuntimeEvent, RlcEventType } from '@/runtime/events'
 import { useTheme } from '@/theme/useTheme'
-import type { CollectionDepth, RoundCompleteSummary, SaveTokenResponse, SessionStatus, SubmittedWord } from '@/types'
+import type { CollectionDepth, SaveTokenResponse, SessionStatus, SubmittedWord } from '@/types'
+
+/** Cap on the "Your words" recent-list — bounds re-render cost on low-end devices. */
+const RECENT_WORDS_LIMIT = 20
 
 interface RwcCollectionScreenProps {
   session_id: string
@@ -22,7 +25,6 @@ interface RwcCollectionScreenProps {
   language: string
   display_name: string
   onSubmitted: (result: SaveTokenResponse) => void
-  onRoundComplete: (summary: RoundCompleteSummary) => void
   onClose: () => void
   onCollectionEnded: (status: SessionStatus) => void
 }
@@ -35,7 +37,6 @@ export function RwcCollectionScreen({
   language,
   display_name,
   onSubmitted,
-  onRoundComplete,
   onClose,
   onCollectionEnded,
 }: RwcCollectionScreenProps) {
@@ -45,7 +46,10 @@ export function RwcCollectionScreen({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SaveTokenResponse | null>(null)
+  // submittedWords is bounded to RECENT_WORDS_LIMIT to keep re-render cost flat
+  // on low-end devices; totalSubmittedCount tracks the true session count.
   const [submittedWords, setSubmittedWords] = useState<SubmittedWord[]>([])
+  const [totalSubmittedCount, setTotalSubmittedCount] = useState(0)
   const [pendingAudioToken, setPendingAudioToken] = useState<{ token_id: string; word: string } | null>(null)
   const auth = useMemo(
     () => participant_token ? { token: participant_token } : null,
@@ -57,27 +61,16 @@ export function RwcCollectionScreen({
   const wordInputRef = useRef<HTMLInputElement>(null)
   const translationInputRef = useRef<HTMLInputElement>(null)
   const lastFocusedInputRef = useRef<'word' | 'translation'>('word')
-  const roundRef = useRef<number | null>(null)
-  const roundEndedRef = useRef(false)
   const sessionEndedRef = useRef(false)
   // Track which synced receipts have already triggered onSubmitted to prevent duplicate calls on re-render.
   const processedReceiptsRef = useRef<Set<string>>(new Set())
   // Track per-submission metadata (populated when submit() returns) for WORD_SUBMITTED event and audio prompt.
   const submissionMetaRef = useRef<Map<string, { hasTranslation: boolean; word: string }>>(new Map())
 
-  const currentRound = session?.current_round ?? 1
-  const totalRounds = session?.total_rounds ?? 5
-  const roundGoal = session?.round_goal ?? 10
   const promptWord = getPromptWord(session?.semantic_domain_id)
   const minutes = Math.floor((session?.time_remaining_seconds ?? 0) / 60)
   const seconds = (session?.time_remaining_seconds ?? 0) % 60
   const needsTranslation = collection_depth !== 'basic'
-
-  useEffect(() => {
-    if (roundRef.current === null) {
-      roundRef.current = currentRound
-    }
-  }, [currentRound])
 
   useEffect(() => {
     const status = session?.status
@@ -86,25 +79,6 @@ export function RwcCollectionScreen({
       onCollectionEnded(status)
     }
   }, [onCollectionEnded, session?.status])
-
-  useEffect(() => {
-    if (!session?.current_round || roundRef.current === null) return
-    if (session.current_round === roundRef.current) return
-    if (session.current_round > roundRef.current && !roundEndedRef.current) {
-      roundEndedRef.current = true
-      onRoundComplete(buildRoundSummary({
-        round: roundRef.current,
-        totalRounds,
-        submittedWords,
-        leaderboard: session.leaderboard,
-        participant_id,
-        display_name,
-      }))
-      setSubmittedWords([])
-    }
-    roundRef.current = session.current_round
-    roundEndedRef.current = false
-  }, [display_name, onRoundComplete, participant_id, session, submittedWords, totalRounds])
 
   useEffect(() => {
     if (syncedSubmissions.length === 0) return
@@ -159,8 +133,7 @@ export function RwcCollectionScreen({
     [display_name, participant_id, session?.leaderboard],
   )
 
-  const progressCount = submittedWords.length
-  const progressPct = Math.min(100, (progressCount / roundGoal) * 100)
+  const progressCount = totalSubmittedCount
   const trimmedWord = word.trim()
   const trimmedTranslation = translation.trim()
   const canSubmit = trimmedWord.length > 0 && (!needsTranslation || trimmedTranslation.length > 0)
@@ -209,8 +182,11 @@ export function RwcCollectionScreen({
       syncStatus:  'queued',
     }
 
-    // 1. Show submission immediately (offline-first UX).
-    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, 20))
+    // 1. Show submission immediately (offline-first UX). Cap state at
+    //    RECENT_WORDS_LIMIT to keep re-render cost flat; the accurate total
+    //    lives in totalSubmittedCount.
+    setSubmittedWords((prev) => [tempItem, ...prev].slice(0, RECENT_WORDS_LIMIT))
+    setTotalSubmittedCount((c) => c + 1)
 
     // 2. Emit RLC_WORD_CAPTURED immediately (spec §13.4: events at moment of action).
     emitRlcEvent(RlcEventType.RLC_WORD_CAPTURED, session_id, participant_id, {
@@ -275,12 +251,8 @@ export function RwcCollectionScreen({
       />
 
       <section style={mainCardStyle}>
-        <div style={roundLabelStyle}>ROUND {currentRound} / {totalRounds}</div>
         <div style={{ textAlign: 'center', fontSize: 29, fontWeight: 800, color: 'var(--accent-primary)' }}>{promptWord}</div>
-        <div style={progressOuterStyle}>
-          <div style={{ ...progressInnerStyle, width: `${progressPct}%` }} />
-        </div>
-        <div style={{ color: 'var(--text-secondary)', textAlign: 'right', fontSize: 13 }}>{progressCount} / {roundGoal} words</div>
+        <div style={{ color: 'var(--text-secondary)', textAlign: 'right', fontSize: 13 }}>{progressCount} words submitted</div>
       </section>
 
       <section style={inputWrapStyle}>
@@ -404,32 +376,6 @@ export function RwcCollectionScreen({
   )
 }
 
-function buildRoundSummary(input: {
-  round: number
-  totalRounds: number
-  submittedWords: SubmittedWord[]
-  leaderboard: Array<{ participant_id: string; display_name: string; rank: number; xp: number }>
-  participant_id: string
-  display_name: string
-}): RoundCompleteSummary {
-  const top_words = [...input.submittedWords].sort((a, b) => b.xp_awarded - a.xp_awarded).slice(0, 5)
-  const points_earned = input.submittedWords.reduce((sum, item) => sum + item.xp_awarded, 0)
-  const me = input.leaderboard.find(
-    (entry) => entry.participant_id === input.participant_id || entry.display_name === input.display_name,
-  )
-  return {
-    round: input.round,
-    total_rounds: input.totalRounds,
-    words_collected: input.submittedWords.length,
-    points_earned,
-    stars_earned: Math.max(1, Math.floor(points_earned / 100)),
-    top_words,
-    player_score: me?.xp ?? points_earned,
-    player_rank: me?.rank ?? 1,
-    total_players: input.leaderboard.length || 1,
-  }
-}
-
 function getPromptWord(semanticDomainId?: string): string {
   if (!semanticDomainId) return 'TARGET WORD'
   const token = semanticDomainId.split(/[.\s_-]+/).slice(-1)[0]
@@ -485,26 +431,6 @@ const mainCardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 8,
-}
-
-const roundLabelStyle: React.CSSProperties = {
-  color: 'var(--accent-primary)',
-  textAlign: 'center',
-  fontWeight: 700,
-  letterSpacing: 1.1,
-}
-
-const progressOuterStyle: React.CSSProperties = {
-  height: 8,
-  background: 'rgba(255,255,255,0.1)',
-  borderRadius: 999,
-  overflow: 'hidden',
-}
-
-const progressInnerStyle: React.CSSProperties = {
-  height: '100%',
-  borderRadius: 999,
-  background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))',
 }
 
 const inputWrapStyle: React.CSSProperties = {
