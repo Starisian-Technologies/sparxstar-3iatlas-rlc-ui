@@ -103,7 +103,7 @@ behind each checkbox.
 - [x] **Step 2 — Branch hygiene.** Drop unused deps, i18n stub, README refresh
 - [x] **Step 3 — Backend Retarget.** `/aiwa/v1` → `/api/v1`; add `RLC_SCHOOL_ID` host global; dev proxy reset
 - [x] **Step 4 — Socket Introduction.** `socket.io-client` installed and wired; `useSessionPoll` is now a compatibility shim over `useSessionSocket`
-- [x] **Step 5 — Tier-aware Sign-in.** S1 LB/UB/SS/Adult flows + failure UX (401/403/410/423/429) implemented in `JoinScreen.tsx`
+- [x] **Step 5 — Tier-aware Sign-in.** S1 LB/UB/SS/Adult flows implemented in `JoinScreen.tsx`; `parseJoinError()` gives specific failure UX for 401 (invalid credential), 410 (session unavailable), and 423 (account locked) — 403 (unknown screen name) and 429 (rate limit) are not distinguished and currently fall back to generic error messaging
 - [ ] **Step 6 — Localization Extraction.** i18next wired, but only an English bundle exists and only one screen (`CeremonyScreen`) consumes it — most student-facing strings are still hardcoded English
 - [ ] **Step 7 — QC Rewrite.** Submitter anonymization is done; the full Audio → Orthography → Semantics → Correction → Translation sequence is not — `QcScreen` currently runs a single combined vote step per token
 - [ ] **Step 8 — Polish.** PWA, offline queue, and AccessoryBar IME bypass are done; screen-time limit UI, ceremony lifetime XP / school standing, and cross-mode E2E tests are not
