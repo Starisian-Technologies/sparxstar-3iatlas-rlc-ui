@@ -12,11 +12,15 @@ It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 
 > **Status — during migration to v4.0:** the rules below describe the v4.0
 > target. Today, `src/api/client.ts` calls the Node backend at `/api/v1/` via
-> `window.RLC_API_BASE`, but `useSessionPoll` is still polling-based. The
-> socket.io replacement lands in the **Socket Introduction** migration step.
-> Migration steps are tracked in `README.md`. Treat the rules below as the
-> contract every new line of code is written *toward*; do not introduce new
-> polling hooks.
+> `window.RLC_API_BASE`, and real-time state is socket.io-driven —
+> `useSessionSocket` connects a `socket.io-client` socket on mount, falling
+> back to a 5s REST poll only until the socket confirms connection.
+> `useSessionPoll` is now just a compatibility re-export of
+> `useSessionSocket`; it has no independent polling logic. Migration steps
+> and their verified status are tracked in `README.md` and spec §11. Treat the
+> rules below as the contract every new line of code is written *toward*; do
+> not introduce new polling hooks or reintroduce standalone polling logic in
+> `useSessionPoll`.
 
 ## The Three Repos
 

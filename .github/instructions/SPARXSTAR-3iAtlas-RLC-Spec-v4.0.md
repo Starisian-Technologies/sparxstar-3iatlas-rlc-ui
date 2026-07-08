@@ -931,8 +931,110 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 
 ---
 
+# 11. Implementation Status — `sparxstar-3iatlas-rlc-ui` (Verified Against Code)
+
+Sections 1–10 above describe the **target** architecture shared across all
+three repos, regardless of what has been built yet. This section is
+different in kind: it is a **repo-specific, code-verified snapshot** of what
+is actually shipped in `sparxstar-3iatlas-rlc-ui` today versus what is still
+planned. Unlike the architecture sections, this section is expected to go
+stale as work lands — update it whenever a UI migration step (§11.5)
+changes status, and re-verify against source rather than trusting a prior
+version of this section or of `README.md`/`AGENTS.md`.
+
+This section covers the UI repo only. It does not speak to the current
+implementation status of `sparxstar-3iatlas-rlc-node-engine` or
+`sparxstar-3iatlas-rlc` — those repos' own instances of this spec file (or
+equivalent) are authoritative for their own status.
+
+## 11.1 Wire Contract — Where the Exact Shapes Live
+
+This spec (§6.3, §3.2) describes REST/socket endpoints and events at a
+conceptual level — purpose, auth, and rough payload contents. It is **not**
+the source of truth for exact field names, types, or JSON shapes. That is
+`.github/instructions/SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`, kept
+byte-identical with its twin file in the node-engine repo, and mirrored in
+code at `src/contract.ts`. When implementing against a REST or socket
+payload, use the Contract doc (or `src/contract.ts`) — not this spec's prose
+— for the exact shape. Do not copy Contract content into this file; keep the
+two documents separate and cross-reference instead.
+
+## 11.2 Real-Time Transport — Socket.io Is Wired, Not Pending
+
+**Current status: done, not planned.** `socket.io-client` (`^4.8.3`) is a
+real dependency in `package.json`. `src/runtime/socket.ts` implements
+`createSocket()`, which opens an authenticated `socket.io` connection with
+reconnection (`reconnection: true`, up to 12 attempts, 1–8s backoff, 10s
+handshake timeout).
+
+`src/hooks/useSessionSocket.ts` is the current real-time hook:
+
+- Connects the socket immediately on mount.
+- Starts a 5-second REST poll (`GET /session/:id/status`) as a fallback from
+  the start; the poll is cancelled the moment the socket emits `connect`.
+- Restarts the fallback poll on `disconnect` or `connect_error`, and stops it
+  again on reconnect.
+- Emits a `heartbeat` event every 10 seconds while connected.
+- Re-fetches full session status via REST whenever the server sends
+  `session:status` (the socket payload for that event is `{ status }` only —
+  the client merges it with join-time metadata).
+
+`src/hooks/useSessionPoll.ts` is **not** an independent polling
+implementation. It is a one-line compatibility re-export:
+`export { useSessionSocket as useSessionPoll } from '@/hooks/useSessionSocket'`.
+Any code that still imports `useSessionPoll` is already running on sockets.
+
+**What this means for prior drift:** earlier revisions of `README.md`,
+`AGENTS.md`, and `.github/copilot-instructions.md` described real-time as
+"still polling-based" with socket.io "not yet installed" — that was stale
+and has been corrected. Verify this section against `package.json`,
+`src/runtime/socket.ts`, and `src/hooks/useSessionSocket.ts` before trusting
+it, since the code may have moved further since this was written.
+
+## 11.3 Configuration / Environment Variables — Verified Current Defaults
+
+| Variable | Where read | Current default / behavior |
+| :---- | :---- | :---- |
+| `VITE_RLC_BACKEND_URL` | `.env.local` (build-time), read by `vite.config.ts` dev proxy and `src/runtime/socket.ts` dev fallback | **`http://localhost:3001`** (see `.env.example`, `vite.config.ts`). This corrects a prior README claim of `http://localhost:3000`. |
+| `window.RLC_API_BASE` | `src/api/client.ts`, `src/runtime/socket.ts` | Injected by the orchestrator host page in production; falls back to `/api/v1` (REST) when unset. Socket URL is derived from its origin when present. |
+| `window.RLC_TEACHER_TOKEN` | `src/api/client.ts`, teacher screens | Backend-issued JWT for teacher sessions. In dev, can be set via `localStorage.setItem('RLC_TEACHER_TOKEN', ...)` (see `.env.example`) since there is no host page. |
+| `window.RLC_SCHOOL_ID` | join flow | Required for `/session/join`; injected by the orchestrator host page, never entered by the student. |
+| `window.RLC_CLASS_ID` | `src/screens/teacher/SetupScreen.tsx` | Read from `window`, with a `localStorage` fallback in dev. |
+| `window.RLC_SCHOOL_CONTEXT` | declared in `src/vite-env.d.ts` | Declared but not yet consumed anywhere in `src/` — reserved for future use, not part of any current data flow. |
+| `window.YAHURA_URL` / `VITE_YAHURA_URL` | `src/components/RlcRecorder.tsx` | Base URL for the (placeholder) Starmus/Yahura recorder integration; window global takes precedence over the Vite env var. |
+
+## 11.4 Vite / Build Configuration
+
+- Vite dev proxy forwards `/api/*` to `VITE_RLC_BACKEND_URL` (default
+  `http://localhost:3001`) — see `vite.config.ts`.
+- `vite-plugin-pwa` is configured with `registerType: 'autoUpdate'`, a full
+  manifest, and a `NetworkFirst` runtime-caching rule for `/api/v1/` — the
+  PWA/offline-install piece of "Polish" (§11.5, Step 8) is done, not pending.
+- Path alias `@/` → `src/` is configured in `vite.config.ts`, consistent with
+  `AGENTS.md`'s coding standards.
+
+## 11.5 UI Migration Steps — Verified Status
+
+`README.md` tracks these steps as a checklist. The table below is the
+code-verified detail behind each checkbox as of this update — re-verify
+against source before relying on it, since work continues to land.
+
+| Step | Checklist state | Verified status |
+| :---- | :---- | :---- |
+| 1 — Spec adoption | Done | Confirmed — this spec file and the AGENTS.md/copilot-instructions rewrite are in place. |
+| 2 — Branch hygiene | Done | Confirmed — no evidence of leftover unused deps from the pre-v4.0 stack. |
+| 3 — Backend Retarget | Done | Confirmed — `src/api/client.ts` and `vite.config.ts` target `/api/v1`; `window.RLC_SCHOOL_ID` exists in `src/vite-env.d.ts` and is used at join. |
+| 4 — Socket Introduction | **Done** (corrects a prior unchecked/stale status) | See §11.2. `socket.io-client` is installed and wired end-to-end on the UI side; `useSessionPoll` is a shim, not real polling. |
+| 5 — Tier-aware Sign-in | **Done** (corrects a prior unchecked/stale status) | `src/screens/student/JoinScreen.tsx` implements all four flows: Lower Basic (roster tap, no credential), Upper Basic (screen name + 4-digit PIN), Senior Secondary/Adult (screen name + password), plus a graceful fallback. Failure UX is implemented for 401 (invalid credential, with `remaining_attempts`), 403/unknown code, 410 (session unavailable), and 423 (account locked). |
+| 6 — Localization Extraction | **Not done** | `src/i18n/index.ts` wires i18next but ships only an English resource bundle (`src/i18n/locales/en/common.json`); Mandinka/Wolof/Fula/French bundles do not exist yet. Of the screens checked, only `CeremonyScreen.tsx` calls `useTranslation()` — `JoinScreen.tsx`, `QcScreen.tsx`, and others still have hardcoded English strings. Key extraction across all student-facing screens remains outstanding. |
+| 7 — QC Rewrite | **Partially done** | Submitter anonymization is implemented — `QcScreen.tsx` never renders a submitter identity, matching the anonymized `QcToken` shape. However, the full Audio → Orthography → Semantics → Correction → Translation five-step sequence (§5.7, §7.4 S4–S7) is not implemented: the current `QcScreen.tsx` has a single combined `vote` step per token that votes on only one dimension (`orthography` for RWC, `semantics` for RSC), an audio step that is a placeholder ("Starmus not yet wired"), then correction/translation. This is a materially simpler flow than the spec's locked five-step sequence. |
+| 8 — Polish | **Partially done** | Done: PWA manifest + Workbox caching (`vite.config.ts`), IndexedDB offline queue with tests (`src/hooks/useSubmissionQueue.test.ts`, `src/runtime/offlineQueue.test.ts`), AccessoryBar IME-bypass with `ŋ` first and 44px targets (`src/components/AccessoryBar.tsx`). Not done: no UI handling found for screen-time limit signals (423 at join / `screentime:limit-reached` mid-session / 451) — the wire types exist in `src/contract.ts` but no screen renders a "Daily limit reached" state; `CeremonyScreen.tsx` shows session XP and star awards but not lifetime XP or school standing; no cross-mode (RWC + RSC) end-to-end test suite was found. |
+
+---
+
 *End of SPARXSTAR-3iAtlas-RLC-Spec-v4.0*
 *Filename: `SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md`*
 *Commit to `.github/instructions/` in all three repos.*
 *Delete every prior spec file from every location any coding agent can index.*
 *WordPress 6.5 minimum. PHP 8.2 minimum.*
+*§11 is a UI-repo-specific, code-verified status appendix — re-verify against source before trusting it; it is expected to change independently of §1–10.*

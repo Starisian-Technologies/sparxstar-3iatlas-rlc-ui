@@ -6,9 +6,12 @@ At the v4.0 target it calls the `sparxstar-3iatlas-rlc-node-engine` Node
 backend over REST (`/api/v1/`) and socket.io.
 
 > **Status — during migration:** today `src/api/client.ts` calls the Node
-> backend at `/api/v1/` via `window.RLC_API_BASE`. Real-time is still
-> polling-based; socket.io lands in the **Socket Introduction** migration step
-> (tracked in `README.md`). Don't add new polling hooks.
+> backend at `/api/v1/` via `window.RLC_API_BASE`. Real-time is socket.io-driven
+> — `useSessionSocket` connects `socket.io-client` on mount and only falls back
+> to a 5s REST poll until the socket confirms connection; `useSessionPoll` is
+> now a compatibility shim with no independent polling logic. Migration steps
+> and their verified status are tracked in `README.md` and spec §11. Don't add
+> new polling hooks or reintroduce standalone polling logic.
 
 **Read `AGENTS.md` in the repo root first.** It is the canonical contract for
 this repo: absolute rules, backend endpoints, UI rules, coding standards, file
