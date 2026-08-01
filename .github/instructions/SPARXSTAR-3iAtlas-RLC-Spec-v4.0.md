@@ -3,7 +3,7 @@
 ### Starisian Technologies / AI West Africa · Confidential · May 2026
 ### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
 
-> **Status: `canonical`** — the single source of truth; wins every conflict (see `AGENTS.md` §2).
+> **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for how it names/status-tags documents — heading and numbering vary per repo).
 >
 > **2026-07 correction note:** this revision consolidates and corrects
 > doc-vs-code drift found by direct inspection of `src/` (not by re-describing
@@ -22,7 +22,7 @@
 | This is the single authoritative specification for: |
 | `sparxstar-3iatlas-rlc-ui` · `sparxstar-3iatlas-rlc-node-engine` · `sparxstar-3iatlas-rlc` |
 | It supersedes every prior document without exception. |
-| If another document conflicts with this one — **this document wins**. `supporting` docs (see `AGENTS.md` §2) may be read but never override v4.0; `superseded` docs are ignored. |
+| If another document conflicts with this one — **this document wins**. `supporting` docs (see this repo's `AGENTS.md` for the Status-field system) may be read but never override v4.0; `superseded` docs are ignored. |
 | **Wire surface delegated:** exact endpoints, field names, encodings, and status codes live in the Integration Contract (`SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`, `supporting`). This spec governs **behavior** and does not define wire encoding; the two never claim the same fact. |
 | Do not deviate without explicit written approval from Max Barrett. |
 | If a rule blocks your approach — change the approach, not the rule. |
@@ -426,14 +426,21 @@ in **both** places — not just an environment-variable edit. Treat this as a
 real engineering prerequisite, not a config toggle, before any second consumer
 is onboarded (see §11.2).
 
-**Vote/event vocabulary reconciliation is an open question, not a decision.**
-`NODE-ADR-003` records that the engine's shipped `event_type` vocabulary is
-dotted, RLC-namespaced (`token.save`, `token.vote`, …) while the
-cited-but-never-adopted "3iAtlas Event Contract v0.1" proposal uses flat
-snake_case verbs (`word_correct`, `word_missed`, …). The ADR defers the
-per-`event_type` registry that would reconcile the two to "P3" — future work,
-not yet built. Treat the two vocabularies as coexisting and unreconciled, not
-as one having superseded the other (see §11.4).
+**Vote/event vocabulary reconciliation is an open question, not a decision —
+except for the game-results seam, ruled 2026-08-01.** `NODE-ADR-003` records
+that the engine's shipped `event_type` vocabulary is dotted, RLC-namespaced
+(`token.save`, `token.vote`, …) while the cited-but-never-adopted "3iAtlas
+Event Contract v0.1" proposal uses flat snake_case verbs (`word_correct`,
+`word_missed`, …). The ADR defers the per-`event_type` registry that would
+reconcile the two generally to "P3" — future work, not yet built. Treat the
+two vocabularies as coexisting and unreconciled for that general question,
+not as one having superseded the other (see §11.4). **Narrow exception:**
+`NODE-ADR-003`'s 2026-08-01 addendum resolves this specifically for
+game-results events (dictionary-games, WordPad, and future non-RLC
+clients) — the wire type is dotted `game.result`; each client translates
+its own vocabulary to that at its own boundary. See the ADR addendum for
+the full ruling; this does not resolve the broader contract-vs-engine
+question.
 
 **Four additional shipped-response-shape corrections**, verified directly
 against source and folded into §6.3 but not previously called out here:
