@@ -3,7 +3,7 @@
 ### Starisian Technologies / AI West Africa · Confidential · May 2026
 ### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
 
-> **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for how it names/status-tags documents — heading and numbering vary per repo).
+> **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for the Status-field system — section heading/number varies per repo).
 >
 > **2026-07 correction note:** this revision consolidates and corrects
 > doc-vs-code drift found by direct inspection of `src/` (not by re-describing
