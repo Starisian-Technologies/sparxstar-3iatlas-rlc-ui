@@ -5,7 +5,7 @@ RLC (Rapid Language Collection) Platform.
 
 > **Status: mid-migration to v4.0.** The codebase is being rewired across a
 > sequence of PRs (see phase status below). For the authoritative, verified
-> breakdown of what is actually shipped vs. still planned, see **§11 of the
+> breakdown of what is actually shipped vs. still planned, see **Appendix A of the
 > canonical spec** (`.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md`).
 > The summary below is a pointer, not a duplicate — if the two ever disagree,
 > the spec wins.
@@ -21,7 +21,7 @@ promotion, page mount) — the UI never calls WordPress directly.
 with a 5s REST poll used only as a startup/fallback safety net until the
 socket confirms connection. `useSessionPoll` is now a thin compatibility
 re-export of `useSessionSocket`, not independent polling logic. Full detail:
-spec §11.2.
+spec Appendix A.2.
 
 ## Stack
 
@@ -30,7 +30,7 @@ spec §11.2.
 - i18next + react-i18next — infrastructure is wired, but only an English
   string bundle exists today; per-screen key extraction and the Mandinka /
   Wolof / Fula / French bundles are still the **Localization Extraction**
-  migration step (spec §11.5)
+  migration step (spec Appendix A.5)
 - IndexedDB offline queue
 - PWA — installs on mobile, works offline
 - socket.io-client — installed and wired (see above); real-time is no longer
@@ -40,7 +40,7 @@ spec §11.2.
 
 `.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md` is the
 single source of truth across all three repos for architecture, data model,
-and API/socket design — including §11, the verified current-implementation
+and API/socket design — including Appendix A, the verified current-implementation
 status for this repo. The exact wire payload shapes (REST bodies, socket
 event payloads) are defined byte-for-byte in
 `.github/instructions/SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`, which is kept
@@ -96,7 +96,7 @@ calls directly.
 
 Each step is a single PR. Numbers below are sequence within the migration,
 not GitHub PR numbers (those depend on what else lands in the repo). Status
-below is a summary — see spec **§11.5** for the verified, code-checked detail
+below is a summary — see spec **Appendix A.5** for the verified, code-checked detail
 behind each checkbox.
 
 - [x] **Step 1 — Spec adoption.** Commit v4.0 spec; rewrite AGENTS.md and copilot-instructions
@@ -109,7 +109,7 @@ behind each checkbox.
 - [ ] **Step 8 — Polish.** PWA, offline queue, and AccessoryBar IME bypass are done; screen-time limit UI, ceremony lifetime XP / school standing, and cross-mode E2E tests are not
 
 Step 4 requires the Node backend running socket.io; step 4 is verified wired
-on the UI side of this repo (see spec §11.2) but end-to-end behavior still
+on the UI side of this repo (see spec Appendix A.2) but end-to-end behavior still
 depends on the backend actually running socket.io in your environment.
 
 ## Confidential · Patent Pending · Starisian Technologies

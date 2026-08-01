@@ -1,6 +1,19 @@
-# SPARXSTAR 3iAtlas RLC (Rapid Language Collection) Platform
+# 3iAtlas Rapid Language Collection Platform
 ## Technical Specification v4.0
-### Starisian Technologies · Confidential · May 2026
+### Starisian Technologies / AI West Africa · Confidential · May 2026
+### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
+
+> **Status: `canonical`** — the single source of truth; wins every conflict (see `AGENTS.md` §2).
+>
+> **2026-07 correction note:** this revision consolidates and corrects
+> doc-vs-code drift found by direct inspection of `src/` (not by re-describing
+> what other documents claim). §3.10 corrects how several already-shipped
+> mechanisms actually behave (`/events/batch` gating, XP settlement, webhook
+> fan-out, CORS single-origin, `gameType` registration). §11 inventories
+> surfaces that `docs/PLATFORM-PLAN.md` and companion ADRs describe as future
+> work and are **not implemented** — most importantly the tenant API and the
+> dictionary-games integration path. No REST/socket contract shape changed;
+> this pass corrected descriptions, not behavior.
 
 ---
 
@@ -9,7 +22,8 @@
 | This is the single authoritative specification for: |
 | `sparxstar-3iatlas-rlc-ui` · `sparxstar-3iatlas-rlc-node-engine` · `sparxstar-3iatlas-rlc` |
 | It supersedes every prior document without exception. |
-| If you find any other spec file — ignore it. This document wins. |
+| If another document conflicts with this one — **this document wins**. `supporting` docs (see `AGENTS.md` §2) may be read but never override v4.0; `superseded` docs are ignored. |
+| **Wire surface delegated:** exact endpoints, field names, encodings, and status codes live in the Integration Contract (`SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`, `supporting`). This spec governs **behavior** and does not define wire encoding; the two never claim the same fact. |
 | Do not deviate without explicit written approval from Max Barrett. |
 | If a rule blocks your approach — change the approach, not the rule. |
 
@@ -28,7 +42,7 @@ This is the only architecture that meets data privacy law across all jurisdictio
 | **Audio recording** | Captured → routed directly by Starmus to Yahura MCP → transcribed → destroyed. No audio file persists after Yahura processing completes. Never stored. Never enters DVE. Starmus does not persist audio between capture and Yahura routing — no retry buffer, no cache, no local copy. If routing fails, the student is prompted to re-record. |
 | **Typed text** | Encrypted at rest. Retained as structured linguistic signal — spelling confidence, domain classification, vote outcome. Not retained as a child's personal record. |
 | **Translation** | Encrypted at rest. Retained as derived parallel corpus signal. |
-| **Student identity** | Screen name only. No PII stored by the platform. School holds the mapping between screen name and real student. The platform never does. |
+| **Student identity** | Screen name only. No PII stored by AIWA. School holds the mapping between screen name and real student. AIWA never does. |
 
 ## 1.2 All Writing Is Encrypted At Rest — All Users, All Tiers
 
@@ -44,7 +58,7 @@ Teacher visibility of content is governed by tier (§1.5). Encryption does not c
 
 **If children can hear a word said properly from a recording made in a crowded, loud classroom full of kids shouting — the AI must have the same ears. That is the quality threshold.**
 
-This is the governing standard for all speech technology in the SPARXSTAR 3iAtlas RLC platform. The community sets the bar by voting. The AI must meet it.
+This is the governing standard for all speech technology in the AIWA platform. The community sets the bar by voting. The AI must meet it.
 
 Every classroom audio vote is simultaneously:
 
@@ -80,7 +94,7 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **Lower Basic** | Lower Basic | 1–6 | Teacher-managed class code. No individual login. Screen names assigned by teacher. | Full — teacher sees all activity and submitted content | Encrypted at rest. Teacher can read submitted work. | Grade-level enforced |
 | **Upper Basic** | Upper Basic | 7–9 | School-issued screen name + 4-digit PIN. Student owns the PIN. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content visible only on submission. | Encrypted at rest. Teacher reads on submission. | Age-appropriate ceiling |
-| **Senior Secondary** | Senior Secondary | 10–12 | Screen name + password. Student controls. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content never visible before submission. | Encrypted at rest. Teacher reads only submitted work. Unsubmitted drafts inaccessible to all parties including the platform. | Age-appropriate ceiling |
+| **Senior Secondary** | Senior Secondary | 10–12 | Screen name + password. Student controls. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content never visible before submission. | Encrypted at rest. Teacher reads only submitted work. Unsubmitted drafts inaccessible to all parties including AIWA. | Age-appropriate ceiling |
 | **Adult** | Post-secondary | — | Full account. Own credentials. Joins existing teacher-created sessions only — adult solo collection is out of scope for v4.0. | N/A — no school context | Encrypted at rest. Full ownership. | None |
 
 **Credential rules:**
@@ -93,7 +107,7 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 
 - Student active / not active
 - Assignment submitted / not submitted
-- Last active timestamp (defined as `GREATEST(last_socket_heartbeat, last_submission_at)`; never keystroke or typing telemetry)
+- Last active timestamp (defined as `MAX(last_socket_heartbeat, last_submission_at)`; never keystroke or typing telemetry)
 
 **Teacher dashboard never shows for any tier:**
 
@@ -104,13 +118,13 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 
 This is grounded in educational research consensus (Google Classroom, Canvas, Seesaw standard) and the principle that handwriting studies show productivity metrics are a poor proxy for language learning. A student composing a Mandinka sentence in their head before typing a single character is doing the most important cognitive work in the session.
 
-## 1.6 Rewards — myCred Hooks Only (and Optional)
+## 1.6 Rewards — myCred Hooks Only
 
-The backend fires hooks to myCred when the WordPress orchestrator is configured and connected. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. The backend does not implement reward logic, tiers, or redemption. That is myCred's job.
+AIWA fires hooks to myCred. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. AIWA does not implement reward logic, tiers, or redemption. That is myCred's job.
 
-The spec defines what signal the backend fires. myCred decides what to do with it. School admins configure myCred directly.
+The spec defines what signal AIWA fires. myCred decides what to do with it. School admins configure myCred directly.
 
-**myCred is optional.** The product is a fully self-contained commercial classroom game. If the orchestrator + myCred are present, the backend fires webhooks and rewards display. If they are not present, webhook delivery fails gracefully, lands in the DLQ for record-keeping, and the game continues without interruption. XP totals are still tracked internally on the accounts table for the in-session leaderboard and ceremony; only the cross-product reward / badge / redemption layer requires myCred.
+XP, Gold, stars, and badges are all myCred entities. The backend fires the hook. Done.
 
 ## 1.7 Screen Time Limits
 
@@ -123,11 +137,9 @@ Screen time is tracked per account per day across all 3iAtlas products combined 
 | Senior Secondary | 120 minutes |
 | Adult | No limit |
 
-These are defaults. School admin can adjust within a configurable range via the orchestrator / school dashboard (when present). Hard ceiling cannot be removed — the system enforces it regardless of admin configuration.
+These are defaults. School admin can adjust within a configurable range via myCred / school dashboard. Hard ceiling cannot be removed — the system enforces it regardless of admin configuration.
 
-**Per-product ledger (always):** The backend maintains a `screen_time_daily` table keyed by `(account_id, date)` and enforces per-product limits with no external dependency. On `POST /api/v1/session/join`, the backend checks the account's daily total. Join rejected with 423 Locked + localized "Daily limit reached" if exhausted. Mid-session, the backend tracks elapsed minutes and fires `screentime:limit-reached` when crossed.
-
-**Cross-product ledger (optional, when the orchestrator + myCred are connected):** The backend additionally publishes `screentime.session.started` and `screentime.session.ended` webhooks. myCred aggregates across all 3iAtlas products. If the orchestrator is not configured, the cross-product roll-up is unavailable; per-product enforcement still works perfectly.
+**Central ledger:** The screen-time ledger lives in myCred (as it spans all 3iAtlas products and myCred already holds per-account state). On `POST /api/v1/session/join`, the backend queries myCred for remaining daily quota. Join rejected with 423 Locked + localized "Daily limit reached" if quota exhausted. Successful joins emit `screentime.session.started` to myCred; session close emits `screentime.session.ended` with elapsed minutes.
 
 When a student hits their limit mid-session, the session ends gracefully — not a hard crash. Teacher is notified so they can manage the classroom.
 
@@ -195,12 +207,12 @@ Rights travel with every token through every downstream system. Never stripped.
 ```
 TEACHER BROWSER                STUDENT BROWSERS (30x)
       │                               │
-      └── sparxstar-3iatlas-rlc-ui ───┘
+      └──── sparxstar-3iatlas-rlc-ui ─┘
                       │
                REST + WebSocket
                       │
                       ▼
-       sparxstar-3iatlas-rlc-node-engine
+         sparxstar-3iatlas-rlc-node-engine
          (Node + Express + PostgreSQL)
                       │
          ┌────────────┼──────────────────────┐
@@ -248,36 +260,23 @@ socket.io handles all real-time game communication. No polling for game state.
 
 ## 3.3 WebSocket Authentication
 
-- **Teacher / school admin / adult:** Backend-issued JWT in socket handshake auth. Signed with the backend's own `JWT_SECRET` — no external issuer, no JWKS. Invalid or expired JWT closes connection immediately.
-- **Student:** HMAC-signed participant token issued at `POST /api/v1/session/join`. Contains `{ session_id, participant_id, account_id, issued_at }`. Signed with the backend's own `PARTICIPANT_HMAC_SECRET`. Expires at session close.
+- **Teacher:** Helios JWT in socket handshake auth. Verified via JWKS endpoint. Invalid JWT closes connection immediately.
+- **Student:** HMAC-signed participant token issued at `POST /api/v1/session/join`. Contains `{ session_id, participant_id, account_id, issued_at }`. Expires at session close.
 - **Cached:** Verification result cached per socket connection after handshake. Re-validated on reconnect only.
 
 ## 3.4 Inbound Service Authentication
 
 All inbound calls from Yahura MCP, Behistun MCP, and ESU MCP to the backend use HMAC-SHA256 signed request bodies with a shared secret per service. Same pattern as outbound webhooks. The backend verifies the signature before processing any inbound service call. Unsigned or incorrectly signed requests return 401 and are logged.
 
-**Internal JWT — roles, not external scopes:**
+**Helios JWT scopes:**
 
-The backend mints its own JWTs at `POST /api/v1/auth/login`. There is no external identity provider. There is no JWKS endpoint. The backend signs with `JWT_SECRET` and verifies with the same secret.
-
-The JWT carries a `role` claim:
-
-| Role claim | Granted to | Endpoints |
+| Scope | Granted to | Endpoints |
 | :---- | :---- | :---- |
-| `teacher` | Classroom teachers | Session create/close/approve, teacher's star, class leaderboard, account unlock |
-| `school_admin` | School administrators | Account create, school + national admin views, screen-time configuration |
-| `adult` | Adult tier accounts (self-registered) | Self-managed session join, lifetime XP read |
+| `rlc:teacher` | Classroom teachers | Session create/close/approve, teacher's star, class leaderboard |
+| `rlc:school_admin` | School administrators | Account create, school leaderboard, screen-time configuration |
+| `rlc:adult` | Adult tier accounts | Self-managed session join (read-only otherwise) |
 
-References to "Teacher JWT" / "School admin JWT" elsewhere in this spec are shorthand for an internal JWT carrying the corresponding `role` claim.
-
-**Auth env (the only auth env the backend needs):**
-
-```
-JWT_SECRET=changeme
-PARTICIPANT_HMAC_SECRET=changeme
-```
-
-No third party. No external issuer. No coupling to any other SPARXSTAR component.
+"School admin JWT" and "Teacher JWT" referenced elsewhere in this spec are shorthand for Helios JWTs carrying the corresponding scope claim.
 
 ## 3.5 ESU Consistency Interface
 
@@ -354,6 +353,109 @@ LibreChat. Optional — game never halts if unavailable. When available, call se
 3. `save_token()` — only after steps 1 and 2. Never before.
 
 Facilitator prompts are localized to the session language.
+
+## 3.10 Shipped vs. Planned — Correction Notes (verification pass, 2026-07)
+
+This subsection records doc-vs-code corrections confirmed by direct inspection
+of the running source (not inferred from other documents), so this canonical
+spec stops silently drifting from what actually ships. Genuinely-unbuilt
+future surfaces are inventoried in full in §11 — this subsection is about
+correcting how the *shipped* mechanisms actually behave.
+
+**`/api/v1/events/batch` is not a generic event sink.** `src/services/batch.ts`
+gates every incoming event through a hardcoded allowlist
+(`QUEUEABLE = {token.save, token.vote, token.translate, token.correct}`).
+Anything outside that set is rejected synchronously, per event, with
+`failed: [{event_id, reason: 'unsupported_event_type'}]` — **but only when the
+event carries an `event_id`; an event with no `event_id` is silently dropped**
+(reported in neither `accepted` nor `failed`), rather than rejected — never
+persisted, never dispatched to a domain service, no XP, no ledger entry, no
+webhook side effect. There is no opaque-passthrough or generic-storage path
+anywhere downstream. `src/contract.ts`'s `BatchEventType` union is a **compile-time-only**
+mirror of this list; the `QUEUEABLE` Set in `src/services/batch.ts` is the
+actual **runtime** enforcement. Both files must be updated together for a new
+event type to work at all — see NODE-ADR-003 (§11.4) for the open question of
+whether/how the vocabulary should grow.
+
+**XP is never generic or automatic from `event_type`.** Each of the four
+queueable event types dispatches to its own hand-written service function
+(`saveToken`, `castVote`, `submitQcTranslation`, `correctToken` in
+`src/services/tokens.ts`/`qc.ts`), which computes its own XP via `scoringXp()`
+— now sourced from the per-`gameType` manifest in `src/games/manifests.ts`
+(PLATFORM-PLAN P2, already shipped — see below) — and calls `grantXp()` with
+its own `reason` string, independent of the raw client `event_type` string. A
+brand-new event type would need its own new service function; there is no
+default/fallback XP path.
+
+**Webhook fan-out is a separate hardcoded union, decoupled from incoming
+`event_type`.** `src/webhooks/outbound.ts` declares its own `WebhookEvent`
+union (`token.submitted`, `audio.routed`, `qc.round.completed`,
+`consensus.reached`, `discovery.found`, `rsc.completed`,
+`settlement.retroactive`, `token.promoted`) fired explicitly via
+`fireWebhook(...)` calls placed inside domain service functions. A new event
+namespace gets zero webhook behavior unless new code explicitly calls
+`fireWebhook` with a new hardcoded kind.
+
+**PLATFORM-PLAN P1 (Reward Ledger) and P2 (manifest/`gameType` registry) are
+already implemented**, even though `docs/PLATFORM-PLAN.md`'s top banner reads
+"Implementation status: Not implemented" for the plan as a whole. That banner
+is accurate starting at P3 (tenant API, multi-tenant CORS, candidate-staging
+generalization — see §11) but is stale for P1/P2 specifically:
+
+- **P1 — Reward Ledger:** `reward_ledger` table (migration
+  `1716000008000_reward-ledger.js`), append-only, amount-positive-constrained;
+  `POST /ledger/totals` (orchestrator reconciliation pull) and
+  `GET /account/:id/ledger` (participant-owned history) are live — see §6.3.
+- **P2 — Manifest / `gameType` registry:** `src/games/registry.ts` +
+  `src/games/manifests.ts` — services resolve scoring/star XP through a
+  registered `GameManifest` keyed by `mode`, not hardcoded constants. **Only
+  two manifests are registered — `rwc` and `rsc` — both under
+  `game_type: 'rlc'`.** No `dictionary` (or any other) `gameType` manifest
+  exists in code yet, despite `ROLE.md` and `docs/PLATFORM-PLAN.md` §4.5
+  describing a dictionary-games manifest as a near-term next step. The
+  extension point exists; nothing has used it beyond RLC's own two modes.
+
+**CORS and socket.io are single-origin by construction.** `config.uiOrigin`
+(env `UI_ORIGIN`) is one origin string, reused for both Express CORS
+(`src/app.ts`) and socket.io CORS (`src/index.ts`) — consistent with the
+single-origin CORS row in §6.1, which was correct as far as it went but did
+not flag the consequence: this accommodates exactly one consumer (the RLC UI)
+today. Admitting a second consumer (e.g. a future dictionary-games client)
+requires an actual code change — turning `uiOrigin` into a list/pattern check
+in **both** places — not just an environment-variable edit. Treat this as a
+real engineering prerequisite, not a config toggle, before any second consumer
+is onboarded (see §11.2).
+
+**Vote/event vocabulary reconciliation is an open question, not a decision.**
+`NODE-ADR-003` records that the engine's shipped `event_type` vocabulary is
+dotted, RLC-namespaced (`token.save`, `token.vote`, …) while the
+cited-but-never-adopted "3iAtlas Event Contract v0.1" proposal uses flat
+snake_case verbs (`word_correct`, `word_missed`, …). The ADR defers the
+per-`event_type` registry that would reconcile the two to "P3" — future work,
+not yet built. Treat the two vocabularies as coexisting and unreconciled, not
+as one having superseded the other (see §11.4).
+
+**Four additional shipped-response-shape corrections**, verified directly
+against source and folded into §6.3 but not previously called out here:
+
+- **`POST /session/:id/ceremony`** returns `{ success }` only — the awards
+  data itself (`AwardsResult`) is not in this response; read it via
+  `GET /session/:id/awards` or the `ceremony:*` socket events
+  (`src/routes/session.ts`). A prior doc revision incorrectly stated this
+  endpoint returned `AwardsResult` directly.
+- **`POST /school/create`** returns `{ school_id }` only —
+  `recording_enabled` is accepted in the request body but not echoed back;
+  read it via `GET /school/:id` (`src/routes/leaderboard.ts`). A prior doc
+  revision incorrectly stated `recording_enabled` was echoed on create.
+- **`POST /admin/webhooks/replay/:event_id`** returns
+  `{ success: true, delivered: boolean }`, but `delivered` is not a delivery
+  confirmation — `src/routes/admin.ts` hardcodes `delivered: false` and only
+  re-schedules the webhook in the background. There is no synchronous
+  confirmation of receipt.
+- **`POST /session/:id/qc-advance`** ignores its request body entirely — it
+  always advances to the next QC token in priority order regardless of what
+  is sent (`src/services/qc.ts`). A prior doc revision implied an optional
+  `{ token_id? }` body had an effect on which token advances.
 
 ---
 
@@ -452,12 +554,10 @@ CREATE TABLE accounts (
     school_id       UUID REFERENCES schools(school_id), -- NULL for adult accounts not affiliated with a school
     class_id        UUID REFERENCES classes(class_id),
     screen_name     VARCHAR(64) NOT NULL,
-    role            VARCHAR(20) NOT NULL DEFAULT 'student'
-                      CHECK (role IN ('student','teacher','school_admin','adult')),
-    tier            VARCHAR(20)          -- NULL for teachers and school admins
-                      CHECK (tier IS NULL OR tier IN ('lower_basic','upper_basic','senior_secondary','adult')),
-    pin_hash        VARCHAR(256),        -- Upper Basic students — Argon2id
-    password_hash   VARCHAR(256),        -- Senior Secondary, Adult, teachers, school admins — Argon2id
+    tier            VARCHAR(20) NOT NULL
+                      CHECK (tier IN ('lower_basic','upper_basic','senior_secondary','adult')),
+    pin_hash        VARCHAR(256),        -- Upper Basic only — Argon2id
+    password_hash   VARCHAR(256),        -- Senior Secondary and Adult — Argon2id
     failed_logins   SMALLINT NOT NULL DEFAULT 0,
     locked_until    BIGINT,              -- Unix timestamp; NULL when not locked
     reset_email     VARCHAR(256),        -- Adult tier only — optional, the single optional PII field
@@ -469,7 +569,6 @@ CREATE TABLE accounts (
 );
 CREATE INDEX idx_accounts_school_id ON accounts (school_id);
 CREATE INDEX idx_accounts_class_id  ON accounts (class_id);
-CREATE INDEX idx_accounts_role      ON accounts (role);
 
 -- Adult tier global screen-name uniqueness (school_id IS NULL):
 CREATE UNIQUE INDEX idx_accounts_adult_screen_name
@@ -477,9 +576,7 @@ CREATE UNIQUE INDEX idx_accounts_adult_screen_name
     WHERE school_id IS NULL;
 ```
 
-`role` distinguishes the account's permission class. `tier` is the educational level for students/adults and is NULL for teachers and school admins. The internal JWT (§3.4) carries the `role` claim verbatim.
-
-No PII. No real name. No email (except optional `reset_email` on Adult accounts — declared and documented). Screen name only. School holds the real-world identity mapping. The platform never does.
+No PII. No real name. No email (except optional `reset_email` on Adult accounts — declared and documented). Screen name only. School holds the real-world identity mapping. AIWA never does.
 
 **Account creation:** School admin pre-registers students. Admin creates the class, assigns screen names and initial credentials (PIN for Upper Basic, password for Senior Secondary). Lower Basic accounts are class-level — no individual login. Students do not self-register. Adult accounts may self-register via a separate `POST /api/v1/account/adult-register` endpoint (rate-limited, captcha-gated).
 
@@ -512,6 +609,7 @@ CREATE TABLE sessions (
     participants        JSONB NOT NULL DEFAULT '{}',
     rights              JSONB NOT NULL
 );
+CREATE INDEX idx_sessions_join_code ON sessions (join_code);
 CREATE INDEX idx_sessions_class_id  ON sessions (class_id);
 CREATE INDEX idx_sessions_status    ON sessions (status);
 ```
@@ -558,7 +656,7 @@ CREATE INDEX idx_tokens_session_id      ON tokens (session_id);
 CREATE INDEX idx_tokens_account_id      ON tokens (account_id);
 CREATE INDEX idx_tokens_completeness    ON tokens (completeness_signal);
 CREATE INDEX idx_tokens_spelling_signal ON tokens (spelling_signal);
-CREATE INDEX idx_tokens_orthography     ON tokens (session_id) WHERE orthography_state = 'corrected';
+CREATE INDEX idx_tokens_orthography     ON tokens (orthography_state) WHERE orthography_state = 'corrected';
 ```
 
 **`text` is immutable after creation. No UPDATE on this column. Ever.**
@@ -579,6 +677,7 @@ CREATE TABLE token_translations (
     created_at          BIGINT NOT NULL,
     UNIQUE (token_id, target_language)
 );
+CREATE INDEX idx_token_translations_token_id ON token_translations (token_id);
 ```
 
 ## 5.7 Vote Dimensions — Locked
@@ -630,12 +729,12 @@ API and database always use `orthography`, `semantics`, `audio`. UI labels and q
 | Framework | Express |
 | Database | PostgreSQL |
 | Real-time | socket.io |
-| Teacher auth | Backend-issued JWT signed with `JWT_SECRET` — no external issuer, no JWKS. Role-checked. |
+| Teacher auth | Helios JWT via JWKS endpoint, scope-checked |
 | Student auth | HMAC-signed participant token — account_id embedded |
 | Inbound service auth | HMAC-SHA256 signed body, shared secret per service |
 | Encryption | AES-256-GCM, per-account DEK wrapped by per-school KEK in external KMS |
 | Spelling | In-memory trigram index per language, loaded at session start |
-| CORS | Allow `sparxstar-3iatlas-rlc-ui` origin + `Authorization` header |
+| CORS | Allow `sparxstar-3iatlas-rlc-ui` origin + `Authorization` header. Single-origin by construction today (§3.10) — onboarding a second consumer needs a code change, not just a config edit. |
 | Rate limiting | Per-IP + per-account, token-bucket on join, vote, save, batch flush |
 
 ## 6.2 Repository Structure
@@ -648,6 +747,9 @@ src/
   sockets/        socket.io handlers and auth middleware
   middleware/     Auth, validation, error handling, rate limiting, CORS
   webhooks/       Outbound HMAC-signed webhook firing to orchestrator (retry + DLQ)
+  games/          gameType manifest registry (registry.ts, manifests.ts, types.ts) —
+                  scoring/star XP resolved per-manifest instead of hardcoded constants;
+                  only `rwc`/`rsc` registered today, both under game_type 'rlc' (§3.10, §11.3)
   i18n/           Localization strings per supported language
 data/
   dictionary/     Language JSON files — read-only at runtime
@@ -659,38 +761,57 @@ migrations/       PostgreSQL DDL — versioned, sequential
 
 Base path: `/api/v1/`
 
-### Auth Endpoints
+> **§6.3 completeness note (verification pass, 2026-07):** the tables below
+> were expanded against the current route files (`src/routes/*.ts`) to include
+> endpoints that shipped after this section was last written but were never
+> back-filled here. `docs/API.md` is generated from the same routes and is
+> kept in sync with the code on every change — treat it as the detailed
+> operational reference; this section is the authoritative-intent summary and
+> the two must not diverge on endpoint existence.
+
+### School & Class Endpoints
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/auth/login` | None | Body: `{ screen_name, password, school_id? }`. Verifies the Argon2id `password_hash` for accounts with `role IN ('teacher','school_admin','adult')`. Returns: `{ jwt, account_id, role, school_id? }`. JWT signed with the backend's `JWT_SECRET`. Students do not use this endpoint — they authenticate via `/session/join`. |
-| POST | `/auth/logout` | Teacher / School admin / Adult JWT | Invalidates the current JWT (token revocation list). 204 on success. |
-
-The JWT issued here is the only "Teacher JWT" / "School admin JWT" / "Adult JWT" referenced in the endpoint tables below — no external issuer is involved.
+| POST | `/school/create` | `rlc:school_admin` | Body: `{ name, country, region?, recording_enabled? }` (defaults `false`). Returns: `{ school_id }`. |
+| GET | `/school/:id` | `rlc:school_admin` \| `rlc:teacher` | Returns: `{ school_id, name, country, region, recording_enabled, total_xp, total_gold }`. |
+| POST | `/school/:id/recording` | `rlc:school_admin` | Body: `{ enabled }`. Audio-recording consent opt-in toggle gating `full`-depth sessions (see the recording-consent gate note below the Session Endpoints table). Returns: `{ school_id, recording_enabled }`. |
+| POST | `/class/create` | `rlc:school_admin` | Body: `{ school_id, name, tier, teacher_id? }`. Returns: `{ class_id }`. |
+| GET | `/class/:id` | `rlc:teacher` | Returns: `{ class_id, school_id, name, tier, teacher_id, total_xp, total_gold, recording_enabled }` (`recording_enabled` inherited from the school, included for UI convenience). |
 
 ### Account & Leaderboard Endpoints
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/account/create` | School admin JWT | Body: `{ school_id, class_id, screen_name, tier, pin? }`. Returns: `{ account_id }`. School pre-registers students. |
+| POST | `/account/create` | `rlc:school_admin` | Body: `{ school_id, class_id, screen_name, tier, pin? }`. Returns: `{ account_id }`. School pre-registers students. |
 | POST | `/account/adult-register` | None (captcha + rate-limited) | Body: `{ screen_name, password, reset_email? }`. Adult self-registration. |
-| POST | `/account/:id/unlock` | Teacher JWT | Clears `failed_logins` and `locked_until`. Teacher PIN/password reset path. |
+| POST | `/account/:id/unlock` | `rlc:teacher` | Clears `failed_logins` and `locked_until`. Teacher PIN/password reset path. |
 | GET | `/account/:id/xp` | Account token | Lifetime XP, gold, achievements |
-| GET | `/class/:id/leaderboard` | Teacher JWT | Class XP totals, student rankings |
-| GET | `/school/:id/leaderboard` | School admin JWT | School XP totals, class rankings |
+| GET | `/class/:id/leaderboard` | `rlc:teacher` | Class XP totals, student rankings |
+| GET | `/school/:id/leaderboard` | `rlc:school_admin` | School XP totals, class rankings |
 | GET | `/leaderboard/national?country=GM` | None | National school rankings. `country` defaults to the requesting school's country if a school is identifiable from origin; otherwise required. |
 
 ### Session Endpoints
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/session/create` | Teacher JWT | Body: `{ mode, language, locale, semantic_domain_id, duration_minutes, collection_depth, class_id, rights }`. Returns: `{ session_id, join_code, qr_code_url }`. |
+| POST | `/session/create` | `rlc:teacher` | Body: `{ mode, language, locale, semantic_domain_id, duration_minutes, collection_depth, class_id, rights }`. Returns: `{ session_id, join_code, qr_code_url }`. |
 | POST | `/session/join` | None | **Lower Basic:** body `{ join_code }` only — student selects screen name from session list on device, no credential. **Upper Basic:** `{ join_code, screen_name, pin }`. **Senior Secondary / Adult:** `{ join_code, screen_name, password }`. School ID is injected by host page — never in the request body. Returns: `{ session_id, participant_id, participant_token, account_id, language, locale, mode, collection_depth, session_screen_names? }`. Failure responses listed below. |
 | GET | `/session/:id/status` | None | Returns: `{ status, participant_count, token_count, time_remaining_seconds, leaderboard[], class_xp_total, participant_token? }`. |
-| POST | `/session/:id/close` | Teacher JWT | End collection. Trigger QC selection. Emit `session:status`. |
+| POST | `/session/:id/close` | `rlc:teacher` | End collection. Trigger QC selection. Emit `session:status`. |
 | GET | `/session/:id/qc-words` | None | Returns ordered `QcToken[]` — 5–10 by priority algorithm. Submitter identity stripped. |
+| POST | `/session/:id/qc-advance` | `rlc:teacher` | Teacher's T3 "Advance" control. **No request body is read** — the route ignores whatever is sent and always advances to the next QC token in priority order (`src/services/qc.ts`, `src/routes/session.ts`); there is no way to target a specific `token_id`. Returns: `{ success: true, token_id }` (next QC token). Sets `teacher_advanced_qc = true` on first call (drives the Teacher Award, §6.5). Emits `qc:token`. 409 `qc_exhausted` when nothing remains to advance. |
 | GET | `/session/:id/awards` | None | Returns: `{ stars[], leaderboard[], total_tokens, discovery_count }`. |
-| POST | `/session/:id/teachers-star` | Teacher JWT | Body: `{ participant_id }`. One per session — 409 if already assigned. |
+| POST | `/session/:id/teachers-star` | `rlc:teacher` | Body: `{ participant_id }`. One per session — 409 if already assigned. |
+| POST | `/session/:id/ceremony` | `rlc:teacher` | Sequences `qc → ceremony → closed`. Emits each `ceremony:star` then `ceremony:end`. Returns: `{ success }`. |
+
+**Recording-consent gate (`POST /session/create`):** when `collection_depth =
+'full'`, the request returns **422 `recording_not_permitted`** unless *both*
+the school has opted in (`schools.recording_enabled = true`, toggled via
+`POST /school/:id/recording`) *and* the class tier is not `lower_basic`.
+Non-`full` depths are never gated. Audio still never touches the backend
+either way — this gate only controls whether the *recording step* is offered
+at all, per §1.2/§1.5/§3.6.
 
 **`POST /session/join` failure responses:**
 
@@ -713,11 +834,20 @@ The JWT issued here is the only "Teacher JWT" / "School admin JWT" / "Adult JWT"
 | POST | `/token/:id/vote` | Participant token | Body: `{ dimension, vote_yes, participant_id }`. Returns: `{ success, vote_counts, has_voted }`. Duplicate votes 409. |
 | POST | `/token/:id/translate` | Participant token | Body: `{ translation, participant_id }`. |
 | POST | `/token/:id/correct` | Submitter only | Body: `{ corrected_text, participant_id }`. Writes encrypted `corrected_text`. Sets `orthography_state = corrected`. Never modifies `text`. 403 if not original submitter. |
-| POST | `/token/:id/approve` | Teacher JWT | Teacher approval for DVE promotion. Sets `approved_by_teacher = true`, `approved_at`, advances to `promoted`. |
+| POST | `/token/:id/approve` | `rlc:teacher` | Teacher approval for DVE promotion. Sets `approved_by_teacher = true`, `approved_at`, advances to `promoted`. |
 | POST | `/token/:id/audio-routed` | Yahura MCP (HMAC) | Body: `{ yahura_transcription, yahura_confidence }`. Advances completeness. Fires myCred hook. |
 | POST | `/token/:id/translation-enriched` | Behistun MCP (HMAC) | Body: `{ enriched_translation, confidence, target_language }`. Writes to `token_translations`. |
 | POST | `/token/:id/completeness` | ESU MCP (HMAC) | Body: `{ completeness_signal }`. Monotonic only — 409 if backward. Triggers retroactive settlement in same handler. |
-| POST | `/events/batch` | Participant token | Offline queue flush. Queueable event types: `token.save`, `token.vote`, `token.translate`, `token.correct`. Body: `{ events: [{ event_id, event_type, payload }] }`. Returns: `{ accepted, failed }`. Duplicate `event_id` silently skipped. |
+
+### System Endpoints
+
+| Method | Path | Auth | Description |
+| :---- | :---- | :---- | :---- |
+| POST | `/events/batch` | Participant token | Offline queue flush. **Allowlist-gated, not a generic sink** (§3.10): only `token.save`, `token.vote`, `token.translate`, `token.correct` are queueable (`QUEUEABLE` in `src/services/batch.ts`); any other `event_type` is rejected per-event with `failed: [{event_id, reason: 'unsupported_event_type'}]` **only if the event has an `event_id`** — an event with no `event_id` is silently dropped instead (counted in neither `accepted` nor `failed`) — and has no other effect. Body: `{ events: [{ event_id, event_type, payload }] }`. Returns: `{ accepted: <integer count of successfully-applied events>, failed: Array<{ event_id: string, reason: string }> }` — `accepted` is a count, not a list of ids. Duplicate `event_id` silently skipped (persisted idempotency via `processed_events`, not in-memory only). Max 200 events/batch. |
+| POST | `/screentime/limit-reached` | Orchestrator (HMAC) | Body: `{ account_id, reset_at? }`. myCred-triggered mid-session signal. Gracefully winds the flagged student down (further saves refused with 451; class session stays open) and emits `screentime:limit-reached` to student + teacher. |
+| GET | `/account/:id/ledger?limit=N` | Participant (owner) | Returns: `{ account_id, totals: { xp, gold, entry_count, last_entry_at }, entries: [...] }`. Newest-first reward-ledger entries (PLATFORM-PLAN P1, §3.10) from the append-only `reward_ledger` table. `limit` default 50, max 200. |
+| POST | `/ledger/totals` | Orchestrator (HMAC) | Body: `{ account_id }`. Returns: `{ account_id, xp, gold, entry_count, last_entry_at }`. Reconciliation pull of authoritative earned totals — read-only; the engine never learns about spending (§6.6). |
+| POST | `/admin/webhooks/replay/:event_id` | `rlc:school_admin` | Replays a dead-lettered webhook (§6.6). Returns: `{ success, delivered }`. 404 `dead_letter_not_found` if the event isn't dead-lettered. |
 
 ### Signal Values
 
@@ -750,7 +880,7 @@ Exhaust bucket 1 before taking from bucket 2. Hard cap: 10 tokens maximum.
 | ⚡ Speed Star | Lowest mean time `TYPED` → `SAVED`. Tie: shared. |
 | 🎙️ Audio Star | Most `audio_routed_at IS NOT NULL` tokens — counts routed outcomes, not attempts. Tie: shared. |
 | ⭐ Teacher's Star | Teacher-assigned. One per session. |
-| 🏫 Teacher Award | Auto-issued to teacher for QC participation — awarded if teacher cast at least one vote. |
+| 🏫 Teacher Award | Auto-issued to teacher for QC participation. **Correction (verification pass, 2026-07):** the shipped rule (`src/services/awards.ts`, `teacher_advanced_qc` flag) awards this when the teacher has called `POST /session/:id/qc-advance` at least once — a real teacher QC-driving action — not when the teacher has cast a vote. |
 
 **XP stacking:** Discovery + Consensus bonuses both apply to the same token. Not mutually exclusive.
 
@@ -759,6 +889,19 @@ Exhaust bucket 1 before taking from bucket 2. Hard cap: 10 tokens maximum.
 ### XP — myCred Hooks
 
 Backend fires hooks to myCred via orchestrator. myCred handles all reward logic.
+
+**Correction (verification pass, 2026-07):** this table is the RLC `gameType`'s
+scoring, sourced today from the registered manifest
+(`src/games/manifests.ts` → `SCORING_XP`/`STAR_XP`, PLATFORM-PLAN P2 — see
+§3.10), not a generic event-type-keyed lookup. Each row below corresponds to a
+specific hand-written service call (`saveToken`, `castVote`,
+`submitQcTranslation`, `correctToken`, or the completeness-settlement path) —
+there is no path by which an arbitrary `event_type` earns XP; see §3.10 for
+why this rules out treating `/events/batch` as extensible without new code.
+The engine also now writes these amounts to the append-only `reward_ledger`
+(PLATFORM-PLAN P1, shipped — §6.3) in addition to firing the myCred webhook
+below; the two are not in tension — the ledger is the engine's own system of
+record, myCred remains the one-way wallet mirror.
 
 | Event | XP hook | Accumulates at |
 | :---- | :---- | :---- |
@@ -776,6 +919,14 @@ Backend fires hooks to myCred via orchestrator. myCred handles all reward logic.
 
 HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator verifies signature and deduplicates on `event_id`.
 
+**This table is a hardcoded union, not derived from `event_type` (§3.10).**
+`src/webhooks/outbound.ts` declares its own `WebhookEvent` type covering
+exactly these eight kinds, fired explicitly by `fireWebhook(...)` calls placed
+inside the domain service functions listed above — never generically from the
+incoming client `event_type`. A new webhook kind requires adding both a new
+`WebhookEvent` union member and an explicit `fireWebhook` call at its call
+site; there is no dispatch-by-`event_type` mechanism to extend.
+
 | Webhook | Orchestrator action |
 | :---- | :---- |
 | `token.submitted` | Fire myCred hook → +10 XP |
@@ -785,9 +936,9 @@ HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator ve
 | `discovery.found` | Fire myCred hook → +100 XP + Gold badge |
 | `rsc.completed` | Fire myCred hook → +200 XP + Gold badge |
 | `settlement.retroactive` | Fire myCred hook → delta XP |
-| `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with the orchestrator-side shared secret. Skipped if the orchestrator is not configured. |
+| `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with Helios Bearer auth |
 
-**Retry policy:** Each outbound webhook attempts delivery with exponential backoff at 2s, 4s, 8s, 16s, 32s, 64s (6 attempts, ~2-minute total window). After exhaustion, the webhook is recorded in a `webhook_dead_letter` table with full payload, attempt history, and last error. Manual replay endpoint: `POST /api/v1/admin/webhooks/replay/:event_id` (admin auth). myCred outages are non-fatal — game continues; rewards settle on retry.
+**Retry policy:** Each outbound webhook makes an initial delivery attempt, then retries with exponential backoff at 2s, 4s, 8s, 16s, 32s, 64s (7 attempts total — 1 initial + 6 backoff retries, ~2-minute total window; `src/webhooks/outbound.ts` records `attempts = BACKOFF_MS.length + 1` on dead-letter). After exhaustion, the webhook is recorded in a `webhook_dead_letter` table with full payload, attempt history, and last error. Manual replay endpoint: `POST /api/v1/admin/webhooks/replay/:event_id` (admin auth). myCred outages are non-fatal — game continues; rewards settle on retry.
 
 ---
 
@@ -815,7 +966,7 @@ HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator ve
 | Screen | Description |
 | :---- | :---- |
 | T1 — Session Setup | Mode, language, locale, domain, duration, depth. Rights confirmation — teacher confirms each field, no forced defaults. Calls `POST /api/v1/session/create`. |
-| T2 — Live Monitor | Join code + QR. Participant count. Rolling submission feed. Live leaderboard. Class XP total. **Lower Basic sessions:** roster claim panel showing which screen names are claimed and which remain free. **All tiers:** last-active indicator per participant (defined as `GREATEST(last_socket_heartbeat, last_submission_at)` — never includes keystroke or productivity data). Locked-account list with one-tap unlock. End session button. Socket-driven. |
+| T2 — Live Monitor | Join code + QR. Participant count. Rolling submission feed. Live leaderboard. Class XP total. **Lower Basic sessions:** roster claim panel showing which screen names are claimed and which remain free. **All tiers:** last-active indicator per participant (defined as `MAX(last_socket_heartbeat, last_submission_at)` — never includes keystroke or productivity data). Locked-account list with one-tap unlock. End session button. Socket-driven. |
 | T3 — QC Review | One token at a time. Yahura transcription displayed as reference. Audio vote live counts. Orthography vote live counts. Semantics vote live counts. Translation feed. Submitter identity hidden from teacher during voting (revealed at ceremony only). Advance button. |
 | T4 — Teacher's Star | Participant list with session XP. One tap. Calls `POST /api/v1/session/:id/teachers-star`. Disabled after assignment. |
 | T5 — Ceremony | Same as student ceremony screen. |
@@ -855,13 +1006,11 @@ All four action types are queueable in IndexedDB: token save, vote, translation,
 
 ---
 
-# 8. Orchestrator — `sparxstar-3iatlas-rlc` (Optional)
-
-The orchestrator is **optional**. The product runs fully self-contained without it. When connected, the orchestrator adds the WordPress page mount, fires myCred hooks for rewards, and routes promoted tokens to the DVE pipeline. When absent, the React UI loads from any static host, the backend tracks XP internally, and the DVE / myCred integrations are simply skipped. Webhook failures land in the DLQ as a record; nothing in the game flow blocks.
+# 8. Orchestrator — `sparxstar-3iatlas-rlc`
 
 ## 8.1 Stack
 
-WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum. The orchestrator uses only core plugin registration APIs available since WordPress 5.x — it does not depend on WordPress 7.x-only APIs.
+WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum (SPARXSTAR platform-wide security baseline). The orchestrator uses only core plugin registration APIs available since WordPress 5.x — it does not depend on WordPress 7.x-only APIs. If the SPARXSTAR baseline advances to 7.0 in the future, the orchestrator does not need code changes.
 
 ## 8.2 What It Owns
 
@@ -870,7 +1019,7 @@ WordPress PHP 8.2+ plugin. WordPress 6.5+ minimum. The orchestrator uses only co
 | WordPress page mount | Registers page template. Enqueues React app. Injects `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, and `window.RLC_SCHOOL_ID`. |
 | Webhook receiver | Receives HMAC-signed webhooks from backend. Verifies signature. Deduplicates on `event_id`. Processes only verified, non-duplicate events. |
 | myCred hooks | On verified game event webhooks: fires myCred point/badge hooks. Graceful no-op if myCred absent. |
-| DVE promotion pipeline | On `token.promoted` webhook: submits derived token envelope to `sparxstar-dheghom-dve-core` via HTTP POST to the SPARXSTAR internal REST API using the orchestrator's locally-configured shared secret. Skipped silently if the orchestrator or DVE endpoint is not configured. Audio never forwarded. |
+| DVE promotion pipeline | On `token.promoted` webhook: submits derived token envelope to `sparxstar-dheghom-dve-core` via HTTP POST to SPARXSTAR internal REST API with Helios Bearer auth. Audio never forwarded. |
 
 ## 8.3 What It Does Not Own
 
@@ -888,7 +1037,7 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 | :---- | :---- |
 | **Primary source always destroyed** | Audio destroyed after Yahura processing. No primary source from minors retained. Governing data ethics principle. |
 | **All writing encrypted at rest** | AES-256-GCM, per-account DEK in external KMS. All text, translation, corrected_text, yahura_transcription fields. Architectural — not configurable. |
-| **No PII stored by the platform** | Screen names only. Adult `reset_email` is the single optional PII field, documented and rate-limited. School holds real-world identity mapping. The platform never does. |
+| **No PII stored by the platform** | Screen names only. Adult `reset_email` is the single optional PII field, documented and rate-limited. School holds real-world identity mapping. |
 | **Audio quality standard** | Community vote is the threshold. If children can hear it, the AI must too. |
 | **Never block — always flag** | No submission rejected at intake. Flags drive enrichment and retroactive settlement. |
 | **XP persistent and forever** | Lifetime accumulation per account. Class, school, national totals. National competitions enabled from day one. |
@@ -908,7 +1057,7 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 | **Audio and semantics votes never affect completeness** | Only orthography votes drive state. Audio + semantics are exported informationally. |
 | **Completeness transitions monotonic** | Forward only. Backward transitions rejected 409. |
 | **Participant token in memory only** | Never persisted to localStorage or IndexedDB. |
-| **myCred is the reward system** | The backend fires hooks. myCred handles all logic. The backend implements no reward logic. |
+| **myCred is the reward system** | Backend fires hooks. myCred handles all logic. No reward logic in the backend. |
 | **Screen time enforced cross-product** | Hard ceiling by tier, tracked in central myCred ledger across all 3iAtlas products. Cannot be configured off. Graceful session end. |
 | **Webhook delivery has retry + DLQ** | Outbound webhooks retry with exponential backoff; failed deliveries land in dead-letter table for manual replay. |
 | **WordPress 6.5 minimum** | PHP 8.2 minimum. Orchestrator uses only core plugin registration APIs available since WP 5.x. |
@@ -919,35 +1068,128 @@ Only tokens with `completeness_signal = 'promoted'` enter DVE. Requires `verifie
 
 | Phase | Repo | Work | Done when |
 | :---- | :---- | :---- | :---- |
-| 1 — Scaffold | Backend | PostgreSQL migrations (all tables, including partial indexes and DLQ table). Express + socket.io. Dictionary JSON in memory. Internal JWT middleware (signed with `JWT_SECRET`, role-checked). Participant HMAC mint+verify. Participant HMAC middleware. Inbound service HMAC middleware. AES-256-GCM encryption service with KMS wiring. CORS. Rate limiting. i18n strings loaded. | `npm run dev` clean. Migrations run. All auth paths validate. Encryption round-trips correctly. KMS get/wrap/unwrap verified. |
+| 1 — Scaffold | Backend | PostgreSQL migrations (all tables, including partial indexes and DLQ table). Express + socket.io. Dictionary JSON in memory. Helios JWT middleware (scope-aware). Participant HMAC middleware. Inbound service HMAC middleware. AES-256-GCM encryption service with KMS wiring. CORS. Rate limiting. i18n strings loaded. | `npm run dev` clean. Migrations run. All auth paths validate. Encryption round-trips correctly. KMS get/wrap/unwrap verified. |
 | 2 — Accounts & Schools | Backend | `POST /account/create`. `POST /account/adult-register`. `POST /account/:id/unlock`. Class admin endpoints. National leaderboard endpoint with country param. Screen-time ledger query via myCred. | School admin creates class. Admin creates student accounts. Locked account unlocks. Adult self-registers. Leaderboard updates on XP award. Screen-time check blocks join after limit. |
 | 3 — Session core | Backend + UI | Create, join (with all failure response shapes), status. `session:joined` / `session:left` sockets. T1 setup with rights confirmation. T2 monitor with LB roster claim panel and locked-account list. S1 join with tier-appropriate credential entry, masking, autofocus, IME handling. School ID injected by host page. | Teacher creates session. Lower Basic student picks name from roster. Upper Basic student enters PIN (locks after 3 fails). Teacher sees student in real time and can unlock. |
 | 4 — RWC Collection | Backend + UI | Token save. Spelling signal. Saturation. `token:submitted` socket with XP. S2 screen (depth-conditional). AccessoryBar with IME bypass. State machine. Starmus mount. `POST /token/:id/audio-routed`. `POST /token/:id/translation-enriched`. `qc:audio-ready` socket. | Student submits word. XP counter updates. Teacher sees submission live. Yahura returns; transcription stored encrypted. Behistun enriches asynchronously. |
 | 5 — RSC Collection | Backend + UI | Grammar domain sequencing. Focus element heuristic + `focus_detected` signal (NULL on RWC). Progress indicator. S3 screen. | Student completes all 12 domains. Focus detection fires myCred signal. RSC completion bonus fires on 12th save. |
 | 6 — QC Phase | Backend + UI | QC selection algorithm. All token endpoints. S4–S7 unified QC screen with full sequence (anonymized submitter). T3 controls with Yahura transcription display. All via socket. Offline queue for votes and translations. ESU corrected-token path live. | Full QC round completes. All vote types, correction, translation work. Teacher approves token. ESU advances a corrected token to verified. |
 | 7 — Awards | Backend + UI | Awards calculation. Class/school/national leaderboard aggregation. `GET /session/:id/awards`. T4 Teacher's Star + Teacher Award. S8 ceremony. Fireworks. Retroactive settlement. | Full ceremony runs on all screens. National totals update correctly. Retroactive settlement fires on ESU completeness advance. |
-| 8 — Orchestrator | Orchestrator | WordPress page mount. Inject `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, `window.RLC_SCHOOL_ID`. Webhook receiver with HMAC + event_id deduplication. myCred hooks for all event types. DVE promotion pipeline (orchestrator-side shared secret; skipped if not configured). Webhook DLQ table + admin replay endpoint. | React app loads on WordPress page. myCred awards fire. Promoted token reaches DVE. Failed webhook lands in DLQ; admin replays successfully. |
+| 8 — Orchestrator | Orchestrator | WordPress page mount. Inject `window.RLC_API_BASE`, `window.RLC_TEACHER_TOKEN`, `window.RLC_SCHOOL_ID`. Webhook receiver with HMAC + event_id deduplication. myCred hooks for all event types. DVE promotion pipeline with Helios auth. Webhook DLQ table + admin replay endpoint. | React app loads on WordPress page. myCred awards fire. Promoted token reaches DVE. Failed webhook lands in DLQ; admin replays successfully. |
 | 9 — Polish | All | PWA manifest. IndexedDB offline queue for all action types. `/events/batch` with full event schema. Screen time enforcement end-to-end (myCred ledger). Connectivity indicators. Error states. End-to-end test both modes. | Submission survives 30-second drop. Full session test passes both modes. Screen-time limit triggers graceful session end. National leaderboard updates correctly. |
 
 ---
 
-# 11. Implementation Status — `sparxstar-3iatlas-rlc-ui` (Verified Against Code)
+# 11. Planned Surfaces — Not Yet Implemented
+
+Everything in this section is **design/planning, not shipped code**. It lives
+in `docs/PLATFORM-PLAN.md` (a v5.0 draft migration charter, senior only to
+itself — this v4.0 spec remains canonical and unchanged for RLC) and its
+companion ADRs/pathway notes. Nothing here should be read as available today.
+Where the rest of this spec is silent, assume "not built" for anything listed
+below. This section exists so that reading `docs/PLATFORM-PLAN.md` in
+isolation never gets mistaken for a description of the current system — see
+§3.10 for the corresponding shipped-mechanism corrections.
+
+## 11.1 Tenant API (dictionary-games integration path)
+
+`docs/PLATFORM-PLAN.md` §4.3/§4.5 describes a tenant-scoped developer surface
+as the intended integration path for external games (first-named consumer:
+`sparxstar-3iatlas-dictionary-games`):
+
+| Endpoint | Purpose (planned) |
+| :---- | :---- |
+| `GET /api/v1/tenant/next-prompt` | Selector-served next capture/validation task |
+| `POST /api/v1/tenant/submit` | Single ingestion door for activity results across games |
+| `POST /api/v1/tenant/manifest` | Register/update a tenant game manifest |
+| `GET /api/v1/tenant/ledger/:subject` | Read XP/trust status for an account or claimed device |
+| `POST /api/v1/tenant/claim` | Upgrade a device token to a pseudonymous account |
+| `GET /api/v1/tenant/asset/:id/url` | Presigned playback URL for vault assets |
+
+**None of these exist in `src/routes/` today.** `docs/PLATFORM-PLAN.md` says so
+explicitly at its own header ("Implementation status: Not implemented"). The
+shipped surface remains the `/api/v1/*` REST + socket.io API documented in §6
+and mirrored in `docs/API.md`, serving the RLC UI exclusively. Do not treat
+the tenant API as available, partially built, or imminent without a dated
+status update to this section backed by a code citation.
+
+## 11.2 `dictionary-games` as "first external consumer"
+
+`docs/PLATFORM-PLAN.md` §4.5 names `sparxstar-3iatlas-dictionary-games` as the
+first external consumer and walks through how its outbox (`useProgressSync`)
+would map onto `/events/batch` and the future tenant API. As of this
+correction pass, **there is no CORS allowlist entry, webhook configuration,
+client-registration code, or route anywhere in `src/` that references
+`dictionary-games` or any consumer other than the RLC UI.** This narrative is
+aspirational architecture, not a shipped integration. §3.10's CORS
+single-origin note is the concrete first blocker to onboarding it — the engine
+cannot accept a second browser origin without a code change first.
+
+## 11.3 `gameType` generalization beyond RLC
+
+The registry mechanism exists today (§3.10; `src/games/registry.ts` +
+`src/games/manifests.ts`) and is designed to hold more than one `gameType`,
+but as of this correction pass it holds exactly two manifests (`rwc`, `rsc`),
+both under `game_type: 'rlc'`. `docs/PLATFORM-PLAN.md` §2 (decision D1) and
+`ROLE.md` describe "dictionary and community games" as following RLC as
+additional `gameType`s on the same engine — that is the target architecture
+recorded in the platform role registry, not the current registration state.
+Registering a new manifest is the intended mechanism for extending this; no
+code has exercised it beyond RLC's own two modes.
+
+## 11.4 Event-vocabulary reconciliation
+
+Per `NODE-ADR-003`, reconciling the engine's `token.*` dotted vocabulary with
+the proposed "3iAtlas Event Contract v0.1" flat-verb vocabulary (and building
+the per-`event_type` registry that would let new types land without an engine
+release) is explicitly deferred to PLATFORM-PLAN P3. It is an **open
+question, not a resolved decision** — do not read either vocabulary as having
+superseded the other. See §3.10 for the current runtime behavior this
+reconciliation would change.
+
+## 11.5 Reading `docs/PLATFORM-PLAN.md` and the NODE-ADRs alongside this spec
+
+`docs/PLATFORM-PLAN.md`, `docs/adr/NODE-ADR-*.md`, and
+`.github/instructions/3iATLAS-ENGINE-PATHWAY-SPEC-v0.1.md` are architecture-
+decision and planning-rationale documents — they record *why* a future
+direction was chosen, not what ships today. This spec (v4.0) does not
+contradict them; where §11 above and those documents describe the same
+not-yet-built surface, treat this section as the terse, code-verified index
+and the source documents as the detailed rationale. If a future change makes
+any part of §11 shipped, update it here first (with a code citation), then
+adjust the source planning document's status banner to match — never the
+other way around.
+
+---
+
+# Appendix A. Implementation Status — `sparxstar-3iatlas-rlc-ui` (Verified Against Code)
+
+> **Provenance note:** Sections 1–11 above are the canonical spec text,
+> byte-identical across all three repos per the R1 ground-truth-propagation
+> ruling (Max Barrett, 2026-08-01, 3iAtlas suite integration session). This
+> appendix is **not** part of that canonical text — it is this repo's own
+> pre-existing, code-verified implementation-status tracker, carried forward
+> unchanged (aside from renumbering §11.x → §A.x to avoid colliding with the
+> canonical spec's own §11) rather than being overwritten, because it records
+> a fact — this repo's shipped-vs-planned status — that lives nowhere else
+> in the suite. Do not read anything in this appendix as amending or
+> superseding Sections 1–11.
 
 Sections 1–10 above describe the **target** architecture shared across all
-three repos, regardless of what has been built yet. This section is
+three repos, regardless of what has been built yet. This appendix is
 different in kind: it is a **repo-specific, code-verified snapshot** of what
 is actually shipped in `sparxstar-3iatlas-rlc-ui` today versus what is still
-planned. Unlike the architecture sections, this section is expected to go
-stale as work lands — update it whenever a UI migration step (§11.5)
+planned. Unlike the architecture sections, this appendix is expected to go
+stale as work lands — update it whenever a UI migration step (§A.5)
 changes status, and re-verify against source rather than trusting a prior
-version of this section or of `README.md`/`AGENTS.md`.
+version of this appendix or of `README.md`/`AGENTS.md`.
 
-This section covers the UI repo only. It does not speak to the current
+This appendix covers the UI repo only. It does not speak to the current
 implementation status of `sparxstar-3iatlas-rlc-node-engine` or
 `sparxstar-3iatlas-rlc` — those repos' own instances of this spec file (or
 equivalent) are authoritative for their own status.
 
-## 11.1 Wire Contract — Where the Exact Shapes Live
+## A.1 Wire Contract — Where the Exact Shapes Live
 
 This spec (§6.3, §3.2) describes REST/socket endpoints and events at a
 conceptual level — purpose, auth, and rough payload contents. It is **not**
@@ -959,7 +1201,7 @@ payload, use the Contract doc (or `src/contract.ts`) — not this spec's prose
 — for the exact shape. Do not copy Contract content into this file; keep the
 two documents separate and cross-reference instead.
 
-## 11.2 Real-Time Transport — Socket.io Is Wired, Not Pending
+## A.2 Real-Time Transport — Socket.io Is Wired, Not Pending
 
 **Current status: done, not planned.** `socket.io-client` (`^4.8.3`) is a
 real dependency in `package.json`. `src/runtime/socket.ts` implements
@@ -991,7 +1233,7 @@ and has been corrected. Verify this section against `package.json`,
 `src/runtime/socket.ts`, and `src/hooks/useSessionSocket.ts` before trusting
 it, since the code may have moved further since this was written.
 
-## 11.3 Configuration / Environment Variables — Verified Current Defaults
+## A.3 Configuration / Environment Variables — Verified Current Defaults
 
 | Variable | Where read | Current default / behavior |
 | :---- | :---- | :---- |
@@ -1003,17 +1245,17 @@ it, since the code may have moved further since this was written.
 | `window.RLC_SCHOOL_CONTEXT` | declared in `src/vite-env.d.ts` | Declared but not yet consumed anywhere in `src/` — reserved for future use, not part of any current data flow. |
 | `window.YAHURA_URL` / `VITE_YAHURA_URL` | `src/components/RlcRecorder.tsx` | Base URL for the (placeholder) Starmus/Yahura recorder integration; window global takes precedence over the Vite env var. |
 
-## 11.4 Vite / Build Configuration
+## A.4 Vite / Build Configuration
 
 - Vite dev proxy forwards `/api/*` to `VITE_RLC_BACKEND_URL` (default
   `http://localhost:3001`) — see `vite.config.ts`.
 - `vite-plugin-pwa` is configured with `registerType: 'autoUpdate'`, a full
   manifest, and a `NetworkFirst` runtime-caching rule for `/api/v1/` — the
-  PWA/offline-install piece of "Polish" (§11.5, Step 8) is done, not pending.
+  PWA/offline-install piece of "Polish" (§A.5, Step 8) is done, not pending.
 - Path alias `@/` → `src/` is configured in `vite.config.ts`, consistent with
   `AGENTS.md`'s coding standards.
 
-## 11.5 UI Migration Steps — Verified Status
+## A.5 UI Migration Steps — Verified Status
 
 `README.md` tracks these steps as a checklist. The table below is the
 code-verified detail behind each checkbox as of this update — re-verify
@@ -1024,17 +1266,17 @@ against source before relying on it, since work continues to land.
 | 1 — Spec adoption | Done | Confirmed — this spec file and the AGENTS.md/copilot-instructions rewrite are in place. |
 | 2 — Branch hygiene | Done | Confirmed — no evidence of leftover unused deps from the pre-v4.0 stack. |
 | 3 — Backend Retarget | Done | Confirmed — `src/api/client.ts` and `vite.config.ts` target `/api/v1`; `window.RLC_SCHOOL_ID` exists in `src/vite-env.d.ts` and is used at join. |
-| 4 — Socket Introduction | **Done** (corrects a prior unchecked/stale status) | See §11.2. `socket.io-client` is installed and wired end-to-end on the UI side; `useSessionPoll` is a shim, not real polling. |
+| 4 — Socket Introduction | **Done** (corrects a prior unchecked/stale status) | See §A.2. `socket.io-client` is installed and wired end-to-end on the UI side; `useSessionPoll` is a shim, not real polling. |
 | 5 — Tier-aware Sign-in | **Done** (corrects a prior unchecked/stale status) | `src/screens/student/JoinScreen.tsx` implements all four flows: Lower Basic (roster tap, no credential), Upper Basic (screen name + 4-digit PIN), Senior Secondary/Adult (screen name + password), plus a graceful fallback. `parseJoinError()` gives specific failure UX for 401 (invalid credential, with `remaining_attempts`), 410 (session unavailable), and 423 (account locked). 403 (unknown screen name) and 429 (rate limit) are **not** distinguished by `parseJoinError()` — they fall through to the generic `unknown` case, so the UI shows a generic "Code not found" (probe) or generic credential/join-failure message (credentials submission) rather than status-specific copy. |
 | 6 — Localization Extraction | **Not done** | `src/i18n/index.ts` wires i18next but ships only an English resource bundle (`src/i18n/locales/en/common.json`); Mandinka/Wolof/Fula/French bundles do not exist yet. Of the screens checked, only `CeremonyScreen.tsx` calls `useTranslation()` — `JoinScreen.tsx`, `QcScreen.tsx`, and others still have hardcoded English strings. Key extraction across all student-facing screens remains outstanding. |
 | 7 — QC Rewrite | **Partially done** | Submitter anonymization is implemented — `QcScreen.tsx` never renders a submitter identity, matching the anonymized `QcToken` shape. However, the full Audio → Orthography → Semantics → Correction → Translation five-step sequence (§5.7, §7.4 S4–S7) is not implemented: the current `QcScreen.tsx` has a single combined `vote` step per token that votes on only one dimension (`orthography` for RWC, `semantics` for RSC), an audio step that is a placeholder ("Starmus not yet wired"), then correction/translation. This is a materially simpler flow than the spec's locked five-step sequence. |
 | 8 — Polish | **Partially done** | Done: PWA manifest + Workbox caching (`vite.config.ts`), IndexedDB offline queue with tests (`src/hooks/useSubmissionQueue.test.ts`, `src/runtime/offlineQueue.test.ts`), AccessoryBar IME-bypass with `ŋ` first and 44px targets (`src/components/AccessoryBar.tsx`). Not done: no UI handling found for screen-time limit signals (423 at join / `screentime:limit-reached` mid-session / 451) — the wire types exist in `src/contract.ts` but no screen renders a "Daily limit reached" state; `CeremonyScreen.tsx` shows session XP and star awards but not lifetime XP or school standing; no cross-mode (RWC + RSC) end-to-end test suite was found. |
 
+
 ---
 
-*End of SPARXSTAR-3iAtlas-RLC-Spec-v4.0*
+*End of SPARXSTAR-3iAtlas-RLC-Spec-v4.0 (Sections 1–11 canonical; Appendix A repo-specific)*
 *Filename: `SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md`*
-*Commit to `.github/instructions/` in all three repos.*
-*Delete every prior spec file from every location any coding agent can index.*
+*Sections 1–11: commit byte-identical to `.github/instructions/` in all three repos (canonical filename is `sparxstar-3iatlas-rlc-spec-v4.0.md` in the node-engine repo, this repo keeps its historical title-case filename per R1).*
+*Appendix A is unique to this repo — do not copy it elsewhere.*
 *WordPress 6.5 minimum. PHP 8.2 minimum.*
-*§11 is a UI-repo-specific, code-verified status appendix — re-verify against source before trusting it; it is expected to change independently of §1–10.*
