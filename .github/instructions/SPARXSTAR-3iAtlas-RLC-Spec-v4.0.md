@@ -363,38 +363,45 @@ future surfaces are inventoried in full in §11 — this subsection is about
 correcting how the *shipped* mechanisms actually behave.
 
 **`/api/v1/events/batch` is not a generic event sink.** `src/services/batch.ts`
-gates every incoming event through a hardcoded allowlist
-(`QUEUEABLE = {token.save, token.vote, token.translate, token.correct}`).
-Anything outside that set is rejected synchronously, per event, with
-`failed: [{event_id, reason: 'unsupported_event_type'}]` — **but only when the
-event carries an `event_id`; an event with no `event_id` is silently dropped**
-(reported in neither `accepted` nor `failed`), rather than rejected — never
-persisted, never dispatched to a domain service, no XP, no ledger entry, no
-webhook side effect. There is no opaque-passthrough or generic-storage path
+gates every incoming event through a hardcoded allowlist. **Corrected
+2026-08 (GAME-SERVICE-INTAKE-SPEC-v1.0 Phase 2):** the allowlist is now
+`QUEUEABLE = {token.save, token.vote, token.translate, token.correct,
+game.result}` — `game.result` landed as a fifth, additive entry; the
+original four are unchanged. Anything outside that set is rejected
+synchronously, per event, with `failed: [{event_id, reason:
+'unsupported_event_type'}]` — **but only when the event carries an
+`event_id`; an event with no `event_id` is silently dropped** (reported in
+neither `accepted` nor `failed`), rather than rejected — never persisted,
+never dispatched to a domain service, no XP, no ledger entry, no webhook
+side effect. There is no opaque-passthrough or generic-storage path
 anywhere downstream. `src/contract.ts`'s `BatchEventType` union is a **compile-time-only**
 mirror of this list; the `QUEUEABLE` Set in `src/services/batch.ts` is the
-actual **runtime** enforcement. Both files must be updated together for a new
-event type to work at all — see NODE-ADR-003 (§11.4) for the open question of
-whether/how the vocabulary should grow.
+actual **runtime** enforcement. Both files were updated together for
+`game.result`, proving the "both or neither" rule this note originally
+stated as a requirement — see NODE-ADR-003's 2026-08-01 addendum (§11.4)
+for the vocabulary ruling this landed against.
 
-**XP is never generic or automatic from `event_type`.** Each of the four
-queueable event types dispatches to its own hand-written service function
-(`saveToken`, `castVote`, `submitQcTranslation`, `correctToken` in
-`src/services/tokens.ts`/`qc.ts`), which computes its own XP via `scoringXp()`
-— now sourced from the per-`gameType` manifest in `src/games/manifests.ts`
-(PLATFORM-PLAN P2, already shipped — see below) — and calls `grantXp()` with
-its own `reason` string, independent of the raw client `event_type` string. A
-brand-new event type would need its own new service function; there is no
-default/fallback XP path.
+**XP is never generic or automatic from `event_type`.** Each queueable event
+type dispatches to its own hand-written service function (`saveToken`,
+`castVote`, `submitQcTranslation`, `correctToken` in
+`src/services/tokens.ts`/`qc.ts`; **`settleGameResult` in the new
+`src/services/gameResults.ts`, added 2026-08**), which computes its own XP —
+the four RLC event types via `scoringXp()` sourced from the per-`gameType`
+manifest in `src/games/manifests.ts` (PLATFORM-PLAN P2, already shipped —
+see below); `game.result` via the new, separate `scoringXpForOutcome()`
+(see the P2 manifest note below for why it's a different registry) — and
+calls `grantXp()` with its own `reason` string, independent of the raw
+client `event_type` string. A brand-new event type still needs its own new
+service function; there is no default/fallback XP path.
 
 **Webhook fan-out is a separate hardcoded union, decoupled from incoming
 `event_type`.** `src/webhooks/outbound.ts` declares its own `WebhookEvent`
 union (`token.submitted`, `audio.routed`, `qc.round.completed`,
 `consensus.reached`, `discovery.found`, `rsc.completed`,
-`settlement.retroactive`, `token.promoted`) fired explicitly via
-`fireWebhook(...)` calls placed inside domain service functions. A new event
-namespace gets zero webhook behavior unless new code explicitly calls
-`fireWebhook` with a new hardcoded kind.
+`settlement.retroactive`, `token.promoted`, and **`game.result.settled`,
+added 2026-08**) fired explicitly via `fireWebhook(...)` calls placed inside
+domain service functions. A new event namespace gets zero webhook behavior
+unless new code explicitly calls `fireWebhook` with a new hardcoded kind.
 
 **PLATFORM-PLAN P1 (Reward Ledger) and P2 (manifest/`gameType` registry) are
 already implemented**, even though `docs/PLATFORM-PLAN.md`'s top banner reads
@@ -408,23 +415,36 @@ generalization — see §11) but is stale for P1/P2 specifically:
   `GET /account/:id/ledger` (participant-owned history) are live — see §6.3.
 - **P2 — Manifest / `gameType` registry:** `src/games/registry.ts` +
   `src/games/manifests.ts` — services resolve scoring/star XP through a
-  registered `GameManifest` keyed by `mode`, not hardcoded constants. **Only
-  two manifests are registered — `rwc` and `rsc` — both under
-  `game_type: 'rlc'`.** No `dictionary` (or any other) `gameType` manifest
-  exists in code yet, despite `ROLE.md` and `docs/PLATFORM-PLAN.md` §4.5
-  describing a dictionary-games manifest as a near-term next step. The
-  extension point exists; nothing has used it beyond RLC's own two modes.
+  registered `GameManifest` keyed by `mode`, not hardcoded constants. Two
+  manifests are registered this way — `rwc` and `rsc` — both under
+  `game_type: 'rlc'`; that part is unchanged since the 2026-07 pass.
+  **Corrected 2026-08 (GAME-SERVICE-INTAKE-SPEC-v1.0 Phase 2):** a
+  `dictionary_quiz` manifest now exists, but **not** as a third `GameManifest`
+  under this same `mode`-keyed registry — `Mode` (`src/types.ts`) is a closed
+  `'rwc' | 'rsc'` union and widening it would ripple into RLC's session/token
+  DB constraints, and `GameManifest.tunables` (saturation threshold, consensus
+  ratio, QC cap) has no meaning for a quiz. Instead `src/games/registry.ts`
+  now also carries a second, `game_type`-keyed map (`GameResultManifest`,
+  `registerGameResultManifest`/`gameResultManifestFor`/`scoringXpForOutcome`)
+  for the generic `game.result` seam — deliberately separate from, and not a
+  generalization of, the `mode`-keyed `GameManifest` machinery, which is
+  unchanged. `game_type: 'dictionary_quiz'` and its XP amounts are working
+  defaults (see `src/games/manifests.ts`'s own comment) pending the
+  dictionary repo's own naming decision and a real myCred/product
+  configuration pass — not settled product numbers.
 
-**CORS and socket.io are single-origin by construction.** `config.uiOrigin`
-(env `UI_ORIGIN`) is one origin string, reused for both Express CORS
-(`src/app.ts`) and socket.io CORS (`src/index.ts`) — consistent with the
-single-origin CORS row in §6.1, which was correct as far as it went but did
-not flag the consequence: this accommodates exactly one consumer (the RLC UI)
-today. Admitting a second consumer (e.g. a future dictionary-games client)
-requires an actual code change — turning `uiOrigin` into a list/pattern check
-in **both** places — not just an environment-variable edit. Treat this as a
-real engineering prerequisite, not a config toggle, before any second consumer
-is onboarded (see §11.2).
+**CORS and socket.io are multi-origin as of 2026-08 (GAME-SERVICE-INTAKE-SPEC-v1.0
+Phase 2) — corrects the single-origin note above.** `config.uiOrigins`
+(`src/config/index.ts`) is now an allowlist: `UI_ORIGINS` (comma-separated)
+is additive to the existing `UI_ORIGIN`, applied in **both** Express CORS
+(`src/app.ts`) and socket.io CORS (`src/index.ts`) together, per the "both or
+neither" rule this correction pass established. Single-origin deployments
+that never set `UI_ORIGINS` are unaffected — `uiOrigins` degrades to a
+one-element array identical to the prior `uiOrigin` string behavior. **What
+this does not mean:** no operator has actually added a second origin (e.g.
+dictionary-games' deployed URL) to any real deployment's `UI_ORIGINS` yet —
+this is the code capability landing, not a live second consumer (see §11.2,
+also corrected).
 
 **Vote/event vocabulary reconciliation is an open question, not a decision —
 except for the game-results seam, ruled 2026-08-01.** `NODE-ADR-003` records
@@ -741,7 +761,7 @@ API and database always use `orthography`, `semantics`, `audio`. UI labels and q
 | Inbound service auth | HMAC-SHA256 signed body, shared secret per service |
 | Encryption | AES-256-GCM, per-account DEK wrapped by per-school KEK in external KMS |
 | Spelling | In-memory trigram index per language, loaded at session start |
-| CORS | Allow `sparxstar-3iatlas-rlc-ui` origin + `Authorization` header. Single-origin by construction today (§3.10) — onboarding a second consumer needs a code change, not just a config edit. |
+| CORS | Allow an origin allowlist (`UI_ORIGIN` + optional comma-separated `UI_ORIGINS`) + `Authorization` header. Multi-origin as of 2026-08 (§3.10) — onboarding a second consumer is now a config edit (`UI_ORIGINS`), not a code change. |
 | Rate limiting | Per-IP + per-account, token-bucket on join, vote, save, batch flush |
 
 ## 6.2 Repository Structure
@@ -756,7 +776,8 @@ src/
   webhooks/       Outbound HMAC-signed webhook firing to orchestrator (retry + DLQ)
   games/          gameType manifest registry (registry.ts, manifests.ts, types.ts) —
                   scoring/star XP resolved per-manifest instead of hardcoded constants;
-                  only `rwc`/`rsc` registered today, both under game_type 'rlc' (§3.10, §11.3)
+                  `rwc`/`rsc` under game_type 'rlc' (mode-keyed) plus `dictionary_quiz`
+                  under a separate game_type-keyed registry as of 2026-08 (§3.10, §11.3)
   i18n/           Localization strings per supported language
 data/
   dictionary/     Language JSON files — read-only at runtime
@@ -850,7 +871,7 @@ at all, per §1.2/§1.5/§3.6.
 
 | Method | Path | Auth | Description |
 | :---- | :---- | :---- | :---- |
-| POST | `/events/batch` | Participant token | Offline queue flush. **Allowlist-gated, not a generic sink** (§3.10): only `token.save`, `token.vote`, `token.translate`, `token.correct` are queueable (`QUEUEABLE` in `src/services/batch.ts`); any other `event_type` is rejected per-event with `failed: [{event_id, reason: 'unsupported_event_type'}]` **only if the event has an `event_id`** — an event with no `event_id` is silently dropped instead (counted in neither `accepted` nor `failed`) — and has no other effect. Body: `{ events: [{ event_id, event_type, payload }] }`. Returns: `{ accepted: <integer count of successfully-applied events>, failed: Array<{ event_id: string, reason: string }> }` — `accepted` is a count, not a list of ids. Duplicate `event_id` silently skipped (persisted idempotency via `processed_events`, not in-memory only). Max 200 events/batch. |
+| POST | `/events/batch` | Participant token | Offline queue flush. **Allowlist-gated, not a generic sink** (§3.10): `token.save`, `token.vote`, `token.translate`, `token.correct`, `game.result` (added 2026-08, GAME-SERVICE-INTAKE-SPEC-v1.0) are queueable (`QUEUEABLE` in `src/services/batch.ts`); any other `event_type` is rejected per-event with `failed: [{event_id, reason: 'unsupported_event_type'}]` **only if the event has an `event_id`** — an event with no `event_id` is silently dropped instead (counted in neither `accepted` nor `failed`) — and has no other effect. Body: `{ events: [{ event_id, event_type, payload }] }`. Returns: `{ accepted: <integer count of successfully-applied events>, failed: Array<{ event_id: string, reason: string }> }` — `accepted` is a count, not a list of ids. Duplicate `event_id` silently skipped (persisted idempotency via `processed_events`, not in-memory only). Max 200 events/batch. |
 | POST | `/screentime/limit-reached` | Orchestrator (HMAC) | Body: `{ account_id, reset_at? }`. myCred-triggered mid-session signal. Gracefully winds the flagged student down (further saves refused with 451; class session stays open) and emits `screentime:limit-reached` to student + teacher. |
 | GET | `/account/:id/ledger?limit=N` | Participant (owner) | Returns: `{ account_id, totals: { xp, gold, entry_count, last_entry_at }, entries: [...] }`. Newest-first reward-ledger entries (PLATFORM-PLAN P1, §3.10) from the append-only `reward_ledger` table. `limit` default 50, max 200. |
 | POST | `/ledger/totals` | Orchestrator (HMAC) | Body: `{ account_id }`. Returns: `{ account_id, xp, gold, entry_count, last_entry_at }`. Reconciliation pull of authoritative earned totals — read-only; the engine never learns about spending (§6.6). |
@@ -944,6 +965,7 @@ site; there is no dispatch-by-`event_type` mechanism to extend.
 | `rsc.completed` | Fire myCred hook → +200 XP + Gold badge |
 | `settlement.retroactive` | Fire myCred hook → delta XP |
 | `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with Helios Bearer auth |
+| `game.result.settled` | Fire myCred hook → XP per the settling `game_type`'s manifest (added 2026-08, GAME-SERVICE-INTAKE-SPEC-v1.0) |
 
 **Retry policy:** Each outbound webhook makes an initial delivery attempt, then retries with exponential backoff at 2s, 4s, 8s, 16s, 32s, 64s (7 attempts total — 1 initial + 6 backoff retries, ~2-minute total window; `src/webhooks/outbound.ts` records `attempts = BACKOFF_MS.length + 1` on dead-letter). After exhaustion, the webhook is recorded in a `webhook_dead_letter` table with full payload, attempt history, and last error. Manual replay endpoint: `POST /api/v1/admin/webhooks/replay/:event_id` (admin auth). myCred outages are non-fatal — game continues; rewards settle on retry.
 
@@ -1124,25 +1146,38 @@ status update to this section backed by a code citation.
 
 `docs/PLATFORM-PLAN.md` §4.5 names `sparxstar-3iatlas-dictionary-games` as the
 first external consumer and walks through how its outbox (`useProgressSync`)
-would map onto `/events/batch` and the future tenant API. As of this
-correction pass, **there is no CORS allowlist entry, webhook configuration,
-client-registration code, or route anywhere in `src/` that references
-`dictionary-games` or any consumer other than the RLC UI.** This narrative is
-aspirational architecture, not a shipped integration. §3.10's CORS
-single-origin note is the concrete first blocker to onboarding it — the engine
-cannot accept a second browser origin without a code change first.
+would map onto `/events/batch` and the future tenant API. **Corrected 2026-08
+(GAME-SERVICE-INTAKE-SPEC-v1.0 Phase 2):** the engine side of this is now
+real — `game.result` is accepted at `/events/batch` under a registered
+`dictionary_quiz` manifest, and `UI_ORIGINS` (§3.10) can admit a second
+browser origin without further code changes. What is still **not** shipped:
+no webhook configuration, client-registration code, or route anywhere in
+`src/` references `dictionary-games` by name; no operator has added its
+actual origin to any real deployment's `UI_ORIGINS`; and — this is the part
+that actually blocks an end-to-end integration — **`dictionary-games`'
+client code does not emit `game.result` at all.** Its outbox
+(`useProgressSync.js`) only ever posts `aiwa_game_*`-prefixed markers to its
+own IndexedDB queue and `syncNow()` is a deliberate no-op (intake spec §5,
+OQ-3: it also can't populate a conformant `GameResultEvent` today — no
+`attempts`/`time_ms`, and only `correct` outcomes are ever recorded). That
+client-side work (Phase 3) has not started. Treat this as "the engine can
+accept it, nothing sends it yet" — not a shipped integration.
 
 ## 11.3 `gameType` generalization beyond RLC
 
 The registry mechanism exists today (§3.10; `src/games/registry.ts` +
-`src/games/manifests.ts`) and is designed to hold more than one `gameType`,
-but as of this correction pass it holds exactly two manifests (`rwc`, `rsc`),
-both under `game_type: 'rlc'`. `docs/PLATFORM-PLAN.md` §2 (decision D1) and
-`ROLE.md` describe "dictionary and community games" as following RLC as
-additional `gameType`s on the same engine — that is the target architecture
-recorded in the platform role registry, not the current registration state.
-Registering a new manifest is the intended mechanism for extending this; no
-code has exercised it beyond RLC's own two modes.
+`src/games/manifests.ts`) and is designed to hold more than one `gameType`.
+The RLC (`mode`-keyed `GameManifest`) side is unchanged since the 2026-07
+pass: exactly two manifests (`rwc`, `rsc`), both under `game_type: 'rlc'`.
+**Corrected 2026-08 (GAME-SERVICE-INTAKE-SPEC-v1.0 Phase 2):** a third
+`game_type` — `dictionary_quiz` — is now registered, but through a second,
+`game_type`-keyed registry added alongside the original one, not as a third
+entry in the `mode`-keyed one (§3.10's P2 note explains why: `Mode` is a
+closed union and `GameManifest.tunables` is RLC-specific). `docs/PLATFORM-PLAN.md`
+§2 (decision D1) and `ROLE.md` describe "dictionary and community games"
+following RLC as additional `gameType`s on the same engine — that target
+architecture is now partially realized in code, via a deliberately separate
+mechanism rather than a literal extension of the `mode`-keyed one.
 
 ## 11.4 Event-vocabulary reconciliation
 
