@@ -3,6 +3,15 @@
 
 ---
 
+> **Status: `supporting`** — v4.0 (canonical) delegates the **wire surface**
+> to this document; this document is the sole home for wire shape and does
+> **not** govern behavior (see this repo's `AGENTS.md` for the Status-field
+> system). Added 2026-08-01 (R1 status-header audit) — this repo's copy of
+> this file was missing the Status field its node-engine twin already
+> carries.
+
+---
+
 | ⚠️ COORDINATION DOCUMENT — ALL THREE REPOS |
 | :---- |
 | This document defines the exact contract between `sparxstar-3iatlas-rlc-ui` and `sparxstar-3iatlas-rlc-node-engine`. |

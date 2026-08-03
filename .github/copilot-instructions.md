@@ -10,7 +10,9 @@ backend over REST (`/api/v1/`) and socket.io.
 > — `useSessionSocket` connects `socket.io-client` on mount and only falls back
 > to a 5s REST poll until the socket confirms connection; `useSessionPoll` is
 > now a compatibility shim with no independent polling logic. Migration steps
-> and their verified status are tracked in `README.md` and spec §11. Don't add
+> and their verified status are tracked in `README.md` and spec Appendix A
+> (§11 of the spec is now the canonical cross-repo "Planned Surfaces"
+> section; UI-repo status tracking lives in Appendix A). Don't add
 > new polling hooks or reintroduce standalone polling logic.
 
 **Read `AGENTS.md` in the repo root first.** It is the canonical contract for

@@ -17,8 +17,11 @@ It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 > back to a 5s REST poll only until the socket confirms connection.
 > `useSessionPoll` is now just a compatibility re-export of
 > `useSessionSocket`; it has no independent polling logic. Migration steps
-> and their verified status are tracked in `README.md` and spec §11. Treat the
-> rules below as the contract every new line of code is written *toward*; do
+> and their verified status are tracked in `README.md` and spec Appendix A
+> (§11 of the spec is now the canonical "Planned Surfaces" section shared
+> across all three repos — UI-repo migration-step tracking moved to
+> Appendix A as part of the R1 canonical-spec propagation, 2026-08-01).
+> Treat the rules below as the contract every new line of code is written *toward*; do
 > not introduce new polling hooks or reintroduce standalone polling logic in
 > `useSessionPoll`.
 
