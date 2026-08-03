@@ -949,7 +949,7 @@ HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator ve
 
 **This table is a hardcoded union, not derived from `event_type` (§3.10).**
 `src/webhooks/outbound.ts` declares its own `WebhookEvent` type covering
-exactly these eight kinds, fired explicitly by `fireWebhook(...)` calls placed
+exactly these nine kinds, fired explicitly by `fireWebhook(...)` calls placed
 inside the domain service functions listed above — never generically from the
 incoming client `event_type`. A new webhook kind requires adding both a new
 `WebhookEvent` union member and an explicit `fireWebhook` call at its call
