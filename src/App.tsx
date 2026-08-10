@@ -18,13 +18,7 @@ import type { AppState, CollectionMode, CollectionDepth, SessionStatus } from '@
 function hasTeacherToken(): boolean {
   if (typeof window === 'undefined') return false
   const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
-  if (typeof fromWindow === 'string' && fromWindow.length > 0) return true
-  try {
-    const stored = localStorage.getItem('RLC_TEACHER_TOKEN')
-    return typeof stored === 'string' && stored.length > 0
-  } catch {
-    return false
-  }
+  return typeof fromWindow === 'string' && fromWindow.length > 0
 }
 
 const TEACHER_RUNTIME_PARTICIPANT_ID = 'teacher'
@@ -91,8 +85,7 @@ export function App() {
           <h1 style={{ fontSize: 22, marginBottom: 8 }}>Teacher token missing</h1>
           <p style={{ opacity: 0.8, marginBottom: 16, lineHeight: 1.5 }}>
             This app needs a teacher token from the orchestrator (`window.RLC_TEACHER_TOKEN`).
-            Open this page from the WordPress orchestrator, or set the token in localStorage
-            (`RLC_TEACHER_TOKEN`) for local dev.
+            Open this page from the WordPress orchestrator so it can inject the token in memory.
           </p>
           <button
             type="button"

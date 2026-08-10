@@ -52,13 +52,7 @@ function participantAuthHeaders(): Record<string, string> {
 function getTeacherToken(): string | null {
   if (typeof window === 'undefined') return null
   const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
-  if (typeof fromWindow === 'string' && fromWindow.length > 0) return fromWindow
-  try {
-    const fromStorage = window.localStorage.getItem('RLC_TEACHER_TOKEN')
-    return fromStorage && fromStorage.length > 0 ? fromStorage : null
-  } catch {
-    return null
-  }
+  return typeof fromWindow === 'string' && fromWindow.length > 0 ? fromWindow : null
 }
 
 function teacherAuthHeaders(): Record<string, string> {
