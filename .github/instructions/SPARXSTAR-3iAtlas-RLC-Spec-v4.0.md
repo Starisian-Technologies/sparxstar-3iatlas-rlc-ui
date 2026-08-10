@@ -1,7 +1,7 @@
 # 3iAtlas Rapid Language Collection Platform
 ## Technical Specification v4.0
 ### Starisian Technologies / AI West Africa · Confidential · May 2026
-### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
+### Corrected 2026-08-10 — UI repository deployment-readiness review (see Appendix A)
 
 > **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for the Status-field system — section heading/number varies per repo).
 >
@@ -1279,21 +1279,24 @@ it, since the code may have moved further since this was written.
 
 | Variable | Where read | Current default / behavior |
 | :---- | :---- | :---- |
-| `VITE_RLC_BACKEND_URL` | `.env.local` (build-time), read by `vite.config.ts` dev proxy and `src/runtime/socket.ts` dev fallback | **`http://localhost:3001`** (see `.env.example`, `vite.config.ts`). This corrects a prior README claim of `http://localhost:3000`. Caveat: `vite.config.ts` exports a plain config object (not the `(env) => defineConfig(...)` function form) and reads `process.env.VITE_RLC_BACKEND_URL` directly without calling Vite's `loadEnv()` — so Vite does **not** automatically populate that from `.env`/`.env.local` for the dev-proxy `target`. `src/runtime/socket.ts` reads it via `import.meta.env`, which Vite *does* populate from `.env.local` for client code, so that path works as documented; but the dev-proxy value in `.env.local` only takes effect if `VITE_RLC_BACKEND_URL` is also exported in the shell running `vite`, or if `vite.config.ts` is updated to call `loadEnv(mode, process.cwd(), '')` and use the result. |
+| `VITE_RLC_BACKEND_URL` | `.env.local` (build-time), read by `vite.config.ts` dev proxy and `src/runtime/socket.ts` dev fallback | **`http://localhost:3001`** by default (see `.env.example`, `vite.config.ts`). `vite.config.ts` now calls `loadEnv(mode, process.cwd(), '')`, so `.env`/`.env.local` values configure the dev proxy as well as client code without a duplicate shell export. |
 | `window.RLC_API_BASE` | `src/api/client.ts`, `src/runtime/socket.ts` | Injected by the orchestrator host page in production; falls back to `/api/v1` (REST) when unset. Socket URL is derived from its origin when present. |
-| `window.RLC_TEACHER_TOKEN` | `src/api/client.ts`, teacher screens | Backend-issued JWT for teacher sessions. In production this is injected onto `window` by the WordPress orchestrator host page — the app never writes it to storage itself. **Local development only** (no host page present): set it directly via `localStorage.setItem('RLC_TEACHER_TOKEN', '<dev-jwt>')` (see `.env.example` lines 17-20 for the exact snippet). This `localStorage` fallback is a dev convenience, not a production auth pattern — `localStorage` is long-lived and readable by any script on the page (XSS-exposed), so it must not be used to persist teacher JWTs outside local development. |
+| `window.RLC_TEACHER_TOKEN` | `src/api/client.ts`, teacher screens | Backend-issued JWT injected by the orchestrator and held in page memory only. The former `localStorage` development fallback was removed on 2026-08-10 because a long-lived, script-readable JWT is an avoidable credential-disclosure risk. Local development may assign the global in the current page from the browser console; a reload clears it. |
 | `window.RLC_SCHOOL_ID` | join flow | Required for `/session/join`; injected by the orchestrator host page, never entered by the student. |
-| `window.RLC_CLASS_ID` | `src/screens/teacher/SetupScreen.tsx` | Read from `window`, with a `localStorage` fallback in dev. |
+| `window.RLC_CLASS_ID` | `src/screens/teacher/SetupScreen.tsx` | Read from `window`, with a non-secret `localStorage` fallback in development. |
 | `window.RLC_SCHOOL_CONTEXT` | declared in `src/vite-env.d.ts` | Declared but not yet consumed anywhere in `src/` — reserved for future use, not part of any current data flow. |
 | `window.YAHURA_URL` / `VITE_YAHURA_URL` | `src/components/RlcRecorder.tsx` | Base URL for the (placeholder) Starmus/Yahura recorder integration; window global takes precedence over the Vite env var. |
 
 ## A.4 Vite / Build Configuration
 
 - Vite dev proxy forwards `/api/*` to `VITE_RLC_BACKEND_URL` (default
-  `http://localhost:3001`) — see `vite.config.ts`.
-- `vite-plugin-pwa` is configured with `registerType: 'autoUpdate'`, a full
-  manifest, and a `NetworkFirst` runtime-caching rule for `/api/v1/` — the
-  PWA/offline-install piece of "Polish" (§A.5, Step 8) is done, not pending.
+  `http://localhost:3001`) — see `vite.config.ts`. The config now uses
+  `loadEnv`, so `.env.local` controls the proxy without a duplicate shell export.
+- `vite-plugin-pwa` is configured with `registerType: 'autoUpdate'` and a
+  manifest whose icon exists (`public/icon.svg`). API responses are deliberately
+  not runtime-cached: authenticated/session responses must not survive in a
+  shared browser cache. Offline writes remain the responsibility of the
+  explicit IndexedDB action queue.
 - Path alias `@/` → `src/` is configured in `vite.config.ts`, consistent with
   `AGENTS.md`'s coding standards.
 
@@ -1312,7 +1315,101 @@ against source before relying on it, since work continues to land.
 | 5 — Tier-aware Sign-in | **Done** (corrects a prior unchecked/stale status) | `src/screens/student/JoinScreen.tsx` implements all four flows: Lower Basic (roster tap, no credential), Upper Basic (screen name + 4-digit PIN), Senior Secondary/Adult (screen name + password), plus a graceful fallback. `parseJoinError()` gives specific failure UX for 401 (invalid credential, with `remaining_attempts`), 410 (session unavailable), and 423 (account locked). 403 (unknown screen name) and 429 (rate limit) are **not** distinguished by `parseJoinError()` — they fall through to the generic `unknown` case, so the UI shows a generic "Code not found" (probe) or generic credential/join-failure message (credentials submission) rather than status-specific copy. |
 | 6 — Localization Extraction | **Not done** | `src/i18n/index.ts` wires i18next but ships only an English resource bundle (`src/i18n/locales/en/common.json`); Mandinka/Wolof/Fula/French bundles do not exist yet. Of the screens checked, only `CeremonyScreen.tsx` calls `useTranslation()` — `JoinScreen.tsx`, `QcScreen.tsx`, and others still have hardcoded English strings. Key extraction across all student-facing screens remains outstanding. |
 | 7 — QC Rewrite | **Partially done** | Submitter anonymization is implemented — `QcScreen.tsx` never renders a submitter identity, matching the anonymized `QcToken` shape. However, the full Audio → Orthography → Semantics → Correction → Translation five-step sequence (§5.7, §7.4 S4–S7) is not implemented: the current `QcScreen.tsx` has a single combined `vote` step per token that votes on only one dimension (`orthography` for RWC, `semantics` for RSC), an audio step that is a placeholder ("Starmus not yet wired"), then correction/translation. This is a materially simpler flow than the spec's locked five-step sequence. |
-| 8 — Polish | **Partially done** | Done: PWA manifest + Workbox caching (`vite.config.ts`), IndexedDB offline queue with tests (`src/hooks/useSubmissionQueue.test.ts`, `src/runtime/offlineQueue.test.ts`), AccessoryBar IME-bypass with `ŋ` first and 44px targets (`src/components/AccessoryBar.tsx`). Not done: no UI handling found for screen-time limit signals (423 at join / `screentime:limit-reached` mid-session / 451) — the wire types exist in `src/contract.ts` but no screen renders a "Daily limit reached" state; `CeremonyScreen.tsx` shows session XP and star awards but not lifetime XP or school standing; no cross-mode (RWC + RSC) end-to-end test suite was found. |
+| 8 — Polish | **Partially done** | Done: installable PWA manifest, IndexedDB offline queue with unit tests (`src/hooks/useSubmissionQueue.test.ts`, `src/runtime/offlineQueue.test.ts`), AccessoryBar IME-bypass with `ŋ` first and 44px targets (`src/components/AccessoryBar.tsx`). API caching was removed as unsafe for shared devices. Not done: no UI handling found for screen-time limit signals (423 at join / `screentime:limit-reached` mid-session / 451); `CeremonyScreen.tsx` lacks lifetime XP and school standing; no cross-mode end-to-end test suite exists. |
+
+## A.6 Complete UI Repository Review — 2026-08-10
+
+The review covered every tracked source/configuration file (the complete
+`rg --files` inventory), all 53 TypeScript/TSX modules under `src/`, the locale
+bundle, styles, public assets, package manifests, TypeScript/ESLint/Vite
+configuration, README/security guidance, wire contract, and this specification.
+It also executed the type checker, linter, unit tests, and production build. An
+`npm audit` dependency scan was attempted but the registry returned HTTP 403,
+so dependency-advisory results remain unverified. This is a static code/configuration review; it does
+not claim backend integration, browser, accessibility, load, or penetration
+testing that has not been run.
+
+**Current runnable surface.** The app has an in-component state router in
+`App.tsx`; teacher setup/monitor/QC and student join/lobby/RWC/RSC/QC/ceremony
+surfaces exist. REST is centralized in `src/api/client.ts`; participant auth is
+module-memory-only. Session updates use socket.io with REST fallback. The PWA
+build, action queue, theme system, and English i18next bootstrap compile.
+
+**Known functional gaps confirmed in code.** In addition to A.5:
+
+- The teacher flow is not localized and the majority of student-facing screens
+  still contain hardcoded English. Four required launch locale bundles are absent.
+- Join does not provide distinct localized UX for every required 403, 429, and
+  451 response. There are no dedicated account-lock or screen-time screens.
+- T2 lacks the specified Lower Basic claim roster, locked-account list/unlock
+  action, full live leaderboard/class total, and defined last-active view.
+- Collection depth/state behavior and the Starmus integration remain incomplete;
+  `RlcRecorder` is a placeholder and must never be replaced with UI-owned audio.
+- QC does not implement the locked audio → orthography → semantics → conditional
+  correction → translation sequence or one-vote-per-dimension lifecycle.
+- T4 is not a separate screen, and ceremony lacks lifetime XP and school standing.
+- Offline coverage is limited to the implemented action queue; reconnect and
+  cross-screen recovery have no browser-level verification.
+- The `smoke` package script names `src/contract.smoke.test.ts`, which is absent,
+  so the documented backend contract smoke check is not currently runnable.
+- There is no CI workflow or end-to-end suite. Unit coverage is two files/nine
+  tests and does not exercise screens, API error behavior, sockets, PWA upgrades,
+  accessibility, or the 360px/mobile interaction contract.
+- File/module comments are inconsistent. Public utilities are often documented,
+  but many components, hooks, constants, and callbacks are not. Completing the
+  requested file/class/function/global documentation pass remains work; comments
+  must explain contracts and invariants rather than restate code.
+
+## A.7 Work Required for a Working, Deployable UI
+
+The repository can produce static assets, but it is **not product-deployable**
+until the following exit criteria are met:
+
+1. **Contract and journeys:** implement every missing A.6 screen/state and verify
+   RWC and RSC journeys against a version-pinned node-engine, including all join
+   failures, status transitions, reconnects, duplicate votes, and offline replay.
+2. **Localization/accessibility:** extract every user-facing string; supply and
+   review `mn`, `wo`, `ff`, and `fr`; add language selection/session-locale
+   behavior; run automated accessibility checks plus keyboard, screen-reader,
+   reduced-motion, focus, contrast, and 360px touch-target testing.
+3. **Authentication/security:** keep both JWT classes out of persistent storage;
+   validate and normalize the injected API/socket origins; configure the host
+   with TLS, a restrictive CSP and `frame-ancestors`, HSTS, Referrer-Policy,
+   Permissions-Policy, and MIME sniffing protection; ensure source maps and host
+   globals expose no secrets. Perform dependency, SAST, and browser security
+   review in CI. API/service-worker caches must never retain authenticated data.
+4. **PWA/offline:** design a service-worker update UX, test install/update/offline
+   behavior on target browsers, define queue retention/expiry and user-visible
+   failure recovery, and confirm logout/session-end purges all participant data.
+5. **Configuration/deployment:** document concrete development/staging/production
+   values and backend CORS/socket allowlists; make the orchestrator inject
+   `RLC_API_BASE`, teacher token, school/class context before app mount; deploy
+   `dist/` as immutable hashed assets with `index.html` uncached; add SPA fallback
+   only where the mount architecture requires it; add health/rollback/runbook and
+   environment promotion procedures.
+6. **Quality gates:** create the missing contract smoke test, screen/component
+   tests, and Playwright-style E2E coverage for all tiers and both modes. Add CI
+   that runs clean install, typecheck, lint, unit tests, smoke tests against an
+   ephemeral compatible backend, production build, audit/SAST, and artifact
+   validation. Pin the supported Node/npm toolchain and enforce lockfile installs.
+7. **Operations/privacy:** add consent/privacy acceptance tests, telemetry that
+   contains no plaintext submissions/tokens, error monitoring with redaction,
+   availability/performance budgets, backup/incident ownership at system level,
+   and a shared-device data-removal verification checklist.
+8. **Documentation/code quality:** complete meaningful documentation for every
+   file, exported type, component, hook, function, callback with non-obvious
+   behavior, and global/constant; normalize formatting; then keep this appendix
+   synchronized with evidence from CI and deployed integration tests.
+
+## A.8 Findings Fixed During This Review
+
+- Removed all teacher-JWT `localStorage` fallbacks from the API client and
+  teacher socket consumers; corrected `.env.example`, which also incorrectly
+  referenced a nonexistent UI `/auth/login` flow.
+- Removed service-worker runtime caching of `/api/v1` responses to prevent stale
+  state and cross-user disclosure on classroom/shared devices.
+- Replaced two nonexistent PNG PWA manifest icons with the tracked SVG icon.
+- Made the Vite proxy load `.env.local` through Vite's supported `loadEnv` path.
 
 
 ---
