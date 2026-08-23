@@ -1,71 +1,84 @@
 # SPARXSTAR 3iAtlas RLC — Integration Contract v1.0
 ### Starisian Technologies · Confidential · May 2026
 
----
-
-> **Status: `supporting`** — v4.0 (canonical) delegates the **wire surface**
-> to this document; this document is the sole home for wire shape and does
-> **not** govern behavior (see this repo's `AGENTS.md` for the Status-field
-> system). Added 2026-08-01 (R1 status-header audit) — this repo's copy of
-> this file was missing the Status field its node-engine twin already
-> carries.
+> **Status: `supporting`** — v4.0 (canonical) delegates the **wire surface** to this document; this document is the sole home for wire shape and does **not** govern behavior (see `AGENTS.md` §2).
 
 ---
-
 | ⚠️ COORDINATION DOCUMENT — ALL THREE REPOS |
 | :---- |
 | This document defines the exact contract between `sparxstar-3iatlas-rlc-ui` and `sparxstar-3iatlas-rlc-node-engine`. |
 | Neither repo invents anything not defined here. |
 | If something is missing — raise it. Do not assume. |
-| If this document and the spec conflict — this document wins for implementation detail. |
-
+| Scope: v4.0 delegates **wire shape** (endpoints, field names, encodings, status codes) to this document; this is its single home and it does **not** govern behavior. Behavioral questions resolve to v4.0. If v4.0 ever re-specifies a wire field, that is a bug — move it here. |
 ---
-
 # 1. Transport
-
 - **REST base URL:** `http://localhost:3001/api/v1` in development. `VITE_RLC_BACKEND_URL` in production.
 - **WebSocket URL:** same host as REST. `VITE_RLC_BACKEND_URL` with `ws://` or `wss://` scheme.
 - **All REST requests:** `Content-Type: application/json`
 - **All responses:** `Content-Type: application/json`
-
 ---
-
 # 2. Authentication Headers
-
 ## 2.1 Teacher Requests
-
 ```
-Authorization: Bearer <helios_jwt>
+Authorization: Bearer <identity_token>
 ```
+**Amended 2026-08-23 (NODE-ADR-007).** This is an **Identity Service** token, not
+a Helios JWT — the label above previously read `<helios_jwt>`. Helios is no longer
+an authentication authority for RLC.
 
-JWT is injected by the WordPress orchestrator as `window.RLC_TEACHER_TOKEN`. The UI reads it from the window object. The UI never calls a login endpoint. There is no `POST /auth/login`.
+The token proves **identity only**. It carries no scope and cannot: the Identity
+Service is forbidden from minting an authorization claim, and the engine refuses
+any token presenting one. Teacher and school-admin power comes from RLC's own
+`rlc_authorizations` rows, resolved server-side per request, and scoped to the
+school of the resource being acted on.
 
+The host page supplies it at runtime as `window.RLC_TEACHER_TOKEN`, held in page
+memory only and never persisted. That host page is **not** a WordPress plugin —
+spec §8's orchestrator is superseded — and a reusable teacher token must never be
+committed to page configuration or source. The UI still never calls a login
+endpoint; there is no `POST /auth/login`.
 ## 2.2 Participant Requests
-
 ```
 Authorization: Participant <participant_token>
 ```
-
 Required on **every** participant REST call. Not optional. Not just audio upload.
-
 `participant_id` is **never** included in request bodies. The backend derives it from the bearer token.
-
 ## 2.3 Inbound Service Calls (Yahura, Behistun, ESU)
-
 ```
 X-HMAC-Signature: <sha256_hmac>
 X-Event-ID: <uuid>
 ```
+## 2.4 Adult Identity Suite Token (Release 1)
+```
+Authorization: Bearer <identity_suite_token>
+```
+Issued by the 3iAtlas Identity Service (`https://id.sparxstar.com`). Carries
+account/tier facts and **no scope** — see spec v4.0 §3.11 for the governing
+statement of what it may do, and `docs/adr/NODE-ADR-006`.
 
+**Amended 2026-08-23 (NODE-ADR-007).** §2.1 and this section now name the **same
+issuer**: there is one authentication authority for the whole platform. What
+distinguishes a teacher request from an adult solo one is therefore no longer the
+issuer but the **authorization** behind it — a teacher route additionally requires
+an `rlc_authorizations` grant for the school in question, which an adult solo
+player simply does not hold. A token alone can never reach a teacher route.
+
+Valid on exactly three surfaces, all listed in §3 with `Auth: Bearer
+<identity_suite_token>`:
+
+| Endpoint | Note |
+| :---- | :---- |
+| `POST /events/batch` | `game.result` events **only** — every `token.*` type is rejected on this credential |
+| `GET /account/:id/xp` | owner-scoped: path id must equal the token's account |
+| `GET /account/:id/ledger` | owner-scoped, as above |
+
+Adult tier only. A valid `lower_basic` / `upper_basic` / `senior_secondary`
+token is refused.
 ---
-
 # 3. REST Endpoints — Exact Contracts
-
 ## 3.1 School & Class
-
 ### POST /school/create
 Auth: `rlc:school_admin`
-
 Request:
 ```typescript
 {
@@ -74,17 +87,14 @@ Request:
   region?: string;
 }
 ```
-
 Response 201:
 ```typescript
 {
   school_id: string; // UUID
 }
 ```
-
 ### POST /class/create
 Auth: `rlc:school_admin`
-
 Request:
 ```typescript
 {
@@ -94,17 +104,14 @@ Request:
   teacher_id?: string;
 }
 ```
-
 Response 201:
 ```typescript
 {
   class_id: string; // UUID
 }
 ```
-
 ### GET /school/:id
 Auth: `rlc:school_admin` or `rlc:teacher`
-
 Response 200:
 ```typescript
 {
@@ -117,10 +124,8 @@ Response 200:
   total_gold: number;
 }
 ```
-
 ### GET /class/:id
 Auth: `rlc:teacher`
-
 Response 200:
 ```typescript
 {
@@ -134,12 +139,9 @@ Response 200:
   recording_enabled: boolean; // inherited from school — included here for UI convenience
 }
 ```
-
 ## 3.2 Accounts
-
 ### POST /account/create
 Auth: `rlc:school_admin`
-
 Request:
 ```typescript
 {
@@ -151,17 +153,14 @@ Request:
   password?: string;  // Senior Secondary, Adult — min 12 chars
 }
 ```
-
 Response 201:
 ```typescript
 {
   account_id: string;
 }
 ```
-
 ### POST /account/adult-register
 Auth: None (rate-limited, captcha-gated)
-
 Request:
 ```typescript
 {
@@ -170,29 +169,24 @@ Request:
   reset_email?: string;
 }
 ```
-
 Response 201:
 ```typescript
 {
   account_id: string;
 }
 ```
-
 ### POST /account/:id/unlock
 Auth: `rlc:teacher`
-
 Request: empty body
-
 Response 200:
 ```typescript
 {
   success: true;
 }
 ```
-
 ### GET /account/:id/xp
-Auth: `Participant <token>`
-
+Auth: `Participant <token>` (classroom) **or** `Bearer <identity_suite_token>` (adult, §2.4).
+Owner-scoped either way: the path id must equal the account the credential names.
 Response 200:
 ```typescript
 {
@@ -201,12 +195,9 @@ Response 200:
   lifetime_gold: number;
 }
 ```
-
 ## 3.3 Leaderboards
-
 ### GET /class/:id/leaderboard
 Auth: `rlc:teacher`
-
 Response 200:
 ```typescript
 {
@@ -220,10 +211,8 @@ Response 200:
   }[];
 }
 ```
-
 ### GET /school/:id/leaderboard
 Auth: `rlc:school_admin`
-
 Response 200:
 ```typescript
 {
@@ -236,12 +225,9 @@ Response 200:
   }[];
 }
 ```
-
 ### GET /leaderboard/national
 Auth: None
-
 Query params: `?country=GM` (defaults to school country if identifiable)
-
 Response 200:
 ```typescript
 {
@@ -254,12 +240,9 @@ Response 200:
   }[];
 }
 ```
-
 ## 3.4 Sessions
-
 ### POST /session/create
 Auth: `rlc:teacher`
-
 Request:
 ```typescript
 {
@@ -277,7 +260,6 @@ Request:
   };
 }
 ```
-
 Response 201:
 ```typescript
 {
@@ -286,7 +268,6 @@ Response 201:
   qr_code_url: string;
 }
 ```
-
 Response 422 — recording not permitted:
 ```typescript
 {
@@ -295,10 +276,8 @@ Response 422 — recording not permitted:
   // (class tier is lower_basic OR school.recording_enabled = false)
 }
 ```
-
 ### POST /session/join — Lower Basic Step 1
 Auth: None
-
 Request:
 ```typescript
 {
@@ -306,7 +285,6 @@ Request:
   // No screen_name — Lower Basic first step
 }
 ```
-
 Response 200:
 ```typescript
 {
@@ -314,16 +292,15 @@ Response 200:
   session_screen_names: string[];
 }
 ```
-
 ### POST /session/join — All Tiers Final Step
 Auth: None
-
 Request:
 ```typescript
 // Lower Basic
 {
   join_code: string;
   screen_name: string;
+  // No credential
 }
 // Upper Basic
 {
@@ -339,7 +316,6 @@ Request:
 }
 // school_id is NEVER in the body — injected by host page as window.RLC_SCHOOL_ID
 ```
-
 Response 200:
 ```typescript
 {
@@ -354,11 +330,11 @@ Response 200:
   session_screen_names?: string[];  // Lower Basic only
 }
 ```
-
 Failure responses:
 ```typescript
-// 403
-{ error: 'unknown_screen_name' } // UI does the i18n; wire body is just { error }
+// 403 — localization is the UI's job (it holds the i18n keys); the backend
+// sends only { error }.
+{ error: 'unknown_screen_name' }
 // 401
 { error: 'credential_invalid'; remaining_attempts: number }
 // 423
@@ -371,15 +347,13 @@ Failure responses:
 // 451
 { error: 'screen_time_exceeded'; reset_at: number } // Unix timestamp
 ```
-
 ### GET /session/:id/status
 Auth: None
-
 Response 200:
 ```typescript
 {
   status: 'open' | 'qc' | 'ceremony' | 'closed' | 'archived';
-  participant_count: number;
+  participant_count: number;  // computed from participants JSONB — not a column
   token_count: number;
   time_remaining_seconds: number;
   leaderboard: {
@@ -391,18 +365,10 @@ Response 200:
   participant_token?: string;  // Present only when near expiry — replace silently
 }
 ```
-
 ### GET /session/:id/qc-state
 Auth: **None** — the same posture as `GET /session/:id/qc-words` below, and
 deliberately no wider: this returns one token from the list that endpoint already
 serves unauthenticated. **Added 2026-08-23.**
-
-> **Pre-existing exposure, not introduced here.** `qc-words` and `awards` are also
-> unauthenticated, so a caller who knows a `session_id` can read decrypted QC text
-> without a participant token. That predates this endpoint and is unchanged by it;
-> it is called out because adding a second endpoint with the same posture is a
-> reasonable moment to notice. Tightening all three together is a contract change
-> and is not attempted here.
 
 The authoritative current QC position — the hydration and reconnection read. A
 client calls this on mount, on reconnect, and after a reload, and lands exactly
@@ -412,6 +378,13 @@ moves anyone, and that is teacher-only.
 `seq` matches the last emitted `qc:token.seq`, so a client can tell whether a
 socket event it already holds is newer than the state it just fetched — and must
 not let an older fetched position overwrite a newer event.
+
+> **Pre-existing exposure, not introduced here.** `qc-words` and `awards` are also
+> unauthenticated, so a caller who knows a `session_id` can read decrypted QC text
+> without a participant token. That predates this endpoint and is unchanged by it;
+> it is called out because adding a third endpoint with the same posture is a
+> reasonable moment to notice. Tightening all three together is a contract change
+> and is not attempted here.
 
 Response 200:
 ```typescript
@@ -424,21 +397,16 @@ Response 200:
 
 ### POST /session/:id/close
 Auth: `rlc:teacher`
-
 Request: empty body
-
 Response 200:
 ```typescript
 {
   success: true;
 }
 ```
-
 ### POST /session/:id/qc-advance
 Auth: `rlc:teacher`
-
 Request: empty body
-
 Response 200:
 ```typescript
 {
@@ -446,7 +414,6 @@ Response 200:
   token_id: string;  // next QC token
 }
 ```
-
 Sets `teacher_advanced_qc = true` on first call. Broadcasts `qc:token` socket
 event with the new `seq`.
 
@@ -454,11 +421,10 @@ The advance is a compare-and-set. Two simultaneous clicks both select the same
 next token, so exactly one lands; the other returns `409 { error:
 'qc_advance_conflict' }` and broadcasts nothing. A client receiving that should
 re-read `GET /session/:id/qc-state` rather than assume either outcome. `409 {
-error: 'qc_exhausted' }` means there is nothing left to advance to.
-
+error: 'qc_exhausted' }` is the different case: there is nothing left to advance
+to, and re-reading will not change that — the class has finished QC.
 ### GET /session/:id/qc-words
 Auth: None
-
 Response 200:
 ```typescript
 {
@@ -478,10 +444,8 @@ Response 200:
   }[];
 }
 ```
-
 ### GET /session/:id/awards
 Auth: None
-
 Response 200:
 ```typescript
 {
@@ -501,48 +465,44 @@ Response 200:
   discovery_count: number;
 }
 ```
-
 ### POST /session/:id/teachers-star
 Auth: `rlc:teacher`
-
 Request:
 ```typescript
 {
   participant_id: string;
 }
 ```
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 Response 409: already assigned this session.
-
 ### POST /session/:id/ceremony
 Auth: `rlc:teacher`
-
 Sequences `qc → ceremony → closed`. Emits `ceremony:star` then `ceremony:end` socket events.
-
 Request: empty body
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 ## 3.5 Tokens
-
 ### POST /token/save
 Auth: `Participant <token>`
-
 Request:
 ```typescript
 {
   session_id: string;
   text: string;
-  translation: string;        // empty string if basic depth
+  translation: string;        // always on the wire; empty string if basic depth
   collection_mode: 'rwc' | 'rsc';
+  // RSC: grammar_domain_index (1–12) is REQUIRED and authoritative — it drives
+  // rsc_progress. The server derives the canonical grammar_domain name from the
+  // index; grammar_domain is OPTIONAL and, if sent, must equal the canonical
+  // name for that index, else 400 { error: 'grammar_domain_mismatch' }. The UI
+  // may send the index alone. RWC: grammar_domain is a free-form Louw-Nida
+  // semantic domain and the index is unused.
+  grammar_domain_index?: number;  // REQUIRED when collection_mode === 'rsc' (1–12)
   grammar_domain?: string;
   focus_detected?: boolean;   // RSC only. NULL for RWC — omit field entirely.
   rights: {
@@ -553,7 +513,6 @@ Request:
   // participant_id NOT included — derived from bearer token
 }
 ```
-
 Response 201:
 ```typescript
 {
@@ -564,12 +523,11 @@ Response 201:
   completeness_signal: 'basic' | 'partial' | 'complete' | 'verified' | 'promoted';
   xp_awarded: number;
   account_lifetime_xp: number;
+  rsc_progress?: { completed: number; total: number };  // RSC mode only
 }
 ```
-
 ### POST /token/:id/vote
 Auth: `Participant <token>`
-
 Request:
 ```typescript
 {
@@ -578,7 +536,6 @@ Request:
   // participant_id NOT included — derived from bearer token
 }
 ```
-
 Response 200:
 ```typescript
 {
@@ -591,12 +548,9 @@ Response 200:
   has_voted: boolean;
 }
 ```
-
 Response 409: duplicate vote.
-
 ### POST /token/:id/translate
 Auth: `Participant <token>`
-
 Request:
 ```typescript
 {
@@ -604,15 +558,12 @@ Request:
   // participant_id NOT included — derived from bearer token
 }
 ```
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 ### POST /token/:id/correct
 Auth: `Participant <token>` — submitter only
-
 Request:
 ```typescript
 {
@@ -620,27 +571,20 @@ Request:
   // participant_id NOT included — derived from bearer token
 }
 ```
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 Response 403: not the original submitter.
-
 ### POST /token/:id/approve
 Auth: `rlc:teacher`
-
 Request: empty body
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 ### POST /token/:id/audio-routed
-Auth: Yahura MCP (HMAC) — or Participant token when UI is the intermediary
-
+Auth: Yahura MCP (HMAC)
 Request:
 ```typescript
 {
@@ -648,18 +592,14 @@ Request:
   yahura_confidence: number;  // 0.0 – 1.0
 }
 ```
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 Audio is never sent to this endpoint. This endpoint receives only the Yahura result.
 Audio travels from the UI directly to Yahura. Backend never holds audio in any form.
-
 ### POST /token/:id/translation-enriched
 Auth: Behistun MCP (HMAC)
-
 Request:
 ```typescript
 {
@@ -668,32 +608,27 @@ Request:
   target_language: string;
 }
 ```
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 ### POST /token/:id/completeness
 Auth: ESU MCP (HMAC)
-
 Request:
 ```typescript
 {
   completeness_signal: 'basic' | 'partial' | 'complete' | 'verified' | 'promoted';
 }
 ```
-
 Response 200:
 ```typescript
 { success: true }
 ```
-
 Response 409: backward transition rejected.
-
 ### POST /events/batch
-Auth: `Participant <token>`
-
+Auth: `Participant <token>` (classroom — every queueable type) **or**
+`Bearer <identity_suite_token>` (adult solo — `game.result` ONLY; any `token.*`
+event on this credential is rejected with `unsupported_event_type`). See §2.4.
 Request:
 ```typescript
 {
@@ -704,7 +639,6 @@ Request:
   }[];
 }
 ```
-
 Response 200:
 ```typescript
 {
@@ -712,59 +646,49 @@ Response 200:
   failed: { event_id: string; reason: string }[];
 }
 ```
-
 ## 3.6 Admin
-
 ### POST /admin/webhooks/replay/:event_id
 Auth: `rlc:school_admin`
-
 Request: empty body
-
 Response 200:
 ```typescript
 { success: true; delivered: boolean }
 ```
-
 ---
-
 # 4. WebSocket — Socket.io
-
 ## 4.1 Connection
-
 ```typescript
 import { io } from 'socket.io-client';
-
 // Student
 const socket = io(VITE_RLC_BACKEND_URL, {
   auth: {
     token: participantToken  // 'Participant <token>'
   }
 });
-
 // Teacher
 const socket = io(VITE_RLC_BACKEND_URL, {
   auth: {
+    // A ROUTING hint: it selects which verifier the handshake runs, and nothing
+    // more. Authority comes from an rlc_authorizations grant, and that grant must
+    // cover the school of `sessionId` below — a teacher authorized in another
+    // school is refused (NODE-ADR-007).
     role: 'teacher',
-    token: window.RLC_TEACHER_TOKEN,  // Identity-issued token. Proves identity
-                                      // only — the handshake additionally requires
-                                      // an RLC authorization record, so `role`
-                                      // below is a routing hint, not a claim.
+    // Identity Service token (§2.1). Proves identity ONLY.
+    token: window.RLC_TEACHER_TOKEN,
+    // REQUIRED. A teacher socket monitors exactly one session; without it the
+    // handshake cannot be scoped, so it is refused rather than admitted unscoped.
     sessionId: sessionId
   }
 });
 ```
-
 Bad or missing auth → connection rejected with `unauthorized`. Handle gracefully — show rejoin prompt.
-
 ## 4.2 Client → Server Events
-
 ### heartbeat
 Throttled to minimum 10s server-side. Drives last-active timestamp.
 ```typescript
 socket.emit('heartbeat');
 // No payload
 ```
-
 ### qc:vote
 ```typescript
 socket.emit('qc:vote', {
@@ -773,7 +697,6 @@ socket.emit('qc:vote', {
   vote_yes: boolean;
 });
 ```
-
 ### qc:translation
 ```typescript
 socket.emit('qc:translation', {
@@ -781,7 +704,6 @@ socket.emit('qc:translation', {
   translation: string;
 });
 ```
-
 ### qc:correction
 ```typescript
 socket.emit('qc:correction', {
@@ -789,9 +711,7 @@ socket.emit('qc:correction', {
   corrected_text: string;
 });
 ```
-
 ## 4.3 Server → Client Events
-
 ### session:joined
 ```typescript
 // Teacher receives when a new participant joins
@@ -801,7 +721,6 @@ socket.emit('qc:correction', {
   tier: 'lower_basic' | 'upper_basic' | 'senior_secondary' | 'adult';
 }
 ```
-
 ### session:left
 ```typescript
 // Teacher receives when a participant disconnects
@@ -810,7 +729,6 @@ socket.emit('qc:correction', {
   screen_name: string;
 }
 ```
-
 ### session:status
 ```typescript
 // All receive on phase transition
@@ -819,7 +737,6 @@ socket.emit('qc:correction', {
   status: 'open' | 'qc' | 'ceremony' | 'closed' | 'archived';
 }
 ```
-
 ### token:submitted
 ```typescript
 // Teacher + submitting student receive on new submission
@@ -830,7 +747,6 @@ socket.emit('qc:correction', {
 }
 // Full token data NOT included — teacher fetches feed via REST
 ```
-
 ### saturation:signal
 ```typescript
 // Submitting student receives when word is saturated
@@ -840,7 +756,6 @@ socket.emit('qc:correction', {
   // UI redirects student — do not show submit for this word again
 }
 ```
-
 ### qc:token
 ```typescript
 // All receive — the AUTHORITATIVE current token for QC (added `seq` 2026-08-23).
@@ -863,7 +778,6 @@ socket.emit('qc:correction', {
   // submitter_id NEVER included
 }
 ```
-
 ### qc:audio-ready
 ```typescript
 // All receive — Yahura transcription arrived for token already in QC
@@ -872,7 +786,6 @@ socket.emit('qc:correction', {
   // UI fetches updated token data via REST GET /session/:id/qc-words
 }
 ```
-
 ### qc:vote
 ```typescript
 // All receive — vote cast
@@ -886,7 +799,6 @@ socket.emit('qc:correction', {
   };
 }
 ```
-
 ### qc:translation
 ```typescript
 // All receive — translation submitted in QC
@@ -895,21 +807,18 @@ socket.emit('qc:correction', {
   // Translation content NOT included — fetch via REST if needed
 }
 ```
-
 ### qc:correction
 ```typescript
 // All receive — correction submitted
 // Two events in sequence:
 // 1. correction_needed — broadcast to all when orthography majority fails
 // 2. corrected — broadcast to all after submitter submits corrected_text
-
 // correction_needed
 {
   token_id: string;
   correction_needed: true;
   // Only the original submitter shows the correction input
 }
-
 // corrected
 {
   token_id: string;
@@ -917,7 +826,6 @@ socket.emit('qc:correction', {
   // UI advances QC state — no corrected_text broadcast
 }
 ```
-
 ### screentime:limit-reached
 ```typescript
 // Student receives when daily limit exhausted mid-session
@@ -929,7 +837,6 @@ socket.emit('qc:correction', {
 // UI shows ScreenTimeExceededScreen for that student
 // Session ends gracefully for that student only
 ```
-
 ### ceremony:star
 ```typescript
 // All receive — star announcements in the SERVER's order (added seq/total 2026-08-23).
@@ -948,7 +855,6 @@ socket.emit('qc:correction', {
   xp_awarded: number;
 }
 ```
-
 ### ceremony:end
 ```typescript
 // All receive — the AUTHORITATIVE end of the ceremony (added stars_total 2026-08-23).
@@ -963,23 +869,17 @@ socket.emit('qc:correction', {
   stars_total: number;
 }
 ```
-
 ---
-
 # 5. Audio — Direct to Yahura
-
 Audio is **never** sent to the node engine. The UI posts the audio blob directly to Yahura.
-
 ```typescript
 // UI — RlcRecorder component
 // src/components/RlcRecorder.tsx
-
 const formData = new FormData();
 formData.append('audio', audioBlob, 'recording.webm');
 formData.append('token_id', tokenId);
 formData.append('session_id', sessionId);
 formData.append('language', sessionLanguage);
-
 const yahuraResponse = await fetch(`${VITE_YAHURA_URL}/v1/transcribe`, {
   method: 'POST',
   headers: {
@@ -987,9 +887,7 @@ const yahuraResponse = await fetch(`${VITE_YAHURA_URL}/v1/transcribe`, {
   },
   body: formData
 });
-
 const { yahura_transcription, confidence } = await yahuraResponse.json();
-
 // Then tell the backend the result
 await fetch(`${VITE_RLC_BACKEND_URL}/api/v1/token/${tokenId}/audio-routed`, {
   method: 'POST',
@@ -999,73 +897,50 @@ await fetch(`${VITE_RLC_BACKEND_URL}/api/v1/token/${tokenId}/audio-routed`, {
   },
   body: JSON.stringify({ yahura_transcription, yahura_confidence: confidence })
 });
-
 // Audio blob is now out of scope — GC collects it
 // Backend never saw it
 ```
-
 ## RlcRecorder Component Contract
-
 ```typescript
 // src/components/RlcRecorder.tsx
 interface RlcRecorderProps {
-  token_id: string;
-  session_id: string;
+  tokenId: string;
+  sessionId: string;
   language: string;
-  word: string;
-  participant_token: string | null;
-  maxSeconds?: number;  // default 5
+  participantToken: string;
   onComplete: (result: { yahura_transcription: string; confidence: number }) => void;
-  onError?: (error: 'mic_denied' | 'upload_failed' | 'yahura_unavailable') => void;
+  onError: (error: 'mic_denied' | 'upload_failed' | 'yahura_unavailable') => void;
   onSkip: () => void;
 }
-
-type RecorderState = 'idle' | 'requesting' | 'recording' | 'uploading' | 'done' | 'error';
+type RecorderState = 'idle' | 'recording' | 'uploading' | 'done' | 'error';
 ```
-
 MediaRecorder format: `audio/webm;codecs=opus` with `audio/mp4` fallback for Safari.
-
 Single button. No client-side persistence. Blob lives in memory only until upload completes.
-
 Mic permission failure → `onError('mic_denied')` → show clear message → student can skip audio step.
-
 ---
-
 # 6. No-Rounds Rule
-
 There are no rounds in the RLC data model. No `current_round`. No `round_status`. No `round_number`.
-
 The UI must not reference rounds anywhere. Remove all round-related state, props, types, and UI elements.
-
 The game has phases: `open` → `qc` → `ceremony` → `closed`. Phase transitions arrive via `session:status` socket event.
-
 ---
-
 # 7. Participant Token Lifecycle
-
 ```typescript
 // Store in memory only
 let participantToken: string = response.participant_token;
-
 // On every GET /session/:id/status response:
 if (statusResponse.participant_token) {
   participantToken = statusResponse.participant_token; // replace silently
   // This replacement must happen even during QC
   // Update the Authorization header on the next request automatically
 }
-
 // NEVER:
 localStorage.setItem('participant_token', participantToken); // ❌
 sessionStorage.setItem('participant_token', participantToken); // ❌
 // indexedDB participant token storage // ❌
 ```
-
 ---
-
 # 8. Mismatch Resolution — From Current State
-
 These are the exact mismatches found between the current UI (PR #16) and node engine (merged branch). Each one is resolved here.
-
 | # | Mismatch | Resolution |
 | :---- | :---- | :---- |
 | 1 | `session:status` — UI expected full Session object | Socket sends `{ status }` only. UI re-fetches `GET /session/:id/status` on receipt. See §4.3. |
@@ -1082,11 +957,7 @@ These are the exact mismatches found between the current UI (PR #16) and node en
 | 12 | 451 on join not handled | Handle `screen_time_exceeded { reset_at }`. See §3.4. |
 | 13 | Participant token refresh | Check every `GET /session/:id/status` response. Replace silently including mid-QC. See §7. |
 | 14 | Backend port | `:3001`. Set `VITE_RLC_BACKEND_URL=http://localhost:3001`. |
-
 ---
-
 *End of SPARXSTAR-3iAtlas-RLC-Contract-v1.0*
-
-*Commit to `.github/instructions/` in all three repos.*
-
+*Filename: `SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`*
 *Both builders work from this document. Neither invents anything not defined here.*
