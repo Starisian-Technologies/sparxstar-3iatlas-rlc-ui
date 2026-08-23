@@ -104,15 +104,13 @@ export function QcScreen({
     // A new token restarts the axis sequence. It starts at the audio vote only
     // when there is a recording to judge; otherwise spelling is step one, which
     // matches the server's own skip rule (spec §5.7).
-    const recorded =
-      currentToken?.yahura_transcription != null ||
-      (currentToken?.vote_audio?.yes ?? 0) + (currentToken?.vote_audio?.no ?? 0) > 0
+    const recorded = currentToken?.yahura_transcription != null
     setStep(recorded ? 'audio' : 'spelling')
     setSpellingFailed(false)
     setCorrection(currentToken?.text ?? '')
     setTranslation('')
     setActionError(null)
-  }, [currentToken?.token_id, currentToken?.text, currentToken?.yahura_transcription, currentToken?.vote_audio])
+  }, [currentToken?.token_id, currentToken?.text, currentToken?.yahura_transcription])
 
   // Wire QcToken doesn't carry participants — leaderboard is the canonical
   // participant list during QC.
