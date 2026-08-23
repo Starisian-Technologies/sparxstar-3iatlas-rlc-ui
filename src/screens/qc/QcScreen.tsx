@@ -522,7 +522,7 @@ export function QcScreen({
 
         {step === 'correction' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label={t('qc.step_correction_new', { defaultValue: 'Step 4 — Correction' })} tokens={tokens} />
+            <StepLabel label={t('qc.step_correction', { defaultValue: 'Step 4 — Correction' })} tokens={tokens} />
             <div style={{ fontSize: 14, color: tokens.textMuted }}>
               {t('qc.correction_prompt_author', {
                 defaultValue: 'The class voted that spelling needs a fix. The word\'s author can edit it below.'
@@ -546,7 +546,7 @@ export function QcScreen({
 
         {step === 'translation' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label={t('qc.step_translation_new', { defaultValue: 'Step 5 — Translation' })} tokens={tokens} />
+            <StepLabel label={t('qc.step_translation', { defaultValue: 'Step 5 — Translation' })} tokens={tokens} />
             <input
               type="text"
               value={translation}
