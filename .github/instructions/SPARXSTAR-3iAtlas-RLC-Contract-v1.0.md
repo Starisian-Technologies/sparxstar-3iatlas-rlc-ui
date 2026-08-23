@@ -392,6 +392,27 @@ Response 200:
 }
 ```
 
+### GET /session/:id/qc-state
+Auth: None (any session participant). **Added 2026-08-23.**
+
+The authoritative current QC position — the hydration and reconnection read. A
+client calls this on mount, on reconnect, and after a reload, and lands exactly
+where the class is. It **advances nothing**: only `POST /session/:id/qc-advance`
+moves anyone, and that is teacher-only.
+
+`seq` matches the last emitted `qc:token.seq`, so a client can tell whether a
+socket event it already holds is newer than the state it just fetched — and must
+not let an older fetched position overwrite a newer event.
+
+Response 200:
+```typescript
+{
+  seq: number;              // 0 before the teacher's first advance
+  token: QcToken | null;    // null before the first advance; submitter NEVER included
+  exhausted: boolean;       // true once every selectable token has been advanced through
+}
+```
+
 ### POST /session/:id/close
 Auth: `rlc:teacher`
 
@@ -417,7 +438,14 @@ Response 200:
 }
 ```
 
-Sets `teacher_advanced_qc = true` on first call. Broadcasts `qc:token` socket event.
+Sets `teacher_advanced_qc = true` on first call. Broadcasts `qc:token` socket
+event with the new `seq`.
+
+The advance is a compare-and-set. Two simultaneous clicks both select the same
+next token, so exactly one lands; the other returns `409 { error:
+'qc_advance_conflict' }` and broadcasts nothing. A client receiving that should
+re-read `GET /session/:id/qc-state` rather than assume either outcome. `409 {
+error: 'qc_exhausted' }` means there is nothing left to advance to.
 
 ### GET /session/:id/qc-words
 Auth: None
@@ -708,7 +736,10 @@ const socket = io(VITE_RLC_BACKEND_URL, {
 const socket = io(VITE_RLC_BACKEND_URL, {
   auth: {
     role: 'teacher',
-    token: window.RLC_TEACHER_TOKEN,  // Helios JWT
+    token: window.RLC_TEACHER_TOKEN,  // Identity-issued token. Proves identity
+                                      // only — the handshake additionally requires
+                                      // an RLC authorization record, so `role`
+                                      // below is a routing hint, not a claim.
     sessionId: sessionId
   }
 });
@@ -803,8 +834,15 @@ socket.emit('qc:correction', {
 
 ### qc:token
 ```typescript
-// All receive — next token for QC
+// All receive — the AUTHORITATIVE current token for QC (added `seq` 2026-08-23).
+//
+// Apply ONLY when `seq` exceeds the last seq this client applied. A repeat is a
+// duplicate delivery; a lower value is a late delivery of a position the class
+// has already left. Both are dropped, and neither is an error. This is what
+// makes a client safe without a cursor of its own — see GET /session/:id/qc-state
+// for the matching hydration read.
 {
+  seq: number;          // monotonic advance counter for this session
   token_id: string;
   text: string;
   yahura_transcription: string | null;
@@ -885,8 +923,15 @@ socket.emit('qc:correction', {
 
 ### ceremony:star
 ```typescript
-// All receive — sequenced star announcements
+// All receive — star announcements in the SERVER's order (added seq/total 2026-08-23).
+//
+// Order comes from `seq`; the client computes none of its own. Dedupe by `star`
+// kind, not by seq, because the immediate announcement fired when a teacher
+// assigns the Teacher's Star carries seq: null and the numbered run re-emits that
+// same star later — both must resolve to one entry.
 {
+  seq: number | null;   // position in the run; null = out-of-sequence announcement
+  total: number | null; // stars in the run; null on an out-of-sequence announcement
   star: 'most_words' | 'most_sentences' | 'best_spelling' | 'discovery' |
         'speed' | 'audio' | 'teacher' | 'teacher_award';
   participant_ids: string[];
@@ -897,11 +942,16 @@ socket.emit('qc:correction', {
 
 ### ceremony:end
 ```typescript
-// All receive — session complete
+// All receive — the AUTHORITATIVE end of the ceremony (added stars_total 2026-08-23).
+//
+// This event ends the phase. A client timer may pace the reveal animation; it may
+// not decide that the ceremony is over. `stars_total` lets a client that missed a
+// star know its reveal was incomplete rather than silently showing a short one.
 {
   session_id: string;
   total_tokens: number;
   discovery_count: number;
+  stars_total: number;
 }
 ```
 
