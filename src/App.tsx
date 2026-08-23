@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
@@ -8,6 +8,7 @@ import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
 import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
 import { RscCompleteScreen } from '@/screens/student/RscCompleteScreen'
 import { QcScreen } from '@/screens/qc/QcScreen'
+import { getTeacherToken } from '@/api/client'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
 import { api } from '@/api/client'
@@ -300,6 +301,7 @@ export function App() {
         session_id={state.session_id}
         participant_id={state.participant_id ?? TEACHER_RUNTIME_PARTICIPANT_ID}
         role={state.role}
+        participant_token={state.participant_token}
         onReturnToSession={(role) => setScreen(role === 'teacher' ? 'teacher_monitor' : 'student_lobby')}
       />
     )
@@ -312,18 +314,34 @@ function CeremonyRoute({
   session_id,
   participant_id,
   role,
+  participant_token,
   onReturnToSession,
 }: {
   session_id: string
   participant_id: string
   role: AppState['role']
+  participant_token: string | null
   onReturnToSession: (role: AppState['role']) => void
 }) {
   const { cleanupSession } = useSubmissionQueue(session_id, participant_id, { autoFlush: false })
 
+  /**
+   * The ceremony needs a socket credential, because the reveal is server-driven
+   * (`ceremony:star` / `ceremony:end`). Without it the screen falls back to a
+   * REST reconstruction, which is correct but is not the shared moment.
+   */
+  const auth = useMemo(() => {
+    if (role === 'teacher') {
+      const t = getTeacherToken()
+      return t ? { role: 'teacher' as const, token: t, sessionId: session_id } : null
+    }
+    return participant_token ? { token: participant_token } : null
+  }, [role, participant_token, session_id])
+
   return (
     <CeremonyScreen
       session_id={session_id}
+      auth={auth}
       onReturnToSession={async () => {
         try {
           await cleanupSession()

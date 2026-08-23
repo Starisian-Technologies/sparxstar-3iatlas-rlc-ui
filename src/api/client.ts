@@ -19,6 +19,7 @@ import type {
   QcAdvanceResponse,
   QcToken,
   QcWordsResponse,
+  QcStateResponse,
   TokenSaveRequest,
   TokenSaveResponse,
   VoteRequest,
@@ -47,9 +48,20 @@ function participantAuthHeaders(): Record<string, string> {
   return _participantToken ? { Authorization: `Participant ${_participantToken}` } : {}
 }
 
-// ─── Teacher token (Helios JWT injected by orchestrator; never minted here) ──
+// ─── Teacher token ───────────────────────────────────────────────────────────
+//
+// An Identity-issued token, supplied by the host page at runtime and held in
+// page memory only — never persisted, never minted here. Whether its holder can
+// do anything is decided server-side against RLC's authorization records; this
+// token proves identity, not authority.
 
-function getTeacherToken(): string | null {
+/**
+ * The teacher's token, or null. Exported because the socket handshake needs the
+ * same value the REST headers use — three files had grown their own copy of this
+ * four-line function, which is three chances for them to disagree about where
+ * the token lives.
+ */
+export function getTeacherToken(): string | null {
   if (typeof window === 'undefined') return null
   const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
   return typeof fromWindow === 'string' && fromWindow.length > 0 ? fromWindow : null
@@ -143,6 +155,18 @@ export const api = {
     async qcWords(session_id: string): Promise<QcToken[]> {
       const result = await request<QcWordsResponse>(`/session/${session_id}/qc-words`)
       return result.qc_words
+    },
+
+    /**
+     * The authoritative current QC position.
+     *
+     * This is HYDRATION, not progression: it is how a client that has just
+     * mounted, reloaded, or reconnected finds out where the class is. It never
+     * advances anything — only the teacher's `qcAdvance` does that — so a
+     * student calling it repeatedly changes nothing for anyone.
+     */
+    qcState(session_id: string): Promise<QcStateResponse> {
+      return request(`/session/${session_id}/qc-state`)
     },
 
     awards(session_id: string): Promise<AwardsResponse> {

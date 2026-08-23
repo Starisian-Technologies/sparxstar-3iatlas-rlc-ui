@@ -12,7 +12,6 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/api/client'
 import { Fireworks } from '@/components/Fireworks'
 import { Screen } from '@/components/Screen'
 import { Card } from '@/components/Card'
@@ -22,24 +21,34 @@ import { StarBadge, type StarVariant } from '@/components/StarBadge'
 import { TenantLogo } from '@/components/TenantLogo'
 import { useTheme } from '@/theme/useTheme'
 import { emitRuntimeEvent } from '@/runtime/events'
+import { useCeremony } from '@/hooks/useCeremony'
+import type { SocketAuth } from '@/runtime/socket'
 import type { AwardsResponse, LeaderboardEntry, Star, StarKind } from '@/types'
 
 interface CeremonyScreenProps {
   session_id: string
   onReturnToSession: () => void
+  /** Socket credential — how this screen receives the server-ordered reveal. */
+  auth?: SocketAuth | null
+  /** True when the session was already closed on arrival (a late joiner). */
+  alreadyComplete?: boolean
+  /**
+   * Milliseconds between star reveals. Presentation only — it paces the
+   * animation and cannot decide that the ceremony is over, which is
+   * `ceremony:end`'s job alone. Explicit here rather than a buried constant so
+   * the cadence is visible at the call site and adjustable per context.
+   */
+  revealIntervalMs?: number
 }
 
-/** Reveal order — backend StarKind strings, displayed in this sequence. */
-const STAR_ORDER: StarKind[] = [
-  'most_words',
-  'most_sentences',
-  'best_spelling',
-  'discovery',
-  'speed',
-  'audio',
-  'teacher',
-  'teacher_award',
-]
+/**
+ * There is deliberately no star order here any more.
+ *
+ * This file used to carry a hardcoded `STAR_ORDER` and sort the awards against
+ * it. That is the server's call — the order comes from the game manifest and
+ * arrives as `seq` on each `ceremony:star` — and duplicating it client-side
+ * meant two places to change and two chances to disagree.
+ */
 
 const STAR_REVEAL_INTERVAL_MS = 2000
 const FIREWORKS_DURATION_MS = 4500
@@ -73,49 +82,51 @@ function awardsLeaderboardToUi(
   }))
 }
 
-export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreenProps) {
+export function CeremonyScreen({
+  session_id,
+  onReturnToSession,
+  auth,
+  alreadyComplete,
+  revealIntervalMs = STAR_REVEAL_INTERVAL_MS
+}: CeremonyScreenProps) {
   const { tokens, resolved } = useTheme()
-  const [awards, setAwards] = useState<AwardsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [revealedCount, setRevealedCount] = useState(0)
   const [showFireworks, setShowFireworks] = useState(false)
 
-  useEffect(() => {
-    let active = true
-    setLoading(true)
-    void (async () => {
-      try {
-        const result = await api.session.awards(session_id)
-        if (!active) return
-        setAwards(result)
-        setError(null)
-      } catch {
-        if (!active) return
-        setError('Could not load awards.')
-      } finally {
-        if (active) setLoading(false)
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [session_id])
+  /**
+   * The server owns the ceremony. `stars` arrive in the order the engine emitted
+   * them and `finished` comes from `ceremony:end` — not from a local timer, and
+   * not from counting what happened to arrive. The old implementation did both,
+   * which is why every browser ran its own ceremony.
+   */
+  const { stars: orderedStars, awards, total, finished, hydratedFromRest, loading, error } = useCeremony(
+    session_id,
+    { auth, alreadyComplete }
+  )
 
-  const orderedStars = useMemo(() => {
-    if (!awards) return []
-    const sorted: Star[] = []
-    for (const kind of STAR_ORDER) {
-      const star = awards.stars.find((item) => item.star === kind)
-      if (star) sorted.push(star)
+  /**
+   * How many stars are currently shown.
+   *
+   * The animation still staggers the reveal — that is presentation, and it is
+   * allowed. What changed is that it can only ever catch up to stars the SERVER
+   * has already sent, and it cannot decide the ceremony is over. A star that has
+   * not arrived cannot be revealed by a timer.
+   */
+  const [revealedCount, setRevealedCount] = useState(0)
+
+  useEffect(() => {
+    // A ceremony reconstructed from REST (this client arrived after the run) has
+    // no live moment to pace, so show it whole rather than animating history.
+    if (hydratedFromRest) {
+      setRevealedCount(orderedStars.length)
+      return
     }
-    for (const star of awards.stars) {
-      if (!sorted.some((s) => s.star === star.star)) {
-        sorted.push(star)
-      }
-    }
-    return sorted
-  }, [awards])
+    if (revealedCount >= orderedStars.length) return
+    const timer = setTimeout(
+      () => setRevealedCount((n) => Math.min(n + 1, orderedStars.length)),
+      revealIntervalMs
+    )
+    return () => clearTimeout(timer)
+  }, [orderedStars.length, revealedCount, hydratedFromRest, revealIntervalMs])
 
   const uiLeaderboard = useMemo(
     () => (awards ? awardsLeaderboardToUi(awards.leaderboard) : []),
@@ -125,21 +136,6 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
   const top3 = useMemo((): LeaderboardEntry[] => {
     return uiLeaderboard.slice(0, 3)
   }, [uiLeaderboard])
-
-  useEffect(() => {
-    if (orderedStars.length === 0) return
-    setRevealedCount(0)
-    const interval = setInterval(() => {
-      setRevealedCount((count) => {
-        if (count >= orderedStars.length) {
-          clearInterval(interval)
-          return count
-        }
-        return count + 1
-      })
-    }, STAR_REVEAL_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [orderedStars])
 
   useEffect(() => {
     if (revealedCount <= 0) return
@@ -157,12 +153,14 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
   }, [orderedStars, revealedCount, session_id])
 
   useEffect(() => {
-    if (!awards) return
+    // Gated on the authoritative end, not on "we have run out of stars to
+    // show" — which was true for a moment every time the list was still filling.
+    if (!finished) return
     if (revealedCount < orderedStars.length) return
     setShowFireworks(true)
     const timeout = setTimeout(() => setShowFireworks(false), FIREWORKS_DURATION_MS)
     return () => clearTimeout(timeout)
-  }, [awards, orderedStars.length, revealedCount])
+  }, [finished, orderedStars.length, revealedCount])
 
   if (loading) {
     return (
@@ -186,7 +184,13 @@ export function CeremonyScreen({ session_id, onReturnToSession }: CeremonyScreen
   }
 
   const revealedStars = orderedStars.slice(0, revealedCount)
-  const starsDone = revealedCount >= orderedStars.length
+  /**
+   * Done when the SERVER has ended the run and every star it sent is on screen.
+   * `total` is the run length the server declared, so a client that missed a star
+   * does not offer the exit early as though it had seen the whole ceremony.
+   */
+  const starsDone =
+    finished && revealedCount >= orderedStars.length && (total === null || orderedStars.length >= total)
 
   return (
     <Screen

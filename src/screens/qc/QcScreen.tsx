@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '@/api/client'
+import { api, getTeacherToken } from '@/api/client'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -12,11 +12,6 @@ import { emitRuntimeEvent } from '@/runtime/events'
 import { useTheme } from '@/theme/useTheme'
 import type { CollectionMode, LeaderboardEntry, VotePayload } from '@/types'
 
-function getTeacherToken(): string | null {
-  const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
-  return typeof fromWindow === 'string' && fromWindow.length > 0 ? fromWindow : null
-}
-
 interface QcScreenProps {
   session_id: string
   participant_id: string
@@ -26,7 +21,30 @@ interface QcScreenProps {
   onGoCeremony: () => void
 }
 
-type QcStep = 'audio' | 'vote' | 'correction' | 'translation'
+/**
+ * The QC steps, one per vote AXIS plus the two write steps.
+ *
+ * This used to be `'audio' | 'vote' | 'correction' | 'translation'` — a single
+ * merged `vote` step that cast ONE dimension, chosen by mode: orthography for
+ * words, semantics for sentences. So in a sentence session nobody ever voted on
+ * spelling, and in a word session nobody voted on meaning, and the platform
+ * silently lost half its linguistic-confidence evidence.
+ *
+ * The three axes are independent evidence and are collected independently
+ * (spec §5.7). They are NOT equal in consequence: spelling is the only axis that
+ * moves the token's workflow state; meaning and pronunciation are recorded and
+ * exported as confidence signals and gate nothing. That asymmetry is the
+ * server's, and this screen does not re-implement it — it just collects all
+ * three and lets the server decide what each one does.
+ */
+type QcStep = 'audio' | 'spelling' | 'meaning' | 'correction' | 'translation'
+
+/** The vote dimension each voting step casts. */
+const STEP_DIMENSION: Record<'audio' | 'spelling' | 'meaning', VotePayload['dimension']> = {
+  audio: 'audio',
+  spelling: 'orthography',
+  meaning: 'semantics'
+}
 type VoteCounts = { yes: number; no: number }
 type QcVoteToken = { vote_orthography: VoteCounts; vote_semantics: VoteCounts; vote_audio?: VoteCounts }
 
@@ -48,17 +66,23 @@ export function QcScreen({
   }, [isTeacher, participant_token, session_id])
   const {
     qcWords,
-    currentIndex,
     currentToken,
+    exhausted,
+    awaitingTeacher,
+    position,
     session,
     loading,
     error,
-    setCurrentIndex,
+    hydrate,
     refreshStatus,
   } = useQcSession(session_id, { auth })
   const { isOnline } = useNetworkStatus()
 
   const [step, setStep] = useState<QcStep>('audio')
+  /**
+   * Voted state and tallies keyed by `token_id:dimension` — one entry per axis,
+   * because one vote on one axis says nothing about the other two.
+   */
   const [hasVotedByToken, setHasVotedByToken] = useState<Record<string, boolean>>({})
   const [voteCountsByToken, setVoteCountsByToken] = useState<Record<string, VoteCounts>>({})
   const [correction, setCorrection] = useState('')
@@ -67,13 +91,28 @@ export function QcScreen({
   const [teacherStarParticipant, setTeacherStarParticipant] = useState('')
   const [teacherStarAssigned, setTeacherStarAssigned] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  /** Guards the teacher's advance so a double-tap cannot fire two requests. */
+  const [advancing, setAdvancing] = useState(false)
+  /**
+   * Whether the spelling vote failed on this token, remembered across the
+   * meaning step so the correction step can be offered after it. Spelling is the
+   * only axis that can produce this.
+   */
+  const [spellingFailed, setSpellingFailed] = useState(false)
 
   useEffect(() => {
-    setStep('audio')
+    // A new token restarts the axis sequence. It starts at the audio vote only
+    // when there is a recording to judge; otherwise spelling is step one, which
+    // matches the server's own skip rule (spec §5.7).
+    const recorded =
+      currentToken?.yahura_transcription != null ||
+      (currentToken?.vote_audio?.yes ?? 0) + (currentToken?.vote_audio?.no ?? 0) > 0
+    setStep(recorded ? 'audio' : 'spelling')
+    setSpellingFailed(false)
     setCorrection(currentToken?.text ?? '')
     setTranslation('')
     setActionError(null)
-  }, [currentToken?.token_id, currentToken?.text])
+  }, [currentToken?.token_id, currentToken?.text, currentToken?.yahura_transcription, currentToken?.vote_audio])
 
   // Wire QcToken doesn't carry participants — leaderboard is the canonical
   // participant list during QC.
@@ -90,28 +129,63 @@ export function QcScreen({
   }
 
   if (!currentToken) {
+    /**
+     * Three genuinely different states, which the old single "queue is empty"
+     * message collapsed into one. A student staring at "empty" while the teacher
+     * has simply not started yet has no idea whether to wait or to worry.
+     */
+    if (error) {
+      return (
+        <FullScreenMessage
+          title="Lost the review"
+          subtitle="Could not reach the session — check your connection. This screen will catch up on its own."
+          tokens={tokens}
+        />
+      )
+    }
+    if (exhausted) {
+      return (
+        <FullScreenMessage title="Review finished" subtitle="Every word has been checked." tokens={tokens} />
+      )
+    }
     return (
       <FullScreenMessage
-        title="Review queue is empty"
-        subtitle={error ? 'Could not load words — check your connection.' : 'No words ready for review yet.'}
+        title="Waiting for your teacher"
+        subtitle={
+          awaitingTeacher
+            ? 'The class reviews each word together. Your teacher starts the first one.'
+            : 'No words ready for review yet.'
+        }
         tokens={tokens}
       />
     )
   }
 
-  const voteDimension: VotePayload['dimension'] = mode === 'rsc' ? 'semantics' : 'orthography'
-  const hasVoted = hasVotedByToken[currentToken.token_id] === true
-  const voteCounts = voteCountsByToken[currentToken.token_id] ?? getDefaultCounts(currentToken, voteDimension)
+  /** The axis the current step is voting on, when the step is a voting step. */
+  const voteStep = step === 'audio' || step === 'spelling' || step === 'meaning' ? step : null
+  const voteDimension = voteStep ? STEP_DIMENSION[voteStep] : null
+  const voteKey = voteDimension ? `${currentToken.token_id}:${voteDimension}` : ''
+  const hasVoted = voteKey !== '' && hasVotedByToken[voteKey] === true
+  const voteCounts = voteDimension
+    ? voteCountsByToken[voteKey] ?? getDefaultCounts(currentToken, voteDimension)
+    : { yes: 0, no: 0 }
+  /**
+   * Whether this token has a recording to judge. The engine skips the audio vote
+   * when there is none (spec §5.7 step 1), so the client must not ask a class to
+   * rate the pronunciation of a word nobody recorded.
+   */
+  const hasAudio =
+    currentToken.yahura_transcription !== null ||
+    (currentToken.vote_audio?.yes ?? 0) + (currentToken.vote_audio?.no ?? 0) > 0
   // QcToken no longer carries submitter_id (anonymized per contract §3.4).
   // The server enforces submitter-only correction at the /token/:id/correct
   // endpoint via the participant token; if a non-submitter tries, they get 403.
   // For the slice, UI shows the correction input to everyone when the vote fails;
   // the failure mode is a server 403 surfaced as actionError.
   const translationSubmitted = translationSubmittedByToken[currentToken.token_id] === true
-  const isLastToken = currentIndex === qcWords.length - 1
 
   const handleVote = async (vote_yes: boolean) => {
-    if (hasVoted) return
+    if (hasVoted || !voteDimension) return
     setActionError(null)
     try {
       const response = await api.token.vote(currentToken.token_id, {
@@ -130,10 +204,25 @@ export function QcScreen({
         },
       })
       const dimensionCounts = response.vote_counts[voteDimension]
-      setHasVotedByToken((prev) => ({ ...prev, [currentToken.token_id]: true }))
-      setVoteCountsByToken((prev) => ({ ...prev, [currentToken.token_id]: dimensionCounts }))
-      const correctionRequired = dimensionCounts.no > dimensionCounts.yes
-      setStep(correctionRequired ? 'correction' : 'translation')
+      setHasVotedByToken((prev) => ({ ...prev, [voteKey]: true }))
+      setVoteCountsByToken((prev) => ({ ...prev, [voteKey]: dimensionCounts }))
+
+      /**
+       * Move to the next step. Only the SPELLING result can branch to
+       * correction, and only on a strict majority No — a tie does not trigger it
+       * (spec §5.7). Meaning and pronunciation never branch: they are evidence,
+       * not gates.
+       */
+      if (voteDimension === 'orthography') {
+        const correctionRequired = dimensionCounts.no > dimensionCounts.yes
+        setSpellingFailed(correctionRequired)
+        setStep('meaning')
+      } else if (voteDimension === 'audio') {
+        setStep('spelling')
+      } else {
+        // Meaning is the last vote. Correction comes after it, if spelling failed.
+        setStep(spellingFailed ? 'correction' : 'translation')
+      }
       await refreshStatus()
     } catch {
       setActionError('Could not submit vote. Please try again.')
@@ -173,6 +262,34 @@ export function QcScreen({
     }
   }
 
+  /**
+   * The teacher's advance. This is the fix for the defect at the centre of this
+   * change: the button used to bump a local index, so it moved this browser and
+   * nobody else. It now asks the server to advance, and the resulting `qc:token`
+   * broadcast moves every connected client — including this one, which learns
+   * its new position the same way a student does.
+   */
+  const handleAdvance = async () => {
+    if (advancing) return
+    setAdvancing(true)
+    setActionError(null)
+    try {
+      await api.session.qcAdvance(session_id)
+      // No local state change here on purpose. The position arrives as an event.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      if (/^API 409\b/.test(msg)) {
+        // qc_exhausted, or a conflicting advance from another teacher device.
+        // Re-read rather than guessing which.
+        await hydrate()
+      } else {
+        setActionError('Could not move the class to the next word. Try again.')
+      }
+    } finally {
+      setAdvancing(false)
+    }
+  }
+
   const handleAssignTeacherStar = async () => {
     if (!teacherStarParticipant || teacherStarAssigned) return
     setActionError(null)
@@ -182,11 +299,6 @@ export function QcScreen({
     } catch {
       setActionError("Could not assign Teacher's Star. Try again.")
     }
-  }
-
-  const handleNextToken = () => {
-    if (isLastToken) return
-    setCurrentIndex(currentIndex + 1)
   }
 
   const inputStyle: React.CSSProperties = {
@@ -233,7 +345,7 @@ export function QcScreen({
       }}>
         <div>
           <div style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
-            Review {currentIndex + 1} of {qcWords.length}
+            Review {position} of {qcWords.length}
           </div>
           <div style={{ fontSize: 28, fontWeight: 900, color: tokens.text, marginTop: 2, letterSpacing: -0.5 }}>
             {currentToken.text}
@@ -262,7 +374,7 @@ export function QcScreen({
       <Card>
         {step === 'audio' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 1 — Audio" tokens={tokens} />
+            <StepLabel label="Step 1 — Pronunciation" tokens={tokens} />
             <div style={{
               border: `2px dashed ${tokens.border}`,
               borderRadius: 12,
@@ -286,17 +398,49 @@ export function QcScreen({
                   : 'No recording for this word'}
               </div>
             </div>
-            <Button onClick={() => setStep('vote')} variant="primary">
-              Continue to vote
-            </Button>
+            <div style={{ fontSize: 15, color: tokens.text, fontWeight: 600 }}>
+              Can you hear the word said properly?
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                aria-label="Pronunciation yes"
+                onClick={() => void handleVote(true)}
+                disabled={hasVoted}
+                style={voteButtonStyle(tokens.success, hasVoted, tokens)}
+              >
+                <span aria-hidden="true">✓</span> Yes
+              </button>
+              <button
+                type="button"
+                aria-label="Pronunciation no"
+                onClick={() => void handleVote(false)}
+                disabled={hasVoted}
+                style={voteButtonStyle(tokens.danger, hasVoted, tokens)}
+              >
+                <span aria-hidden="true">✗</span> No
+              </button>
+            </div>
+            {!hasAudio && (
+              <Button onClick={() => setStep('spelling')} variant="soft">
+                Skip — no recording
+              </Button>
+            )}
           </div>
         )}
 
-        {step === 'vote' && (
+        {(step === 'spelling' || step === 'meaning') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 2 — Community vote" tokens={tokens} />
+            <StepLabel
+              label={step === 'spelling' ? 'Step 2 — Spelling' : 'Step 3 — Meaning'}
+              tokens={tokens}
+            />
             <div style={{ fontSize: 15, color: tokens.text, fontWeight: 600 }}>
-              {mode === 'rsc' ? 'Does this sentence make sense?' : 'Is the spelling correct?'}
+              {step === 'spelling'
+                ? 'Is this spelled correctly?'
+                : mode === 'rsc'
+                  ? 'Does this make sense? Is the grammar correct?'
+                  : 'Does this make sense?'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
@@ -304,21 +448,7 @@ export function QcScreen({
                 aria-label="Vote yes"
                 onClick={() => void handleVote(true)}
                 disabled={hasVoted}
-                style={{
-                  flex: 1,
-                  minHeight: 56,
-                  borderRadius: 12,
-                  border: 'none',
-                  background: hasVoted ? tokens.card : tokens.success,
-                  color: hasVoted ? tokens.textMuted : '#fff',
-                  fontSize: 20,
-                  fontWeight: 800,
-                  cursor: hasVoted ? 'default' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
+                style={voteButtonStyle(tokens.success, hasVoted, tokens)}
               >
                 <span aria-hidden="true">✓</span> Yes
               </button>
@@ -327,21 +457,7 @@ export function QcScreen({
                 aria-label="Vote no"
                 onClick={() => void handleVote(false)}
                 disabled={hasVoted}
-                style={{
-                  flex: 1,
-                  minHeight: 56,
-                  borderRadius: 12,
-                  border: 'none',
-                  background: hasVoted ? tokens.card : tokens.danger,
-                  color: hasVoted ? tokens.textMuted : '#fff',
-                  fontSize: 20,
-                  fontWeight: 800,
-                  cursor: hasVoted ? 'default' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
+                style={voteButtonStyle(tokens.danger, hasVoted, tokens)}
               >
                 <span aria-hidden="true">✗</span> No
               </button>
@@ -367,7 +483,7 @@ export function QcScreen({
 
         {step === 'correction' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 3 — Correction" tokens={tokens} />
+            <StepLabel label="Step 4 — Correction" tokens={tokens} />
             <div style={{ fontSize: 14, color: tokens.textMuted }}>
               The class voted that spelling needs a fix. The word&apos;s author can edit it below.
             </div>
@@ -389,7 +505,7 @@ export function QcScreen({
 
         {step === 'translation' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 4 — Translation" tokens={tokens} />
+            <StepLabel label="Step 5 — Translation" tokens={tokens} />
             <input
               type="text"
               value={translation}
@@ -433,7 +549,7 @@ export function QcScreen({
           <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12 }}>
             Teacher controls
           </div>
-          {isLastToken ? (
+          {exhausted ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
                 <label
@@ -494,14 +610,42 @@ export function QcScreen({
               </Button>
             </div>
           ) : (
-            <Button onClick={handleNextToken} variant="primary">
-              Next word →
+            <Button onClick={() => void handleAdvance()} variant="primary" disabled={advancing}>
+              {advancing ? 'Moving the class…' : 'Next word →'}
             </Button>
           )}
         </Card>
       )}
     </div>
   )
+}
+
+
+/**
+ * The yes/no vote button style. Shared because there are now three voting steps
+ * (pronunciation, spelling, meaning) and a copy per step is three chances for
+ * them to look subtly different. Keeps the 56px minimum touch target.
+ */
+function voteButtonStyle(
+  activeBackground: string,
+  voted: boolean,
+  tokens: { card: string; textMuted: string }
+): React.CSSProperties {
+  return {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 12,
+    border: 'none',
+    background: voted ? tokens.card : activeBackground,
+    color: voted ? tokens.textMuted : '#fff',
+    fontSize: 20,
+    fontWeight: 800,
+    cursor: voted ? 'default' : 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8
+  }
 }
 
 function StepLabel({ label, tokens }: { label: string; tokens: { primary: string } }) {

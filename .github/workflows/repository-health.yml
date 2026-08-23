@@ -3,8 +3,8 @@ name: Repository Health
 on:
   workflow_dispatch:
 
-permissions: {}
-
+# Single declaration. This file previously had `permissions: {}` twice, which is
+# a duplicate YAML key — the parser keeps one and silently discards the other.
 permissions: {}
 
 jobs:
