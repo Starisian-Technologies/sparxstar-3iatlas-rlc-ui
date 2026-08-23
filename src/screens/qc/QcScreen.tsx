@@ -57,12 +57,12 @@ export function QcScreen({
   participant_token = null,
   onGoCeremony,
 }: QcScreenProps) {
-  const { tokens } = useTheme()
   const { t } = useTranslation()
+  const { tokens } = useTheme()
   const auth = useMemo(() => {
     if (isTeacher) {
-      const t = getTeacherToken()
-      return t ? { role: 'teacher' as const, token: t, sessionId: session_id } : null
+      const teacherToken = getTeacherToken()
+      return teacherToken ? { role: 'teacher' as const, token: teacherToken, sessionId: session_id } : null
     }
     return participant_token ? { token: participant_token } : null
   }, [isTeacher, participant_token, session_id])
@@ -185,15 +185,15 @@ export function QcScreen({
     }
     return (
       <FullScreenMessage
-      title={t('qc.waiting_for_teacher_title', { defaultValue: 'Waiting for your teacher' })}
+        title={t('qc.waiting_for_teacher_title', { defaultValue: 'Waiting for your teacher' })}
         subtitle={
           awaitingTeacher
-          ? t('qc.waiting_for_teacher_subtitle', {
-            defaultValue: 'The class reviews each word together. Your teacher starts the first one.'
-          })
-          : t('qc.empty_subtitle', { defaultValue: 'No words ready for review yet.' })
-      }
-      tokens={tokens}
+            ? t('qc.waiting_for_teacher_subtitle', {
+              defaultValue: 'The class reviews each word together. Your teacher starts the first one.'
+            })
+            : t('qc.empty_subtitle', { defaultValue: 'No words ready for review yet.' })
+        }
+        tokens={tokens}
       />
     )
   }
@@ -446,7 +446,7 @@ export function QcScreen({
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.success, hasVoted, tokens)}
               >
-                <span aria-hidden="true">✓</span> Yes
+                <span aria-hidden="true">✓</span> {t('qc.vote_yes')}
               </button>
               <button
                 type="button"
@@ -455,12 +455,12 @@ export function QcScreen({
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.danger, hasVoted, tokens)}
               >
-                <span aria-hidden="true">✗</span> No
+                <span aria-hidden="true">✗</span> {t('qc.vote_no')}
               </button>
             </div>
             {!hasAudio && (
               <Button onClick={() => setStep('spelling')} variant="soft">
-                Skip — no recording
+                {t('qc.skip_no_recording')}
               </Button>
             )}
           </div>
@@ -489,7 +489,7 @@ export function QcScreen({
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.success, hasVoted, tokens)}
               >
-                <span aria-hidden="true">✓</span> Yes
+                <span aria-hidden="true">✓</span> {t('qc.vote_yes')}
               </button>
               <button
                 type="button"
@@ -498,12 +498,12 @@ export function QcScreen({
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.danger, hasVoted, tokens)}
               >
-                <span aria-hidden="true">✗</span> No
+                <span aria-hidden="true">✗</span> {t('qc.vote_no')}
               </button>
             </div>
             {hasVoted && (
               <div style={{ color: tokens.success, fontSize: 14, fontWeight: 600, textAlign: 'center' }}>
-                +5 XP for voting
+                {t('qc.voted_xp')}
               </div>
             )}
             <div style={{

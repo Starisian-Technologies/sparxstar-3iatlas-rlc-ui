@@ -1,4 +1,5 @@
 import '@testing-library/dom'
+import '@/i18n'
 import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
