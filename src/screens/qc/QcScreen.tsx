@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, getTeacherToken } from '@/api/client'
 import { Avatar } from '@/components/Avatar'
@@ -102,17 +102,40 @@ export function QcScreen({
    */
   const [spellingFailed, setSpellingFailed] = useState(false)
 
+  /**
+   * Reset the axis sequence when the class moves to a DIFFERENT token.
+   *
+   * Keyed on `token_id` alone, and that is load-bearing. This effect previously
+   * also depended on `text`, `yahura_transcription`, and `vote_audio` — all of
+   * which change *within* a token's review: `qc:vote` hands back a fresh
+   * `vote_audio` object on every classmate's vote, and a correction changes
+   * `text`. So a student halfway through typing a correction had their step reset
+   * and their input cleared every time anyone else voted. Token identity is the
+   * only thing that should restart the sequence.
+   *
+   * `tokenRef` carries the values the reset needs without making them triggers.
+   */
+  const tokenRef = useRef(currentToken)
+  tokenRef.current = currentToken
   useEffect(() => {
-    // A new token restarts the axis sequence. It starts at the audio vote only
-    // when there is a recording to judge; otherwise spelling is step one, which
-    // matches the server's own skip rule (spec §5.7).
-    const recorded = currentToken?.yahura_transcription != null
+    const token = tokenRef.current
+    // Start at the audio vote only when there is a recording to judge; otherwise
+    // spelling is step one, matching the server's own skip rule (spec §5.7).
+    // Decided once per token — a transcription arriving mid-review must not yank
+    // the class backwards into an audio vote they have moved past.
+    //
+    // Both signals, not just the transcription: a token can carry audio votes
+    // before its transcription lands, and the class should still be asked about
+    // pronunciation in that window rather than skipping the axis entirely.
+    const recorded =
+      token?.yahura_transcription != null ||
+      (token?.vote_audio?.yes ?? 0) + (token?.vote_audio?.no ?? 0) > 0
     setStep(recorded ? 'audio' : 'spelling')
     setSpellingFailed(false)
-    setCorrection(currentToken?.text ?? '')
+    setCorrection(token?.text ?? '')
     setTranslation('')
     setActionError(null)
-  }, [currentToken?.token_id, currentToken?.text, currentToken?.yahura_transcription])
+  }, [currentToken?.token_id])
 
   // Wire QcToken doesn't carry participants — leaderboard is the canonical
   // participant list during QC.

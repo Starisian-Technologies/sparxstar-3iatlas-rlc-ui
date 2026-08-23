@@ -69,7 +69,14 @@ export function getTeacherToken(): string | null {
 
 function teacherAuthHeaders(): Record<string, string> {
   const token = getTeacherToken()
-  return token ? { Authorization: 'Bearer ' + token } : {}
+  // Template literal, deliberately. A review bot reported this line as an
+  // "unterminated template literal that will fail TypeScript parsing" and
+  // rewrote it as concatenation; the report was a false positive — a secret
+  // scanner had redacted the token interpolation to `******` in the diff the
+  // reviewer read, and it mistook the redaction for the source. Typecheck, lint,
+  // build, and CI were all green throughout, which a parse error makes
+  // impossible. Restored for consistency with the rest of this file.
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 // ─── Core fetch wrapper ─────────────────────────────────────────────────────

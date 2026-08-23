@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QcScreen } from './QcScreen'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import { socketRegistry } from '@/test/fakeSocket'
@@ -101,6 +101,20 @@ function renderQc(mode: 'rwc' | 'rsc' = 'rwc') {
       />
     </ThemeProvider>
   )
+}
+
+/**
+ * Let React flush everything an event triggered, then assert synchronously.
+ *
+ * `waitFor` is wrong for asserting that something did NOT change: its first check
+ * runs before the re-render lands, so it resolves against the pre-event DOM and
+ * the test passes whether or not the bug is present. Both of the
+ * classmate-vote tests below did exactly that until this was added.
+ */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 60))
+  })
 }
 
 /** Dimensions passed to the vote endpoint, in call order. */
@@ -234,6 +248,117 @@ describe('the three vote axes stay separate', () => {
     // Strict majority only: `no > yes`. A tie does not trigger correction.
     await waitFor(() => expect(screen.getByText(/Step 5 — Translation/i)).toBeTruthy())
     expect(screen.queryByText(/Step 4 — Correction/i)).toBeNull()
+  })
+
+  it('does not reset a student mid-review when a classmate votes', async () => {
+    // The bug this locks out: the token-reset effect depended on
+    // `currentToken.vote_audio`, and `qc:vote` hands back a FRESH tallies object
+    // on every vote. So a student who had reached the meaning step — or was
+    // halfway through typing a correction — was thrown back to spelling every
+    // time anyone else in the class voted.
+    h.vote.mockResolvedValue(tallies({ orthography: { yes: 3, no: 0 } }))
+    renderQc('rwc')
+    const socket = await waitFor(() => socketRegistry.latest())
+    socket.server.connect()
+
+    await waitFor(() => expect(screen.getByText(/Is this spelled correctly/i)).toBeTruthy())
+    screen.getByLabelText('Vote yes').click()
+    await waitFor(() => expect(screen.getByText(/Does this make sense/i)).toBeTruthy())
+
+    // A classmate's vote lands, updating every axis's live tallies.
+    socket.server.emit('qc:vote', {
+      token_id: 'tok-1',
+      dimension: 'audio',
+      vote_counts: {
+        orthography: { yes: 4, no: 0 },
+        semantics: { yes: 1, no: 0 },
+        audio: { yes: 2, no: 1 }
+      }
+    })
+
+    await settle()
+
+    // Still on meaning. The tallies changed; the student's position did not.
+    //
+    // With the old dependency array this landed on the PRONUNCIATION step, not
+    // spelling — `vote_audio` going from 0/0 to 2/1 made the reset compute
+    // `recorded === true`. So a single classmate's audio vote threw the whole
+    // class into a step they had already passed. Assert positively on where we
+    // should be, and negatively on both wrong destinations.
+    expect(screen.getByText(/Does this make sense/i)).toBeTruthy()
+    expect(screen.queryByText(/Is this spelled correctly/i)).toBeNull()
+    expect(screen.queryByText(/hear the word said properly/i)).toBeNull()
+  })
+
+  it('keeps a half-typed correction when a classmate votes', async () => {
+    h.vote.mockResolvedValue(tallies({ orthography: { yes: 0, no: 3 } }))
+    renderQc('rwc')
+    const socket = await waitFor(() => socketRegistry.latest())
+    socket.server.connect()
+
+    await waitFor(() => expect(screen.getByText(/Is this spelled correctly/i)).toBeTruthy())
+    screen.getByLabelText('Vote no').click()
+    await waitFor(() => expect(screen.getByText(/Does this make sense/i)).toBeTruthy())
+    screen.getByLabelText('Vote yes').click()
+    await waitFor(() => expect(screen.getByText(/Step 4 — Correction/i)).toBeTruthy())
+
+    // Type a correction, then let a classmate's vote arrive. `fireEvent.change`
+    // rather than assigning `.value`: these are React-controlled inputs, so a raw
+    // DOM write is overwritten on the next render and proves nothing.
+    const input = document.querySelector('input, textarea') as HTMLInputElement | null
+    expect(input).not.toBeNull()
+    fireEvent.change(input!, { target: { value: 'kèlèfaŋ' } })
+    await waitFor(() => expect((document.querySelector('input, textarea') as HTMLInputElement).value).toBe('kèlèfaŋ'))
+
+    socket.server.emit('qc:vote', {
+      token_id: 'tok-1',
+      dimension: 'semantics',
+      vote_counts: {
+        orthography: { yes: 0, no: 4 },
+        semantics: { yes: 2, no: 0 },
+        audio: { yes: 0, no: 0 }
+      }
+    })
+
+    await settle()
+
+    // Still on the correction step, and the typing survived. Losing a student's
+    // in-progress writing to someone else's vote is the worst version of this
+    // bug — the whole product is about capturing what they write.
+    expect(screen.getByText(/Step 4 — Correction/i)).toBeTruthy()
+    expect((document.querySelector('input, textarea') as HTMLInputElement).value).toBe('kèlèfaŋ')
+  })
+
+  it('does not reset the step when a transcription arrives mid-review', async () => {
+    // The narrower case, and the one that separates a complete fix from a
+    // partial one. `text` and `yahura_transcription` are primitives, so keeping
+    // them in the reset's dependency array is harmless *until one actually
+    // changes* — and a transcription genuinely can land mid-review: audio
+    // finishes routing, then this client reconnects or polls, `hydrate()` re-reads
+    // the token from the server, and the transcription appears.
+    //
+    // With those deps still present the student is thrown into the pronunciation
+    // step at that moment. Keyed on `token_id` alone, they stay where they are.
+    h.vote.mockResolvedValue(tallies({ orthography: { yes: 3, no: 0 } }))
+    renderQc('rwc')
+    const socket = await waitFor(() => socketRegistry.latest())
+    socket.server.connect()
+
+    await waitFor(() => expect(screen.getByText(/Is this spelled correctly/i)).toBeTruthy())
+    screen.getByLabelText('Vote yes').click()
+    await waitFor(() => expect(screen.getByText(/Does this make sense/i)).toBeTruthy())
+
+    // Audio finished routing for this token, and a reconnect re-hydrates it.
+    h.serverState = {
+      seq: 1,
+      token: token({ yahura_transcription: 'kelefa', vote_audio: { yes: 1, no: 0 } }),
+      exhausted: false
+    }
+    socket.server.connect()
+    await settle()
+
+    expect(screen.getByText(/Does this make sense/i)).toBeTruthy()
+    expect(screen.queryByText(/hear the word said properly/i)).toBeNull()
   })
 
   it('never sends a merged or averaged tally', async () => {
