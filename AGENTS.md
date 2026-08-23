@@ -3,9 +3,9 @@
 ## What This Repo Is
 
 This is the **React 19 + TypeScript + Vite + i18next PWA frontend** for the
-SPARXSTAR 3iAtlas RLC (Rapid Language Collection) Platform. It is one of three
-repos in the 3iAtlas RLC system. It is a pure client. It has **no WordPress
-dependency, no Node server of its own, no database, no game logic**.
+SPARXSTAR 3iAtlas RLC (Rapid Language Collection) Platform. It is a pure client
+of the shared RLC Node engine. It has **no WordPress dependency, no Node server
+of its own, no database, no game logic**.
 
 It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 (`/api/v1/`) and socket.io.
@@ -31,7 +31,6 @@ It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 | :---- | :---- |
 | **`sparxstar-3iatlas-rlc-ui`** (this repo) | React frontend — all screens, all user interaction, localized |
 | `sparxstar-3iatlas-rlc-node-engine` | Node + Express + PostgreSQL + socket.io — all game logic, all data, system of record |
-| `sparxstar-3iatlas-rlc` | WordPress PHP plugin — orchestrator: myCred hooks, DVE promotion, WordPress page mount only |
 
 ## Canonical Spec
 
@@ -43,7 +42,7 @@ UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.pn
 
 ## Absolute Rules — Never Violate
 
-- **UI talks to the Node backend only.** Base URL is `window.RLC_API_BASE` (injected by the orchestrator) or `/api/v1` fallback. **Never call WordPress directly.**
+- **UI talks to the Node engine only.** Base URL is `window.RLC_API_BASE` (injected by the host page) or `/api/v1` fallback. There is no other backend to call.
 - **Audio never touches the UI's data layer.** Starmus widget routes audio directly to Yahura MCP. The UI never references audio files in any API call, never stores audio, never holds binary audio bytes.
 - **Participant token in memory only.** Never persist to localStorage or IndexedDB.
 - **Never compute XP client-side.** XP comes from the backend on the `token:submitted` socket event and the `token/save` response.
@@ -54,7 +53,7 @@ UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.pn
 - **Three-step sequence** in collection: text → translation → recording. State machine enforced as pedagogical guide, not a rejection gate. Steps not required by the selected depth are **hidden entirely** — never shown disabled.
 - **Keep the Starmus recorder placeholder** until the real widget is wired; do not implement audio recording inside the UI.
 - **No WebSocket library beyond socket.io-client.** No custom WS protocol.
-- **No WordPress packages.** No `@wordpress/*`. The orchestrator (PHP plugin) only mounts this app and injects host globals — the UI never calls WP REST directly.
+- **No WordPress. At all.** RLC is entirely Node.js — no `@wordpress/*` packages, no `/wp-json` calls, no WordPress runtime dependency, no WordPress page mount, no WordPress-injected teacher token, no WordPress-owned session workflow. **There is no WordPress orchestrator and none is to be created** (owner ruling, 2026-08-23; canonical spec §8 is marked superseded). A host page supplies runtime globals; it is not a WordPress plugin.
 
 ---
 
@@ -99,7 +98,7 @@ REST base: `/api/v1/`. socket.io for live game state.
 | Senior Secondary (grades 10–12) | Join code + screen name + password (`type="password"`, 12-char min, show/hide). |
 | Adult | Same as Senior Secondary. |
 
-School ID is injected by the orchestrator host page as `window.RLC_SCHOOL_ID` — never entered by the student. Three failed attempts locks the account; teacher unlocks via T2 monitor.
+School ID is injected by the host page as `window.RLC_SCHOOL_ID` — never entered by the student. Three failed attempts locks the account; teacher unlocks via T2 monitor.
 
 ### Join failure responses (handle in UI with localized error UX)
 
@@ -177,7 +176,7 @@ One screen per file. One hook per file. No barrel files.
 
 ## Host-Page Injection
 
-The orchestrator (`sparxstar-3iatlas-rlc`) injects on the WordPress page where the app mounts:
+The host page injects, at runtime, where the app mounts:
 
 ```
 window.RLC_API_BASE      = "https://backend.example/api/v1"
@@ -213,16 +212,15 @@ Before opening a PR, `typecheck`, `lint`, `test`, and `build` must all pass.
 | 3 — Session core | **Big.** Tier-aware S1, T1 with rights confirmation, T2 with LB roster panel and locked-account list, socket.io connect, i18next wired (English), RLC_* host-global injection path, replace polling with sockets |
 | 4 — RWC | S2 already mostly done. Add AccessoryBar IME bypass + long vowels, drive XP from socket, Starmus mount |
 | 5 — RSC | S3 already mostly done. Add tri-state `focus_detected`, localize prompts |
-| 6 — QC | **Heavy.** Rewrite QcScreen for audio → orthography → semantics → correction → translation sequence. Anonymize submitter. Offline queue for vote/translate/correct. |
+| 6 — QC | Submitter anonymized ✅. Three separate vote axes (pronunciation → spelling → meaning → conditional correction → translation) ✅ 2026-08-23. Remaining: the audio panel is a placeholder until `RlcRecorder` records; offline queue for vote/translate/correct. |
 | 7 — Awards | Extend CeremonyScreen with lifetime XP + school standing. Extract T4 from QcScreen. Localize star names. |
-| 8 — Orchestrator | (orchestrator phase) |
-| 9 — Polish | PWA, all-action offline queue, screen-time enforcement UI, E2E tests both modes |
+| 9 — Polish | PWA ✅, screen-time signal handling ✅ (but screen-time is NOT enforced — the engine's quota client is a stub). Remaining: all-action offline queue, browser-level E2E for both modes |
 
 ---
 
 ## What Not To Do
 
-- Do not add WordPress dependencies, REST calls to `/wp-json`, or `@wordpress/*` packages
+- Do not add WordPress dependencies, REST calls to `/wp-json`, or `@wordpress/*` packages — and do not create a WordPress orchestrator
 - Do not add a Node server or database to this repo
 - Do not call Yahura, Behistun, ESU, DVE, or any SPARXSTAR pipeline component directly — backend handles all downstream. There is no external identity provider; the backend mints its own JWTs and HMAC participant tokens.
 - Do not implement reward logic, XP calculation, or badge awards — myCred owns reward logic

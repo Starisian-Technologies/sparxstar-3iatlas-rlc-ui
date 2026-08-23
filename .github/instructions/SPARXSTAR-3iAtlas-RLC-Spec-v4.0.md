@@ -1,7 +1,7 @@
 # 3iAtlas Rapid Language Collection Platform
 ## Technical Specification v4.0
 ### Starisian Technologies / AI West Africa · Confidential · May 2026
-### Corrected 2026-08-10 — UI repository deployment-readiness review (see Appendix A)
+### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
 
 > **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for the Status-field system — section heading/number varies per repo).
 >
@@ -43,6 +43,18 @@ This is the only architecture that meets data privacy law across all jurisdictio
 | **Typed text** | Encrypted at rest. Retained as structured linguistic signal — spelling confidence, domain classification, vote outcome. Not retained as a child's personal record. |
 | **Translation** | Encrypted at rest. Retained as derived parallel corpus signal. |
 | **Student identity** | Screen name only. No PII stored by AIWA. School holds the mapping between screen name and real student. AIWA never does. |
+
+> **Verification note, 2026-08-23.** The engine's
+> `docs/PRIVACY-LIFECYCLE.md` documents the **implemented** lifecycle of each row
+> in the table above — where readable material exists, for how long, and what
+> deletion actually removes — and reports three places where the claims in this
+> section are stronger than the implementation can currently support: the
+> headline "primary source is destroyed" sentence versus this table's own
+> "retained, encrypted" entry for typed text; the audio-destruction claim, which
+> concerns components outside these repositories and has never run end to end;
+> and erasure completeness against a strict Article 17 reading. Those are
+> escalated for owner and legal ruling. **No claim in this section was weakened
+> to accommodate them**, and no encryption or erasure behaviour was changed.
 
 ## 1.2 All Writing Is Encrypted At Rest — All Users, All Tiers
 
@@ -95,7 +107,22 @@ Flags are not penalties. They are signals that drive enrichment, human review, a
 | **Lower Basic** | Lower Basic | 1–6 | Teacher-managed class code. No individual login. Screen names assigned by teacher. | Full — teacher sees all activity and submitted content | Encrypted at rest. Teacher can read submitted work. | Grade-level enforced |
 | **Upper Basic** | Upper Basic | 7–9 | School-issued screen name + 4-digit PIN. Student owns the PIN. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content visible only on submission. | Encrypted at rest. Teacher reads on submission. | Age-appropriate ceiling |
 | **Senior Secondary** | Senior Secondary | 10–12 | Screen name + password. Student controls. Shared device safe. | Activity signals only — last active, submitted/not submitted. Content never visible before submission. | Encrypted at rest. Teacher reads only submitted work. Unsubmitted drafts inaccessible to all parties including AIWA. | Age-appropriate ceiling |
-| **Adult** | Post-secondary | — | Full account. Own credentials. Joins existing teacher-created sessions only — adult solo collection is out of scope for v4.0. | N/A — no school context | Encrypted at rest. Full ownership. | None |
+| **Adult** | Post-secondary | — | Full account. Own credentials. May join a teacher-created session, **and may also play individually** — see the amendment below. | N/A — no school context | Encrypted at rest. Full ownership. | None |
+
+**Amendment 2026-08-23 — adult individual play is in scope.** This row
+previously ended *"adult solo collection is out of scope for v4.0"*, which was
+true when written and is now misleading. Two things changed:
+
+- **§3.11 (amended 2026-08-21)** admits authenticated adult single-player
+  **game results** — which is what Release 1 actually serves. Results are not
+  writing, so this is narrower than it sounds, but the flat "out of scope"
+  reading was wrong.
+- **RLC supports individual gameplay as a first-class mode** (owner ruling,
+  2026-08-23), on the same engine as classroom play.
+
+What remains out of scope is adult solo **writing collection** — the RWC/RSC
+surface requires a session, and Release 1 stores game results rather than
+writing. Read this row together with §3.11 rather than on its own.
 
 **Credential rules:**
 
@@ -179,13 +206,24 @@ Rights travel with every token through every downstream system. Never stripped.
 | **myCred (via Rewards MCP)** | Quality signals → points, stars, badges. Also: screen-time ledger across all 3iAtlas products. |
 | **DVE** | Promoted, teacher-approved, ESU-enriched tokens only — via orchestrator |
 
-## 2.2 The Three Repos
+## 2.2 The Repos
+
+**Amended 2026-08-23 (owner architectural ruling).** RLC is **entirely
+Node.js/JavaScript**. It began as a WordPress-integrated system and is not one
+now: **there is no WordPress RLC orchestrator, and none is to be created.** No
+WordPress runtime dependency, no WordPress page mount, no WordPress-injected
+teacher token, no WordPress-owned session workflow. Section 8 below is retained
+as a record of the superseded design and is marked accordingly.
 
 | Repo | Language | Responsibility |
 | :---- | :---- | :---- |
-| `sparxstar-3iatlas-rlc-ui` | React 19 + TypeScript + Vite + i18next | All screens. All user interaction. Localized. Talks to backend only. |
-| `sparxstar-3iatlas-rlc-node-engine` | Node.js + Express + PostgreSQL + socket.io | All game logic. All data. All real-time. System of record. |
-| `sparxstar-3iatlas-rlc` | WordPress PHP 8.2+ plugin | myCred hooks. DVE promotion pipeline. WordPress page mount. |
+| `sparxstar-3iatlas-rlc-ui` | React 19 + TypeScript + Vite + i18next | All classroom screens. All user interaction. Localized. Talks to the engine only. |
+| `sparxstar-3iatlas-rlc-node-engine` | Node.js + Express + PostgreSQL + socket.io | The **shared gameplay engine for all games**. All game logic, all data, all real-time. System of record. |
+| `sparxstar-3iatlas-identity-node` | Node.js | The suite's **sole authentication authority**. Issues the identity tokens the engine verifies. It never issues a permission. |
+| `sparxstar-3iatlas-dictionary-games` | — | **A client** of the shared engine, not a separate competing architecture. |
+
+RLC supports **both individual gameplay and teacher-led classroom gameplay** on
+that one engine.
 
 ## 2.3 Repo Boundaries — Absolute
 
@@ -278,6 +316,12 @@ All inbound calls from Yahura MCP, Behistun MCP, and ESU MCP to the backend use 
 
 "School admin JWT" and "Teacher JWT" referenced elsewhere in this spec are shorthand for Helios JWTs carrying the corresponding scope claim.
 
+**A Helios JWT is the ONLY credential that carries any scope in this table.** A
+second, separate credential — the 3iAtlas Identity *suite token* — exists for
+authenticated adult solo play and carries no scope at all. It is specified in
+**§3.11**, and it authorizes exactly one event type and nothing else. It is
+never a substitute for a Helios JWT on any endpoint above.
+
 ## 3.5 ESU Consistency Interface
 
 RLC presents signals to Sky ESU. The algorithms that process them are ESU's responsibility and are specified in the ESU spec — not here.
@@ -344,15 +388,33 @@ Transitions are monotonic — forward only. Backward transitions rejected with 4
 
 **Limbo tokens:** Tokens with 50–79% yes on orthography vote are neither corrected nor verified. They sit at `complete` permanently unless ESU advances them. This is intentional — the human gate (teacher approval) and ESU enrichment are the paths forward.
 
-## 3.9 AI Facilitator
+## 3.9 AI Facilitator — DEFERRED; the ordering invariant is implemented server-side
 
-LibreChat. Optional — game never halts if unavailable. When available, call sequence after every submission is locked:
+**Corrected 2026-08-23 to describe the implementation that exists.**
 
-1. `check_saturation(text, session_id)` — if saturated, redirect. Skip step 2.
-2. `analyze_spelling(text, language)` — shape facilitator response
-3. `save_token()` — only after steps 1 and 2. Never before.
+The original text specified LibreChat with a locked post-submission call
+sequence: `check_saturation` → `analyze_spelling` → `save_token`, never out of
+order. **No AI facilitator is implemented, and none is planned in this release.**
+LibreChat is not integrated and must not be added merely to satisfy this section.
 
-Facilitator prompts are localized to the session language.
+**The invariant that mattered is implemented, and better placed.** The reason for
+the locked order was that saturation and spelling had to be resolved before a
+token was saved. That now happens *inside* `saveToken` on the server: the
+saturation count and the spelling classification are computed as part of the save
+itself, in one transaction, before the token row exists. A client cannot get the
+order wrong because a client is not orchestrating it. That is a stronger
+guarantee than a documented call sequence, and it is why this section is
+corrected rather than scheduled.
+
+**What was removed from the UI (2026-08-23):** a panel of three "Eshu" ability
+buttons — translate, pronounce, semantic hint — that returned hardcoded
+placeholder strings. Presenting placeholder text as AI guidance is worse than
+offering nothing, so the controls and their module are gone.
+
+**Deferred, explicitly:** any future facilitator is new work with its own
+decision record. It must not reintroduce client-orchestrated ordering around
+saving, and the game must continue to work without it (which today it does, by
+construction).
 
 ## 3.10 Shipped vs. Planned — Correction Notes (verification pass, 2026-07)
 
@@ -483,6 +545,61 @@ against source and folded into §6.3 but not previously called out here:
   always advances to the next QC token in priority order regardless of what
   is sent (`src/services/qc.ts`). A prior doc revision implied an optional
   `{ token_id? }` body had an effect on which token advances.
+
+---
+
+## 3.11 Adult Identity Suite Token — Release 1
+
+> **Amendment, 2026-08-21.** Added on the written approval of Max Barrett,
+> narrowly, to describe the one credential Release 1 introduces. It grants no
+> new capability beyond what is stated here.
+
+Release 1 serves **authenticated adult single-player games**. Those players
+authenticate with a **suite token** issued by the 3iAtlas Identity Service
+(`https://id.sparxstar.com`), not with a Helios JWT and not with a participant
+token.
+
+**What an adult Identity token may do — the whole list:**
+
+| Allowed | Notes |
+| :---- | :---- |
+| Submit `game.result` events to `POST /api/v1/events/batch` | The only event type accepted on this credential. Settles account-scoped XP/reward with no session, class, or school. |
+| Read its own `GET /api/v1/account/:id/xp` | Owner-scoped: the path's account must equal the token's. |
+| Read its own `GET /api/v1/account/:id/ledger` | Owner-scoped, as above. |
+
+**What it does NOT authorize, and must never be extended to authorize:**
+
+- **Classroom** routes of any kind — session create/join/close/status, QC
+  advance, teacher's star, ceremony, leaderboards.
+- **Minor** tiers. The token carries a `tier` claim and only `adult` is
+  accepted; a valid `lower_basic` / `upper_basic` / `senior_secondary` token is
+  refused.
+- **Session**-scoped anything. Solo settlement is account-scoped by
+  construction; there is no session to join or resolve.
+- **DVE promotion** (`POST /token/:id/approve`). Non-negotiable #10 stands
+  unchanged: a token reaches `promoted` only by teacher approval under a Helios
+  JWT.
+- **Stored writing.** No `token.*` event is accepted on this credential, so the
+  RWC/RSC collection surface is unreachable from it. Release 1 deliberately
+  stores **game results, not writing**; encrypted writing collection is out of
+  scope for this release (§11).
+
+**Relationship to non-negotiable #12 (§9).** #12 is unchanged and unweakened:
+teacher/admin auth is a JWKS-verified Helios JWT, scope-checked, and the
+participant token remains HMAC-signed and session-scoped. This section adds a
+*third* credential for a surface #12 does not describe — solo adult game
+results — and the two authorities are permanently separate:
+
+- Identity answers *who are you* and issues no scope. Helios answers *what may
+  you do*.
+- A suite token MUST NEVER be accepted on a path requiring a JWKS-verified
+  Helios JWT (`3IATLAS-IDENTITY-AND-GAME-SERVICES-DECISION-v1.0` §2).
+- The engine refuses to start if the Helios and Identity JWKS or issuers name
+  the same authority, in every environment.
+
+Wire shape is delegated to `GAME-SERVICE-INTAKE-SPEC-v1.0` §1/§3 (the
+`GameResultEvent` envelope and the auth gate), per §2's one-home-per-fact rule.
+The local decision record is `docs/adr/NODE-ADR-006`.
 
 ---
 
@@ -1018,7 +1135,15 @@ Required on all collection screens. Non-negotiable.
 - Visible without scrolling at 360px
 - Inserts at cursor position — never replaces selected text
 - Multi-character inserts (`aa`, `ee`, `ii`, `oo`, `uu`) advance cursor by 2 — must bypass IME autocorrect to prevent interference
-- Characters: `ŋ` `ɓ` `ɗ` `ñ` `ɲ` `aa` `ee` `ii` `oo` `uu`
+- Characters: `ŋ` `ɓ` `ɗ` `ñ` `ɲ` `ʔ`, plus the long vowels `aa` `ee` `ii` `oo` `uu`
+
+**`ʔ` (U+0294, glottal stop) is intentionally supported** (amended 2026-08-23).
+It was absent from this list and present in the implementation; the
+implementation is right. The glottal stop is a phoneme in the target languages,
+and a student who cannot type it will simply drop it — the same failure this bar
+exists to prevent for `ŋ`. Asserted in the UI's
+`src/types/rsc.preservation.test.ts` so the list and the bar cannot drift apart
+again.
 
 `ŋ` is the highest-priority character. If not trivially accessible, students type `n` and never learn the difference. Linguistic sovereignty — not optional.
 
@@ -1035,7 +1160,32 @@ All four action types are queueable in IndexedDB: token save, vote, translation,
 
 ---
 
-# 8. Orchestrator — `sparxstar-3iatlas-rlc`
+# 8. Orchestrator — SUPERSEDED (no WordPress orchestrator exists or will)
+
+> **Superseded 2026-08-23 by owner architectural ruling.** This section described
+> a WordPress PHP orchestrator owning myCred hooks, the DVE promotion pipeline,
+> and a page mount that injected `window.RLC_API_BASE`,
+> `window.RLC_TEACHER_TOKEN`, and `window.RLC_SCHOOL_ID` into the UI at runtime.
+>
+> **That component does not exist and is not to be created.** RLC is entirely
+> Node.js. Nothing in this section is a dependency waiting to be built, and no
+> requirement stated below binds any current repository. It is kept, unedited
+> below the line, only as the record of what was superseded — read it as history.
+>
+> What replaced each part:
+>
+> | Was the orchestrator's | Now |
+> | :--- | :--- |
+> | Injecting a standing teacher token into a page | **Gone.** Authentication is an Identity Service token; authorization is `rlc_authorizations` rows in the engine (NODE-ADR-007). A reusable teacher token in page configuration is explicitly forbidden. |
+> | Injecting school/class/session context | The engine resolves school scope from the authenticated principal's grant. The browser does not supply it. |
+> | Owning the session workflow | The engine owns it, teacher-driven and server-authoritative (NODE-ADR-008). |
+> | myCred hooks and reward settlement | Still a **separate integration**, not yet built, and not a WordPress plugin. The engine writes its own append-only ledger and fires signed webhooks; who consumes them is an integration decision. |
+> | DVE promotion | Unchanged in intent: a token reaches `promoted` only by teacher approval (non-negotiable #10). The pipeline's host is not this component. |
+>
+> ---
+>
+> *Historical text follows.*
+
 
 ## 8.1 Stack
 
@@ -1230,6 +1380,61 @@ This appendix covers the UI repo only. It does not speak to the current
 implementation status of `sparxstar-3iatlas-rlc-node-engine` or
 `sparxstar-3iatlas-rlc` — those repos' own instances of this spec file (or
 equivalent) are authoritative for their own status.
+
+## A.0 Update — 2026-08-23 (synchronization, voting, and CI)
+
+This appendix's status tables below predate the change described here. Where they
+disagree with this section, this section is current.
+
+**Classroom progression is now server-authoritative.** The three defects this
+appendix's §A.5/§A.6 hinted at but did not name have been fixed:
+
+| Was | Now |
+| :--- | :--- |
+| `qc:token` unheard; QC walked a local index, so the teacher's Advance moved one browser | `useQcSession` has no cursor. It hydrates from `GET /session/:id/qc-state` and follows `qc:token`, applying an event only when its `seq` exceeds the last applied. The teacher's advance is a server call. |
+| `ceremony:star` / `ceremony:end` unheard; each browser sorted awards against a local `STAR_ORDER` and ran its own reveal timer | `useCeremony` renders the server's order from `seq`, dedupes by star kind, and ends on `ceremony:end`. `STAR_ORDER` is deleted. |
+| 6 of 13 emitted events handled, with no record of which mattered | All 13 handled and classified in `src/runtime/serverEvents.ts`, enforced by a test. Unknown events and throwing handlers are contained. |
+
+**Step 7 (QC Rewrite) is materially advanced, not complete.** The three vote
+axes are now collected **separately** — pronunciation (when a recording exists) →
+spelling → meaning → conditional correction → translation — which closes the
+gap §A.5 described as *"a single combined `vote` step … that votes on only one
+dimension"*. Only the spelling result branches to correction, and only on a
+strict majority No. What remains outstanding on this step: the audio panel is
+still a placeholder because `RlcRecorder` does not record, and one-vote-per-
+dimension is enforced server-side rather than reflected in a per-axis UI history.
+
+**The AI facilitator controls are gone.** The three "Eshu" buttons returned
+hardcoded placeholder strings presented as guidance. Removed, with their module.
+Canonical §3.9 is corrected to describe what exists: no facilitator, and the
+ordering invariant it existed to protect implemented server-side inside
+`saveToken`. Future facilitator work is explicitly deferred.
+
+**Screen-time signals are now handled client-side** (`screentime:limit-reached`,
+and the halt state it produces). This does **not** mean screen-time is enforced:
+the engine's quota client is a labelled development stub that grants the full
+allowance on every call. See the engine's `PRODUCTION_READINESS.md`.
+
+**CI exists.** `.github/workflows/test.yml` runs clean lockfile install,
+typecheck, lint, tests, the contract smoke test, and a production build on every
+push and PR. `npm run smoke` previously pointed at a file that did not exist —
+that test is now implemented (`src/contract.smoke.test.ts`), so §A.6's finding
+that "the documented backend contract smoke check is not currently runnable" is
+closed.
+
+**Test coverage, actual numbers.** 75 tests across 8 files, stable over five
+consecutive runs — up from 9 tests across 2 files, none of which touched a
+screen. The new suites are screen-level: they render the real components and
+drive the real hooks through a fake socket, because a test that mocked the hook
+would have passed against the broken code. §A.6's "no CI workflow or end-to-end
+suite" is half closed: CI exists, browser-level E2E still does not.
+
+**Still not done, and not claimed:** localization extraction (one screen consumes
+i18next, and none of the four non-English bundles exist), the Starmus recorder,
+the teacher T2 gaps, ceremony lifetime XP and school standing, browser-level
+E2E, and accessibility/mobile-width verification. No browser, offline,
+reconnection-against-a-real-network, accessibility, or mobile-width testing was
+performed for this change.
 
 ## A.1 Wire Contract — Where the Exact Shapes Live
 
