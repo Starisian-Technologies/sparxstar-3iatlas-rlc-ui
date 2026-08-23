@@ -393,7 +393,16 @@ Response 200:
 ```
 
 ### GET /session/:id/qc-state
-Auth: None (any session participant). **Added 2026-08-23.**
+Auth: **None** — the same posture as `GET /session/:id/qc-words` below, and
+deliberately no wider: this returns one token from the list that endpoint already
+serves unauthenticated. **Added 2026-08-23.**
+
+> **Pre-existing exposure, not introduced here.** `qc-words` and `awards` are also
+> unauthenticated, so a caller who knows a `session_id` can read decrypted QC text
+> without a participant token. That predates this endpoint and is unchanged by it;
+> it is called out because adding a second endpoint with the same posture is a
+> reasonable moment to notice. Tightening all three together is a contract change
+> and is not attempted here.
 
 The authoritative current QC position — the hydration and reconnection read. A
 client calls this on mount, on reconnect, and after a reload, and lands exactly
