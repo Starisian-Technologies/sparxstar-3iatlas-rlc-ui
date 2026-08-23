@@ -242,6 +242,9 @@ export interface SessionStatusResponse {
 export interface QcAdvanceResponse {
   success: true
   token_id: string
+  /** The sequence the accompanying `qc:token` broadcast carried. Lets the teacher
+   *  learn the new position from this response instead of correlating the event. */
+  seq: number
 }
 
 export interface QcToken {

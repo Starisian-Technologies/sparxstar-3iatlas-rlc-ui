@@ -398,13 +398,20 @@ order. **No AI facilitator is implemented, and none is planned in this release.*
 LibreChat is not integrated and must not be added merely to satisfy this section.
 
 **The invariant that mattered is implemented, and better placed.** The reason for
-the locked order was that saturation and spelling had to be resolved before a
-token was saved. That now happens *inside* `saveToken` on the server: the
-saturation count and the spelling classification are computed as part of the save
-itself, in one transaction, before the token row exists. A client cannot get the
-order wrong because a client is not orchestrating it. That is a stronger
-guarantee than a documented call sequence, and it is why this section is
-corrected rather than scheduled.
+the locked order was that saturation and spelling had to be resolved as part of
+saving rather than after it. That now happens *inside* `saveToken` on the server,
+in one transaction. A client cannot get the order wrong because a client is not
+orchestrating it. That is a stronger guarantee than a documented call sequence,
+and it is why this section is corrected rather than scheduled.
+
+**Neither check ever rejects a submission** (§1.4, never block — always flag).
+This must not be misread: the token is written, `token:submitted` is emitted, and
+only *then* is `saturation:signal` sent to the submitter if the word is saturated.
+Saturation is a redirect offered to the student, not a gate in front of the
+insert; a saturated word is saved like any other. Spelling likewise classifies
+(`confirmed` / `variant` / `discovery`) and never refuses — `discovery` is the
+most valuable outcome, not a failure. Any future change that makes either check
+able to reject a save would violate §1.4.
 
 **What was removed from the UI (2026-08-23):** a panel of three "Eshu" ability
 buttons — translate, pronounce, semantic hint — that returned hardcoded

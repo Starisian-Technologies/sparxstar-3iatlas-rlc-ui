@@ -375,16 +375,38 @@ client calls this on mount, on reconnect, and after a reload, and lands exactly
 where the class is. It **advances nothing**: only `POST /session/:id/qc-advance`
 moves anyone, and that is teacher-only.
 
-`seq` matches the last emitted `qc:token.seq`, so a client can tell whether a
-socket event it already holds is newer than the state it just fetched — and must
-not let an older fetched position overwrite a newer event.
+`seq` matches the last emitted `qc:token.seq`. REST and socket read the SAME
+counter, so the two are directly comparable — that is what lets a client tell
+whether an event it holds is newer than the state it just fetched.
 
-> **Pre-existing exposure, not introduced here.** `qc-words` and `awards` are also
-> unauthenticated, so a caller who knows a `session_id` can read decrypted QC text
-> without a participant token. That predates this endpoint and is unchanged by it;
-> it is called out because adding a third endpoint with the same posture is a
-> reasonable moment to notice. Tightening all three together is a contract change
-> and is not attempted here.
+The two comparisons are deliberately not identical:
+
+- **A socket event applies on strictly greater** (`seq > applied`). A repeat is a
+  duplicate delivery; a lower value is a late one.
+- **A hydration response applies on greater-or-equal** (`seq >= applied`). Equal
+  means the fetch describes the position the client already holds, and adopting it
+  is a no-op that also refreshes the token's live tallies. Treating equal as stale
+  here would leave a reconnecting client on a token it never refreshed.
+
+So a REST fetch racing the first advance — both reporting `seq: 1` — converges
+rather than deadlocking, and neither path can move a client backward.
+
+> **`token` carries DECRYPTED WRITING.** `QcToken.text` is the student's
+> submission, decrypted server-side for the class to vote on — the same field
+> `GET /session/:id/qc-words` returns. Stated explicitly because a reader of this
+> contract alone could otherwise not tell.
+>
+> **Pre-existing exposure, not introduced here — and why this endpoint is not
+> tightened on its own.** `qc-words` and `awards` are also unauthenticated, so a
+> caller who knows a `session_id` can already read the full decrypted QC list
+> without a participant token. Requiring auth on `qc-state` alone would reduce
+> nothing an attacker can do: they would call `qc-words` and get strictly more.
+> It would look like a fix while changing the exposure not at all, which is worse
+> than leaving it visible.
+>
+> The coherent fix is to tighten all three together, which is a breaking contract
+> change affecting existing UI calls. Recorded as the open decision it is, in
+> `docs/PRIVACY-LIFECYCLE.md`, rather than half-done here.
 
 Response 200:
 ```typescript
@@ -405,22 +427,31 @@ Response 200:
 }
 ```
 ### POST /session/:id/qc-advance
-Auth: `rlc:teacher`
+Auth: classroom role `teacher`, resolved from `rlc_authorizations` and scoped to
+this session's school (§2.1). Not a token scope — no token carries one.
 Request: empty body
 Response 200:
 ```typescript
 {
   success: true;
   token_id: string;  // next QC token
+  seq: number;       // sequence the accompanying qc:token broadcast carried
 }
 ```
+
+`seq` is echoed (added 2026-08-23) so the teacher's own response says where the
+class was moved to. Without it a teacher client must wait for and correlate the
+broadcast, and has nothing to compare against `qc-state` if that broadcast is
+lost.
 Sets `teacher_advanced_qc = true` on first call. Broadcasts `qc:token` socket
 event with the new `seq`.
 
 The advance is a compare-and-set. Two simultaneous clicks both select the same
 next token, so exactly one lands; the other returns `409 { error:
-'qc_advance_conflict' }` and broadcasts nothing. A client receiving that should
-re-read `GET /session/:id/qc-state` rather than assume either outcome. `409 {
+'qc_advance_conflict' }` and broadcasts nothing. A client receiving that **must**
+re-read `GET /session/:id/qc-state` before rendering anything further — advisory
+language would be wrong here, because a teacher UI that assumed either outcome
+would diverge from the class it is supposed to be driving. `409 {
 error: 'qc_exhausted' }` is the different case: there is nothing left to advance
 to, and re-reading will not change that — the class has finished QC.
 ### GET /session/:id/qc-words
@@ -682,6 +713,20 @@ const socket = io(VITE_RLC_BACKEND_URL, {
 });
 ```
 Bad or missing auth → connection rejected with `unauthorized`. Handle gracefully — show rejoin prompt.
+
+**What `role` can and cannot do.** It selects which verifier runs and nothing
+else; both verifiers then run their own full check, so spoofing it gains nothing:
+
+| Client sends | What happens |
+| :---- | :---- |
+| `role: 'teacher'` + participant token | Identity verifier runs and rejects an HMAC participant token outright → `unauthorized` |
+| `role: 'teacher'` + valid Identity token, no grant for the session's school | Authenticated, then refused at the grant lookup → `unauthorized` |
+| `role: 'teacher'` + valid Identity token + grant for that school | Admitted, as a teacher |
+| no `role` (student) + valid participant token | Admitted, as that participant only |
+
+There is no path on which `role` skips a step. Both branches verify a real
+credential and the teacher branch additionally requires an authorization row
+covering `sessionId`'s school.
 ## 4.2 Client → Server Events
 ### heartbeat
 Throttled to minimum 10s server-side. Drives last-active timestamp.
@@ -845,6 +890,12 @@ socket.emit('qc:correction', {
 // kind, not by seq, because the immediate announcement fired when a teacher
 // assigns the Teacher's Star carries seq: null and the numbered run re-emits that
 // same star later — both must resolve to one entry.
+//
+// BOTH emissions carry the same `xp_awarded`, read from the same game manifest.
+// It is display metadata, not an increment: a client must never accumulate XP
+// from these events. XP is granted server-side and read from the account (spec
+// §7.2 — the client never calculates XP), so seeing a star twice cannot
+// double-count anything. Dedupe by kind and the question does not arise.
 {
   seq: number | null;   // position in the run; null = out-of-sequence announcement
   total: number | null; // stars in the run; null on an out-of-sequence announcement
