@@ -79,12 +79,16 @@ export function useCeremony(session_id: string | null, options: UseCeremonyOptio
 
   const sessionIdRef = useRef(session_id)
   sessionIdRef.current = session_id
+  /** Participant token when this is a student; teachers fall back to Identity. */
+  const readTokenRef = useRef<string | null>(null)
+  readTokenRef.current =
+    options.auth && !('role' in options.auth) ? (options.auth as { token: string }).token : null
 
   const hydrate = useCallback(async () => {
     const sid = sessionIdRef.current
     if (!sid) return
     try {
-      const result = await api.session.awards(sid)
+      const result = await api.session.awards(sid, readTokenRef.current)
       setAwards(result)
       setError(null)
       return result

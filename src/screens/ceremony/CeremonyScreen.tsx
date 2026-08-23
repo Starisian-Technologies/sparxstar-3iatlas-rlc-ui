@@ -189,8 +189,18 @@ export function CeremonyScreen({
    * `total` is the run length the server declared, so a client that missed a star
    * does not offer the exit early as though it had seen the whole ceremony.
    */
+  /**
+   * Only NUMBERED stars count toward the server's declared run length.
+   *
+   * `orderedStars` also contains out-of-sequence announcements (`seq: null`) — the
+   * immediate Teacher's Star acknowledgement. Counting those against `total` let
+   * one of them stand in for a dropped run star, so a client that missed an award
+   * could still reach `total` and offer the exit as though it had seen the whole
+   * ceremony.
+   */
+  const numberedRevealed = orderedStars.filter((s) => s.seq !== null).length
   const starsDone =
-    finished && revealedCount >= orderedStars.length && (total === null || orderedStars.length >= total)
+    finished && revealedCount >= orderedStars.length && (total === null || numberedRevealed >= total)
 
   return (
     <Screen

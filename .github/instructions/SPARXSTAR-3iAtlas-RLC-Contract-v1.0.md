@@ -366,47 +366,31 @@ Response 200:
 }
 ```
 ### GET /session/:id/qc-state
-Auth: **None** — the same posture as `GET /session/:id/qc-words` below, and
-deliberately no wider: this returns one token from the list that endpoint already
-serves unauthenticated. **Added 2026-08-23.**
+Auth: **session reader** — either `Participant <token>` for *this* session, or
+`Bearer <identity_token>` from a teacher/admin holding an `rlc_authorizations`
+grant for this session's school. **Added 2026-08-23.**
 
 The authoritative current QC position — the hydration and reconnection read. A
 client calls this on mount, on reconnect, and after a reload, and lands exactly
 where the class is. It **advances nothing**: only `POST /session/:id/qc-advance`
 moves anyone, and that is teacher-only.
 
-`seq` matches the last emitted `qc:token.seq`. REST and socket read the SAME
-counter, so the two are directly comparable — that is what lets a client tell
-whether an event it holds is newer than the state it just fetched.
+`seq` matches the last emitted `qc:token.seq`, so a client can tell whether a
+socket event it already holds is newer than the state it just fetched — and must
+not let an older fetched position overwrite a newer event.
 
-The two comparisons are deliberately not identical:
-
-- **A socket event applies on strictly greater** (`seq > applied`). A repeat is a
-  duplicate delivery; a lower value is a late one.
-- **A hydration response applies on greater-or-equal** (`seq >= applied`). Equal
-  means the fetch describes the position the client already holds, and adopting it
-  is a no-op that also refreshes the token's live tallies. Treating equal as stale
-  here would leave a reconnecting client on a token it never refreshed.
-
-So a REST fetch racing the first advance — both reporting `seq: 1` — converges
-rather than deadlocking, and neither path can move a client backward.
-
-> **`token` carries DECRYPTED WRITING.** `QcToken.text` is the student's
-> submission, decrypted server-side for the class to vote on — the same field
-> `GET /session/:id/qc-words` returns. Stated explicitly because a reader of this
-> contract alone could otherwise not tell.
+> **`token` carries DECRYPTED WRITING**, which is why this is authenticated.
+> `QcToken.text` is the student's submission, decrypted server-side for the class
+> to vote on.
 >
-> **Pre-existing exposure, not introduced here — and why this endpoint is not
-> tightened on its own.** `qc-words` and `awards` are also unauthenticated, so a
-> caller who knows a `session_id` can already read the full decrypted QC list
-> without a participant token. Requiring auth on `qc-state` alone would reduce
-> nothing an attacker can do: they would call `qc-words` and get strictly more.
-> It would look like a fix while changing the exposure not at all, which is worse
-> than leaving it visible.
->
-> The coherent fix is to tighten all three together, which is a breaking contract
-> change affecting existing UI calls. Recorded as the open decision it is, in
-> `docs/PRIVACY-LIFECYCLE.md`, rather than half-done here.
+> **Closed 2026-08-23: `qc-words`, `qc-state`, and `awards` were all
+> unauthenticated.** Anyone holding a session UUID could read minors' writing with
+> no credential. The first reasoning offered for leaving the new endpoint open —
+> that tightening one changes nothing while the others serve more — was true and
+> was the argument for closing all three, not for adding a third. All three now
+> require a session reader. Refusals: `401` with no or an invalid credential,
+> `403 session_scope_required` for a valid credential belonging to another session
+> or an account with no grant for this school.
 
 Response 200:
 ```typescript
@@ -455,7 +439,8 @@ would diverge from the class it is supposed to be driving. `409 {
 error: 'qc_exhausted' }` is the different case: there is nothing left to advance
 to, and re-reading will not change that — the class has finished QC.
 ### GET /session/:id/qc-words
-Auth: None
+Auth: **session reader** (see `GET /session/:id/qc-state`) — changed 2026-08-23
+from `None`. Returns decrypted student writing.
 Response 200:
 ```typescript
 {
@@ -476,7 +461,8 @@ Response 200:
 }
 ```
 ### GET /session/:id/awards
-Auth: None
+Auth: **session reader** (see `GET /session/:id/qc-state`) — changed 2026-08-23
+from `None`. Returns participant `screen_names`.
 Response 200:
 ```typescript
 {

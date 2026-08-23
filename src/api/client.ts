@@ -67,6 +67,20 @@ export function getTeacherToken(): string | null {
   return typeof fromWindow === 'string' && fromWindow.length > 0 ? fromWindow : null
 }
 
+/**
+ * Credential for the session READ surfaces (`qc-words`, `qc-state`, `awards`).
+ *
+ * Those three return decrypted student writing, so the engine now requires either
+ * a participant token for that session or a teacher/admin grant for its school.
+ * A student passes their participant token; a teacher falls back to the injected
+ * Identity token.
+ */
+export function sessionReadHeaders(participant_token?: string | null): Record<string, string> {
+  if (participant_token) return { Authorization: `Participant ${participant_token}` }
+  const token = getTeacherToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 function teacherAuthHeaders(): Record<string, string> {
   const token = getTeacherToken()
   // Template literal, deliberately. A review bot reported this line as an
@@ -159,8 +173,10 @@ export const api = {
       })
     },
 
-    async qcWords(session_id: string): Promise<QcToken[]> {
-      const result = await request<QcWordsResponse>(`/session/${session_id}/qc-words`)
+    async qcWords(session_id: string, participant_token?: string | null): Promise<QcToken[]> {
+      const result = await request<QcWordsResponse>(`/session/${session_id}/qc-words`, {
+        headers: sessionReadHeaders(participant_token)
+      })
       return result.qc_words
     },
 
@@ -172,12 +188,12 @@ export const api = {
      * advances anything — only the teacher's `qcAdvance` does that — so a
      * student calling it repeatedly changes nothing for anyone.
      */
-    qcState(session_id: string): Promise<QcStateResponse> {
-      return request(`/session/${session_id}/qc-state`)
+    qcState(session_id: string, participant_token?: string | null): Promise<QcStateResponse> {
+      return request(`/session/${session_id}/qc-state`, { headers: sessionReadHeaders(participant_token) })
     },
 
-    awards(session_id: string): Promise<AwardsResponse> {
-      return request(`/session/${session_id}/awards`)
+    awards(session_id: string, participant_token?: string | null): Promise<AwardsResponse> {
+      return request(`/session/${session_id}/awards`, { headers: sessionReadHeaders(participant_token) })
     },
 
     ceremony(session_id: string): Promise<{ success: true }> {

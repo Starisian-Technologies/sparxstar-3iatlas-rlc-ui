@@ -382,7 +382,7 @@ export function QcScreen({
       }}>
         <div>
           <div style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
-            Review {position} of {qcWords.length}
+            {t('qc.counter', { current: position, total: qcWords.length, defaultValue: 'Review {{current}} of {{total}}' })}
           </div>
           <div style={{ fontSize: 28, fontWeight: 900, color: tokens.text, marginTop: 2, letterSpacing: -0.5 }}>
             {currentToken.text}
@@ -432,7 +432,7 @@ export function QcScreen({
               <div style={{ fontSize: 14 }}>
                 {((currentToken.vote_audio?.yes ?? 0) + (currentToken.vote_audio?.no ?? 0)) > 0
                   ? 'Audio playback (Starmus not yet wired)'
-                  : 'No recording for this word'}
+                  : t('qc.no_recording', { defaultValue: 'No recording for this word' })}
               </div>
             </div>
             <div style={{ fontSize: 15, color: tokens.text, fontWeight: 600 }}>
@@ -539,7 +539,7 @@ export function QcScreen({
               spellCheck={false}
             />
             <Button onClick={() => void handleCorrection()} disabled={!correction.trim()} variant="primary">
-              Submit correction
+              {t('qc.submit_correction', { defaultValue: 'Submit correction' })}
             </Button>
           </div>
         )}
@@ -551,7 +551,7 @@ export function QcScreen({
               type="text"
               value={translation}
               onChange={(e) => setTranslation(e.target.value)}
-              placeholder="Type the English meaning…"
+              placeholder={t('qc.translation_placeholder', { defaultValue: 'Type the English meaning…' })}
               style={{ ...inputStyle, opacity: translationSubmitted ? 0.5 : 1 }}
               aria-label="Translation input"
               disabled={translationSubmitted}
@@ -563,7 +563,9 @@ export function QcScreen({
               disabled={!translation.trim() || translationSubmitted}
               variant="primary"
             >
-              {translationSubmitted ? 'Waiting for others…' : 'Submit translation'}
+              {translationSubmitted
+                ? t('qc.translation_waiting', { defaultValue: 'Waiting for others…' })
+                : t('qc.submit_translation', { defaultValue: 'Submit translation' })}
             </Button>
             {/* Class translation list is no longer broadcast on the wire (contract §3.4). */}
           </div>
@@ -588,7 +590,7 @@ export function QcScreen({
       {isTeacher && (
         <Card highlight>
           <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12 }}>
-            Teacher controls
+            {t('qc.teacher_controls', { defaultValue: 'Teacher controls' })}
           </div>
           {exhausted ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -597,7 +599,7 @@ export function QcScreen({
                   htmlFor="teacher-star"
                   style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: tokens.textMuted }}
                 >
-                  Assign Teacher&apos;s Star
+                  {t('qc.assign_star_label', { defaultValue: "Assign Teacher's Star" })}
                 </label>
                 <select
                   id="teacher-star"
@@ -618,7 +620,7 @@ export function QcScreen({
                   }}
                   aria-label="Select participant to award Teacher's Star"
                 >
-                  <option value="">Select a student…</option>
+                  <option value="">{t('qc.assign_star_select_placeholder', { defaultValue: 'Select a student…' })}</option>
                   {participants.map((p) => (
                     <option key={p.participant_id} value={p.participant_id}>
                       {p.display_name}
@@ -643,16 +645,20 @@ export function QcScreen({
                 disabled={!teacherStarParticipant || teacherStarAssigned}
                 variant={teacherStarAssigned ? 'ghost' : 'primary'}
               >
-                {teacherStarAssigned ? "Teacher's Star assigned ✓" : "Assign Teacher's Star"}
+                {teacherStarAssigned
+                  ? t('qc.assign_star_done', { defaultValue: "Teacher's Star assigned ✓" })
+                  : t('qc.assign_star_button', { defaultValue: "Assign Teacher's Star" })}
               </Button>
 
               <Button onClick={onGoCeremony} variant="soft">
-                Start ceremony →
+                {t('qc.start_ceremony', { defaultValue: 'Start ceremony →' })}
               </Button>
             </div>
           ) : (
             <Button onClick={() => void handleAdvance()} variant="primary" disabled={advancing}>
-              {advancing ? 'Moving the class…' : 'Next word →'}
+              {advancing
+                ? t('qc.advancing', { defaultValue: 'Moving the class…' })
+                : t('qc.next_word', { defaultValue: 'Next word →' })}
             </Button>
           )}
         </Card>
@@ -695,9 +701,24 @@ function StepLabel({ label, tokens }: { label: string; tokens: { primary: string
   )
 }
 
+/**
+ * The server's tallies for one axis, used until this client has cast its own vote.
+ *
+ * Exhaustive over the three dimensions on purpose. It previously fell through to
+ * `vote_orthography` for anything that was not `semantics`, which meant the
+ * pronunciation step displayed SPELLING tallies — a wrong number presented as if
+ * it were the count of people who could hear the word.
+ */
 function getDefaultCounts(token: QcVoteToken, dimension: VotePayload['dimension']): VoteCounts {
-  if (dimension === 'semantics') return token.vote_semantics
-  return token.vote_orthography
+  switch (dimension) {
+    case 'semantics':
+      return token.vote_semantics
+    case 'audio':
+      // Optional on the wire: a token with no recording carries no audio tally.
+      return token.vote_audio ?? { yes: 0, no: 0 }
+    case 'orthography':
+      return token.vote_orthography
+  }
 }
 
 function FullScreenMessage({

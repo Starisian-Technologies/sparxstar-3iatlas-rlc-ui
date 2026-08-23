@@ -81,6 +81,18 @@ export function useQcSession(
   const metaRef = useRef(options.initialMeta)
   metaRef.current = options.initialMeta
   /**
+   * The participant token, when this client is a student.
+   *
+   * The three session reads now require a credential — they serve decrypted
+   * writing — so a student passes their participant token and a teacher falls
+   * back to the injected Identity token inside `sessionReadHeaders`. A teacher's
+   * socket auth carries `role: 'teacher'` and no participant token, which is
+   * exactly the discriminator.
+   */
+  const readTokenRef = useRef<string | null>(null)
+  readTokenRef.current =
+    options.auth && !('role' in options.auth) ? (options.auth as { token: string }).token : null
+  /**
    * The last sequence actually applied. A ref, not state: the ordering decision
    * happens inside an event handler that must see the newest value immediately,
    * and a state read there would see the value from its own render.
@@ -103,7 +115,7 @@ export function useQcSession(
     const sid = sessionIdRef.current
     if (!sid) return
     try {
-      setQcWords(await api.session.qcWords(sid))
+      setQcWords(await api.session.qcWords(sid, readTokenRef.current))
     } catch {
       // Best-effort: this list is context, so keeping a slightly stale copy is
       // better than blanking the screen.
@@ -123,7 +135,7 @@ export function useQcSession(
     const sid = sessionIdRef.current
     if (!sid) return
     try {
-      const state = await api.session.qcState(sid)
+      const state = await api.session.qcState(sid, readTokenRef.current)
       setExhausted(state.exhausted)
       if (state.seq >= appliedSeqRef.current) {
         appliedSeqRef.current = state.seq
@@ -147,7 +159,7 @@ export function useQcSession(
     setCurrentToken(null)
     void (async () => {
       try {
-        const [words] = await Promise.all([api.session.qcWords(session_id), hydrate()])
+        const [words] = await Promise.all([api.session.qcWords(session_id, readTokenRef.current), hydrate()])
         if (!active) return
         setQcWords(words)
       } catch (err) {
