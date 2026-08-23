@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api, getTeacherToken } from '@/api/client'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/Button'
@@ -57,6 +58,7 @@ export function QcScreen({
   onGoCeremony,
 }: QcScreenProps) {
   const { tokens } = useTheme()
+  const { t } = useTranslation()
   const auth = useMemo(() => {
     if (isTeacher) {
       const t = getTeacherToken()
@@ -123,7 +125,13 @@ export function QcScreen({
   }, [session?.leaderboard])
 
   if (loading) {
-    return <FullScreenMessage title="Loading review…" subtitle="Preparing words for the community check." tokens={tokens} />
+    return (
+      <FullScreenMessage
+        title={t('qc.loading', { defaultValue: 'Loading review…' })}
+        subtitle={t('qc.loading_subtitle', { defaultValue: 'Preparing words for the community check.' })}
+        tokens={tokens}
+      />
+    )
   }
 
   if (!currentToken) {
@@ -135,26 +143,34 @@ export function QcScreen({
     if (error) {
       return (
         <FullScreenMessage
-          title="Lost the review"
-          subtitle="Could not reach the session — check your connection. This screen will catch up on its own."
+          title={t('qc.lost_review_title', { defaultValue: 'Lost the review' })}
+          subtitle={t('qc.lost_review_subtitle', {
+            defaultValue: 'Could not reach the session — check your connection. This screen will catch up on its own.'
+          })}
           tokens={tokens}
         />
       )
     }
     if (exhausted) {
       return (
-        <FullScreenMessage title="Review finished" subtitle="Every word has been checked." tokens={tokens} />
+        <FullScreenMessage
+          title={t('qc.review_finished_title', { defaultValue: 'Review finished' })}
+          subtitle={t('qc.review_finished_subtitle', { defaultValue: 'Every word has been checked.' })}
+          tokens={tokens}
+        />
       )
     }
     return (
       <FullScreenMessage
-        title="Waiting for your teacher"
+      title={t('qc.waiting_for_teacher_title', { defaultValue: 'Waiting for your teacher' })}
         subtitle={
           awaitingTeacher
-            ? 'The class reviews each word together. Your teacher starts the first one.'
-            : 'No words ready for review yet.'
-        }
-        tokens={tokens}
+          ? t('qc.waiting_for_teacher_subtitle', {
+            defaultValue: 'The class reviews each word together. Your teacher starts the first one.'
+          })
+          : t('qc.empty_subtitle', { defaultValue: 'No words ready for review yet.' })
+      }
+      tokens={tokens}
       />
     )
   }
@@ -223,7 +239,7 @@ export function QcScreen({
       }
       await refreshStatus()
     } catch {
-      setActionError('Could not submit vote. Please try again.')
+      setActionError(t('qc.error_vote', { defaultValue: 'Could not submit vote. Please try again.' }))
     }
   }
 
@@ -372,7 +388,7 @@ export function QcScreen({
       <Card>
         {step === 'audio' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 1 — Pronunciation" tokens={tokens} />
+            <StepLabel label={t('qc.step_pronunciation', { defaultValue: 'Step 1 — Pronunciation' })} tokens={tokens} />
             <div style={{
               border: `2px dashed ${tokens.border}`,
               borderRadius: 12,
@@ -397,7 +413,7 @@ export function QcScreen({
               </div>
             </div>
             <div style={{ fontSize: 15, color: tokens.text, fontWeight: 600 }}>
-              Can you hear the word said properly?
+              {t('qc.vote_question_audio', { defaultValue: 'Can you hear the word said properly?' })}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
@@ -430,15 +446,17 @@ export function QcScreen({
         {(step === 'spelling' || step === 'meaning') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <StepLabel
-              label={step === 'spelling' ? 'Step 2 — Spelling' : 'Step 3 — Meaning'}
+              label={step === 'spelling'
+                ? t('qc.step_spelling', { defaultValue: 'Step 2 — Spelling' })
+                : t('qc.step_meaning', { defaultValue: 'Step 3 — Meaning' })}
               tokens={tokens}
             />
             <div style={{ fontSize: 15, color: tokens.text, fontWeight: 600 }}>
               {step === 'spelling'
-                ? 'Is this spelled correctly?'
+                ? t('qc.vote_question_spelling', { defaultValue: 'Is this spelled correctly?' })
                 : mode === 'rsc'
-                  ? 'Does this make sense? Is the grammar correct?'
-                  : 'Does this make sense?'}
+                  ? t('qc.vote_question_semantics_rsc', { defaultValue: 'Does this make sense? Is the grammar correct?' })
+                  : t('qc.vote_question_semantics_rwc', { defaultValue: 'Does this make sense?' })}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
@@ -481,9 +499,11 @@ export function QcScreen({
 
         {step === 'correction' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 4 — Correction" tokens={tokens} />
+            <StepLabel label={t('qc.step_correction_new', { defaultValue: 'Step 4 — Correction' })} tokens={tokens} />
             <div style={{ fontSize: 14, color: tokens.textMuted }}>
-              The class voted that spelling needs a fix. The word&apos;s author can edit it below.
+              {t('qc.correction_prompt_author', {
+                defaultValue: 'The class voted that spelling needs a fix. The word\'s author can edit it below.'
+              })}
             </div>
             <input
               type="text"
@@ -503,7 +523,7 @@ export function QcScreen({
 
         {step === 'translation' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StepLabel label="Step 5 — Translation" tokens={tokens} />
+            <StepLabel label={t('qc.step_translation_new', { defaultValue: 'Step 5 — Translation' })} tokens={tokens} />
             <input
               type="text"
               value={translation}
