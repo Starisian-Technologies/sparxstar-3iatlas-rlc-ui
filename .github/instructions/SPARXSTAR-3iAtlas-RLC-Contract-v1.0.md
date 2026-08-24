@@ -100,11 +100,17 @@ whether the 2026-08-23 auth tightening on `qc-words`, `qc-state`, and `awards` �
 `None` → `session reader` — is a breaking change for an existing consumer. **It
 is not.** All three live on the session router, which is unmounted in Release 1,
 so they answer 404 to everyone today; there is no deployed caller to break. The
-same holds for the socket handshake's new refusal reason strings: socket
-registration itself is not gated, but neither credential type can be obtained
-without the classroom routes (a participant token comes from `session/join`, and
-a teacher socket needs a session that only `session/create` can make), so no
-Release 1 client observes either string.
+same holds — more strongly — for the socket handshake's new refusal reason
+strings and for every `seq`/`total`/`stars_total` field added to a socket event:
+**socket.io is not attached at all** when `CLASSROOM_ENABLED` is off.
+`src/index.ts` constructs the `Server` and calls `registerSockets` inside that
+conditional, so in Release 1 there is no socket namespace to connect to, no
+handshake to refuse, and no event to receive.
+
+*(Corrected 2026-08-24. This paragraph previously said "socket registration
+itself is not gated", which was wrong — it is. The weaker argument it then made,
+that neither credential type is obtainable without the classroom routes, is also
+true and remains true, but it is not the reason.)*
 
 Release 1's reachable surface is the adult single-player one: `POST
 /events/batch` (`game.result` only), `GET /account/:id/xp`, and `GET
@@ -402,6 +408,15 @@ Response 200:
 }
 ```
 ### GET /session/:id/qc-state
+
+**`seq` is on the ENVELOPE, not on `QcToken`.** A review read the new field as
+belonging to the token type and expected `QcToken.seq`; it does not exist and
+should not be added. `QcToken` is unchanged by this amendment — the same shape
+`qc-words` has always returned. The sequence describes *the class's position*,
+which is a property of the session, so it lives on this response and on the
+`qc:token` event beside the token rather than inside it. A token has no sequence
+of its own; it can be current at one position and, after a reconnect and a
+re-read, still be current at the same one.
 Auth: **session reader** — either `Participant <token>` for *this* session, or
 `Bearer <identity_token>` from a teacher/admin holding an `rlc_authorizations`
 grant for this session's school. **Added 2026-08-23.**

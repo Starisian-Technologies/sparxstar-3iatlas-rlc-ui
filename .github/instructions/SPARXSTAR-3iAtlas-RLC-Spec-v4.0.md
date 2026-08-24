@@ -378,7 +378,7 @@ The backend stores the enriched translation in `token_translations` table (one r
 | `partial` | Set at token creation in `translation_only` or `full` depth |
 | `complete` | Set when Yahura signals `audio-routed` |
 | `verified` | Set when `vote_orthography.yes / total >= 0.8` AND `total >= floor(session.participant_count / 2)` |
-| `promoted` | Set when teacher calls `POST /token/:id/approve` |
+| `promoted` | Set when teacher calls `POST /token/:id/approve`. **The gate is real; what follows it is not built** (noted 2026-08-24): the state transition and its teacher-approval requirement are implemented and enforced, so nothing auto-promotes and nothing leaks — but no code in either repository then submits the derived envelope to `sparxstar-dheghom-dve-core`. A promoted token currently goes nowhere. See `OQ-NODE-008-A` in §8. |
 
 Transitions are monotonic — forward only. Backward transitions rejected with 409.
 
