@@ -734,15 +734,36 @@ const socket = io(VITE_RLC_BACKEND_URL, {
   }
 });
 ```
-Bad or missing auth → connection rejected with `unauthorized`. Handle gracefully — show rejoin prompt.
+**Refusal reasons (amended 2026-08-23).** The handshake refuses with one of
+exactly two strings, delivered as the `connect_error` message. It previously sent
+the single string `unauthorized`, which a client could not act on: it could not
+tell a fixable credential problem from a permanent entitlement failure.
+
+| Reason | Means | What the client should do |
+| :---- | :---- | :---- |
+| `unauthenticated` | No credential, or one that failed verification | Re-authenticate, then retry |
+| `session_scope_required` | Authenticated, and not entitled to this session | Stop retrying; the credential is not the problem |
+
+Two is the whole vocabulary, deliberately. No grant, a grant for the wrong
+school, a session that does not exist, and no `sessionId` at all **all** report
+`session_scope_required` — telling an authenticated caller which of those it was
+would let it enumerate real session ids and the schools they belong to.
+Authentication also runs before any session lookup, so an unauthenticated caller
+learns nothing about which sessions exist. The specific check that failed goes to
+the server log only.
+
+No Release 1 client observes either string: teacher and participant sockets both
+need a credential obtainable only from the classroom routes, which are unmounted
+(§2.5). Handle gracefully in either case — show a rejoin prompt on
+`unauthenticated`.
 
 **What `role` can and cannot do.** It selects which verifier runs and nothing
 else; both verifiers then run their own full check, so spoofing it gains nothing:
 
 | Client sends | What happens |
 | :---- | :---- |
-| `role: 'teacher'` + participant token | Identity verifier runs and rejects an HMAC participant token outright → `unauthorized` |
-| `role: 'teacher'` + valid Identity token, no grant for the session's school | Authenticated, then refused at the grant lookup → `unauthorized` |
+| `role: 'teacher'` + participant token | Identity verifier runs and rejects an HMAC participant token outright → `unauthenticated`, before any database access, so there is no lookup to time |
+| `role: 'teacher'` + valid Identity token, no grant for the session's school | Authenticated, then refused at the grant lookup → `session_scope_required` |
 | `role: 'teacher'` + valid Identity token + grant for that school | Admitted, as a teacher |
 | no `role` (student) + valid participant token | Admitted, as that participant only |
 

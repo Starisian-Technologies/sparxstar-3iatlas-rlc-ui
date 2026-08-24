@@ -174,3 +174,37 @@ describe('shouldApplyQcSeq', () => {
     expect(shouldApplyQcSeq(1, 0)).toBe(true)
   })
 })
+
+/**
+ * `qc:vote`, `qc:translation`, and `qc:correction` each name TWO events.
+ *
+ * They appear in BOTH `ServerToClientEvents` (real broadcasts the engine emits
+ * after the REST action lands — `castVote`, `submitQcTranslation`,
+ * `correctToken`) and `ClientToServerEvents` (reserved, no server handler).
+ *
+ * This is pinned because conflating them already caused a documentation
+ * regression once: an attempt to "correct" the spec's socket table replaced the
+ * server→client rows with "reserved", which erased broadcasts this client
+ * genuinely depends on. If someone reasons the same way about the code and drops
+ * these handlers, live vote tallies stop updating during QC and the class votes
+ * against stale counts. A `handled` disposition on all three is the guard.
+ */
+describe('the three dual-named QC events', () => {
+  const DUAL = ['qc:vote', 'qc:translation', 'qc:correction'] as const
+
+  it('are inbound broadcasts this client handles, not reserved paths', () => {
+    const dispositions = Object.fromEntries(
+      DUAL.map((name) => [name, EVENT_DISPOSITION[name]?.disposition])
+    )
+    // Asserted as one object so a failure names which one was downgraded.
+    expect(dispositions).toEqual({
+      'qc:vote': 'handled',
+      'qc:translation': 'handled',
+      'qc:correction': 'handled'
+    })
+  })
+
+  it('are all present in the server-to-client inventory', () => {
+    expect(DUAL.every((name) => KNOWN_EVENTS.includes(name))).toBe(true)
+  })
+})
