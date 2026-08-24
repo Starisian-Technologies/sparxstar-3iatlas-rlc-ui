@@ -87,6 +87,30 @@ be read as a behavioural change to the adult path; it is not. What changed is th
 the classroom path stopped using a *different* verifier and now calls the same
 one. No adult client needs to do anything differently.
 ---
+## 2.5 What is actually reachable in Release 1
+
+**Amended 2026-08-23.** Every endpoint in §3 below that needs a teacher, a
+classroom, a school roster, a minor tier, an RLC session, or the DVE gate is
+**not mounted** unless `CLASSROOM_ENABLED=true`, which is off by default
+(`src/routes/index.ts`). An unmounted route 404s for every caller, so it cannot
+be reached by a token of any kind.
+
+This is stated here because it is the answer to a question §3 otherwise invites:
+whether the 2026-08-23 auth tightening on `qc-words`, `qc-state`, and `awards` —
+`None` → `session reader` — is a breaking change for an existing consumer. **It
+is not.** All three live on the session router, which is unmounted in Release 1,
+so they answer 404 to everyone today; there is no deployed caller to break. The
+same holds for the socket handshake's new refusal reason strings: socket
+registration itself is not gated, but neither credential type can be obtained
+without the classroom routes (a participant token comes from `session/join`, and
+a teacher socket needs a session that only `session/create` can make), so no
+Release 1 client observes either string.
+
+Release 1's reachable surface is the adult single-player one: `POST
+/events/batch` (`game.result` only), `GET /account/:id/xp`, and `GET
+/account/:id/ledger` — the three §2.4 surfaces, whose verifier is unchanged.
+
+---
 # 3. REST Endpoints — Exact Contracts
 ## 3.1 School & Class
 ### POST /school/create
