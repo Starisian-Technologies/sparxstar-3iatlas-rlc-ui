@@ -1,0 +1,55 @@
+name: Test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Least-privilege GITHUB_TOKEN: this workflow only checks out code and runs
+# checks — it needs no write scopes.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` and not `npm install`: the lockfile is the point. An install
+      # that is free to resolve differently from the committed tree would test a
+      # dependency graph no deploy will ever have.
+      - name: Install (clean, lockfile-enforced)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Unit AND integration: the screen-level QC/ceremony synchronization tests
+      # live in the same runner. They are the ones that would have caught the
+      # missing socket handlers, so they must never be optional.
+      - name: Tests
+        run: npm run test
+
+      - name: Contract smoke
+        run: npm run smoke
+
+      - name: Production build
+        run: npm run build
+
+      # Advisory, not blocking. The engine repo gates on high/critical because it
+      # reached zero first; this repo still carries a transitive backlog, and a
+      # blocking gate here would fail every PR on findings unrelated to it. The
+      # report is printed so the backlog stays visible rather than forgotten.
+      - name: Dependency audit (advisory)
+        run: npm audit --audit-level=high || true
+        continue-on-error: true

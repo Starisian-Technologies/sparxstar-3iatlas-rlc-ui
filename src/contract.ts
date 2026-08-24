@@ -242,6 +242,9 @@ export interface SessionStatusResponse {
 export interface QcAdvanceResponse {
   success: true
   token_id: string
+  /** The sequence the accompanying `qc:token` broadcast carried. Lets the teacher
+   *  learn the new position from this response instead of correlating the event. */
+  seq: number
 }
 
 export interface QcToken {
@@ -261,11 +264,41 @@ export interface QcWordsResponse {
   qc_words: QcToken[]
 }
 
+/**
+ * GET /session/:id/qc-state — the authoritative current QC position.
+ *
+ * This is the reconnection and hydration read. Clients use it on mount, on
+ * reconnect, and after a reload; they do NOT keep a local cursor. `seq` matches
+ * the last emitted `qc:token.seq`, so a client can tell whether a socket event
+ * it holds is newer than the state it just fetched.
+ */
+export interface QcStateResponse {
+  /** Monotonic advance counter. 0 before the teacher's first advance. */
+  seq: number
+  /** The token the whole class is on, or null before the first advance. */
+  token: QcToken | null
+  /** True when every selectable token has been advanced through. */
+  exhausted: boolean
+}
+
 export interface Star {
   star: StarKind
   participant_ids: string[]
   screen_names: string[]
   xp_awarded: number
+}
+
+/**
+ * A `ceremony:star` broadcast: a Star plus its place in the server-defined run.
+ *
+ * `seq`/`total` are null for the immediate announcement fired when a teacher
+ * assigns the Teacher's Star, which is not a step in the ceremony run (the run
+ * re-emits that star with a real seq). Clients therefore dedupe by `star` kind
+ * and order by `seq`, ignoring null-seq events for progress purposes.
+ */
+export interface CeremonyStarEvent extends Star {
+  seq: number | null
+  total: number | null
 }
 export interface AwardsResponse {
   stars: Star[]
@@ -387,6 +420,9 @@ export interface ServerToClientEvents {
   }) => void
   'saturation:signal': (p: { token_id: string; signal: 'saturated' }) => void
   'qc:token': (p: {
+    /** Monotonic advance sequence. Apply only if higher than the last applied —
+     *  this is what makes duplicated, delayed, or reordered delivery safe. */
+    seq: number
     token_id: string
     text: string
     yahura_transcription: string | null
@@ -401,8 +437,14 @@ export interface ServerToClientEvents {
   'qc:translation': (p: { token_id: string }) => void
   'qc:correction': (p: { token_id: string; correction_needed?: true; corrected?: true }) => void
   'screentime:limit-reached': (p: { participant_id: string | null; reset_at: number | null }) => void
-  'ceremony:star': (p: Star) => void
-  'ceremony:end': (p: { session_id: string; total_tokens: number; discovery_count: number }) => void
+  'ceremony:star': (p: CeremonyStarEvent) => void
+  'ceremony:end': (p: {
+    session_id: string
+    total_tokens: number
+    discovery_count: number
+    /** Stars in the run, so a client can tell a complete reveal from a partial one. */
+    stars_total: number
+  }) => void
 }
 
 /** Client → server. */

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { createSocket } from '@/runtime/socket'
-import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { Avatar } from '@/components/Avatar'
 import { StarBadge } from '@/components/StarBadge'
@@ -131,7 +130,6 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
         </section>
       </div>
 
-      <AiGuidePanel compact context={{ language: session?.language, mode: session?.mode }} />
 
       {error && <div style={errorStyle}>Connection issue — retrying.</div>}
 

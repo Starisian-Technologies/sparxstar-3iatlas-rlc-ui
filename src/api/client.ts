@@ -19,6 +19,7 @@ import type {
   QcAdvanceResponse,
   QcToken,
   QcWordsResponse,
+  QcStateResponse,
   TokenSaveRequest,
   TokenSaveResponse,
   VoteRequest,
@@ -47,16 +48,48 @@ function participantAuthHeaders(): Record<string, string> {
   return _participantToken ? { Authorization: `Participant ${_participantToken}` } : {}
 }
 
-// ─── Teacher token (Helios JWT injected by orchestrator; never minted here) ──
+// ─── Teacher token ───────────────────────────────────────────────────────────
+//
+// An Identity-issued token, supplied by the host page at runtime and held in
+// page memory only — never persisted, never minted here. Whether its holder can
+// do anything is decided server-side against RLC's authorization records; this
+// token proves identity, not authority.
 
-function getTeacherToken(): string | null {
+/**
+ * The teacher's token, or null. Exported because the socket handshake needs the
+ * same value the REST headers use — three files had grown their own copy of this
+ * four-line function, which is three chances for them to disagree about where
+ * the token lives.
+ */
+export function getTeacherToken(): string | null {
   if (typeof window === 'undefined') return null
   const fromWindow = (window as unknown as Record<string, unknown>)['RLC_TEACHER_TOKEN']
   return typeof fromWindow === 'string' && fromWindow.length > 0 ? fromWindow : null
 }
 
+/**
+ * Credential for the session READ surfaces (`qc-words`, `qc-state`, `awards`).
+ *
+ * Those three return decrypted student writing, so the engine now requires either
+ * a participant token for that session or a teacher/admin grant for its school.
+ * A student passes their participant token; a teacher falls back to the injected
+ * Identity token.
+ */
+export function sessionReadHeaders(participant_token?: string | null): Record<string, string> {
+  if (participant_token) return { Authorization: `Participant ${participant_token}` }
+  const token = getTeacherToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 function teacherAuthHeaders(): Record<string, string> {
   const token = getTeacherToken()
+  // Template literal, deliberately. A review bot reported this line as an
+  // "unterminated template literal that will fail TypeScript parsing" and
+  // rewrote it as concatenation; the report was a false positive — a secret
+  // scanner had redacted the token interpolation to `******` in the diff the
+  // reviewer read, and it mistook the redaction for the source. Typecheck, lint,
+  // build, and CI were all green throughout, which a parse error makes
+  // impossible. Restored for consistency with the rest of this file.
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
@@ -140,13 +173,27 @@ export const api = {
       })
     },
 
-    async qcWords(session_id: string): Promise<QcToken[]> {
-      const result = await request<QcWordsResponse>(`/session/${session_id}/qc-words`)
+    async qcWords(session_id: string, participant_token?: string | null): Promise<QcToken[]> {
+      const result = await request<QcWordsResponse>(`/session/${session_id}/qc-words`, {
+        headers: sessionReadHeaders(participant_token)
+      })
       return result.qc_words
     },
 
-    awards(session_id: string): Promise<AwardsResponse> {
-      return request(`/session/${session_id}/awards`)
+    /**
+     * The authoritative current QC position.
+     *
+     * This is HYDRATION, not progression: it is how a client that has just
+     * mounted, reloaded, or reconnected finds out where the class is. It never
+     * advances anything — only the teacher's `qcAdvance` does that — so a
+     * student calling it repeatedly changes nothing for anyone.
+     */
+    qcState(session_id: string, participant_token?: string | null): Promise<QcStateResponse> {
+      return request(`/session/${session_id}/qc-state`, { headers: sessionReadHeaders(participant_token) })
+    },
+
+    awards(session_id: string, participant_token?: string | null): Promise<AwardsResponse> {
+      return request(`/session/${session_id}/awards`, { headers: sessionReadHeaders(participant_token) })
     },
 
     ceremony(session_id: string): Promise<{ success: true }> {

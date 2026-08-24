@@ -31,6 +31,19 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
+    /**
+     * Test environment. `jsdom` because the synchronized QC and ceremony flows
+     * are asserted at SCREEN level — rendering the real components against a
+     * fake socket — not by unit-testing helpers, which is what let the missing
+     * `qc:token` and `ceremony:star` handlers go unnoticed.
+     */
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test/setup.ts'],
+      // Screens and hooks are the point; config and generated files are not.
+      exclude: ['node_modules/**', 'dist/**']
+    },
     server: {
       // Proxy /api/* to the Node backend during local development.
       // Set VITE_RLC_BACKEND_URL in .env.local to your Node backend URL.

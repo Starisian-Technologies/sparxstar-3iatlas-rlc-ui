@@ -15,7 +15,6 @@ export type RuntimeEventType =
   | 'QC_REVIEWED'
   | 'CEREMONY_ENTERED'
   | 'AWARD_REVEALED'
-  | 'ABILITY_INVOKED'
 
 export interface RuntimeEventDetail {
   type: RuntimeEventType

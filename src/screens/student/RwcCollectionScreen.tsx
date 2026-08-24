@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { RlcRecorder } from '@/components/RlcRecorder'
-import { AiGuidePanel } from '@/components/AiGuidePanel'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { SpellingSignalDot } from '@/components/SpellingSignalDot'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
@@ -370,7 +369,6 @@ export function RwcCollectionScreen({
 
       {error && <div role="alert" style={errorStyle}>{error}</div>}
 
-      <AiGuidePanel compact context={{ language, mode: 'rwc', sourceText: word || promptWord }} />
       <AccessoryBar onInsert={insertChar} />
     </div>
   )
