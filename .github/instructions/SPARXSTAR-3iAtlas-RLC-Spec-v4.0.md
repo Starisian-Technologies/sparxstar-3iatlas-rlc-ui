@@ -287,13 +287,13 @@ socket.io handles all real-time game communication. No polling for game state.
 | `token:submitted` | Server → teacher + student | New submission — includes current XP |
 | `saturation:signal` | Server → submitting student | Word saturated — redirect |
 | `session:status` | Server → all | Phase transition |
-| `qc:token` | Server → all | Next token for QC — includes Yahura transcription if available |
+| `qc:token` | Server → all | The AUTHORITATIVE current token for QC — includes Yahura transcription if available. Carries `seq` (added 2026-08-23): a monotonic advance counter. A client applies the event only when `seq` exceeds the last it applied, which is what makes duplicate, late, and reordered delivery safe and lets a client hold no cursor of its own. |
 | `qc:audio-ready` | Server → all | Yahura transcription arrived for a token already in QC |
 | `qc:vote` | Client → Server → all | Vote cast with dimension field — covers all three dimensions |
 | `qc:translation` | Client → Server → all | Translation submitted |
 | `qc:correction` | Server → all | Correction submitted |
-| `ceremony:star` | Server → all | Star awarded — sequenced |
-| `ceremony:end` | Server → all | Session complete |
+| `ceremony:star` | Server → all | Star awarded, in the SERVER's order. Carries `seq` + `total` (added 2026-08-23) — position in the run and the run length. `seq: null` marks the immediate announcement fired when a teacher assigns the Teacher's Star, which is not a step in the run; the run re-emits that star numbered. Clients dedupe by star kind and order by `seq`. |
+| `ceremony:end` | Server → all | Session complete, and the AUTHORITATIVE end of the ceremony — a client timer may pace the reveal but may not decide it is over. Carries `stars_total` (added 2026-08-23): the number of stars in the numbered run, **excluding** any out-of-sequence announcement, so a client can tell a complete reveal from a truncated one. |
 | `screentime:limit-reached` | Server → student + teacher | Student's daily screen-time exhausted — graceful disconnect |
 
 ## 3.3 WebSocket Authentication
@@ -951,9 +951,10 @@ Base path: `/api/v1/`
 | POST | `/session/join` | None | **Lower Basic:** body `{ join_code }` only — student selects screen name from session list on device, no credential. **Upper Basic:** `{ join_code, screen_name, pin }`. **Senior Secondary / Adult:** `{ join_code, screen_name, password }`. School ID is injected by host page — never in the request body. Returns: `{ session_id, participant_id, participant_token, account_id, language, locale, mode, collection_depth, session_screen_names? }`. Failure responses listed below. |
 | GET | `/session/:id/status` | None | Returns: `{ status, participant_count, token_count, time_remaining_seconds, leaderboard[], class_xp_total, participant_token? }`. |
 | POST | `/session/:id/close` | `rlc:teacher` | End collection. Trigger QC selection. Emit `session:status`. |
-| GET | `/session/:id/qc-words` | None | Returns ordered `QcToken[]` — 5–10 by priority algorithm. Submitter identity stripped. |
-| POST | `/session/:id/qc-advance` | `rlc:teacher` | Teacher's T3 "Advance" control. **No request body is read** — the route ignores whatever is sent and always advances to the next QC token in priority order (`src/services/qc.ts`, `src/routes/session.ts`); there is no way to target a specific `token_id`. Returns: `{ success: true, token_id }` (next QC token). Sets `teacher_advanced_qc = true` on the first call that **actually advances** (drives the Teacher Award, §6.5) — corrected 2026-08-23: it previously flipped on any call, so one click against an exhausted queue earned the award without the teacher having driven QC. A 409 (`qc_exhausted` or `qc_advance_conflict`) credits nothing. Emits `qc:token`. 409 `qc_exhausted` when nothing remains to advance. |
-| GET | `/session/:id/awards` | None | Returns: `{ stars[], leaderboard[], total_tokens, discovery_count }`. |
+| GET | `/session/:id/qc-words` | session reader | Returns ordered `QcToken[]` — 5–10 by priority algorithm. Submitter identity stripped. **Auth changed 2026-08-23 from None:** this returns decrypted writing, so it now requires a participant of this session or a teacher/admin authorized for its school. |
+| GET | `/session/:id/qc-state` | session reader | **Added 2026-08-23.** The authoritative current QC position: `{ seq, token, exhausted }`. The hydration and reconnection read — a client calls it on mount, on reconnect, and after a reload, and lands where the class is. It advances nothing; only `qc-advance` moves anyone. Submitter identity stripped. |
+| POST | `/session/:id/qc-advance` | `rlc:teacher` | Teacher's T3 "Advance" control. **No request body is read** — the route ignores whatever is sent and always advances to the next QC token in priority order (`src/services/qc.ts`, `src/routes/session.ts`); there is no way to target a specific `token_id`. Returns: `{ success: true, token_id, seq }` (next QC token, and the sequence its broadcast carried). Sets `teacher_advanced_qc = true` on the first call that **actually advances** (drives the Teacher Award, §6.5) — corrected 2026-08-23: it previously flipped on any call, so one click against an exhausted queue earned the award without the teacher having driven QC. A 409 (`qc_exhausted` or `qc_advance_conflict`) credits nothing. Emits `qc:token`. 409 `qc_exhausted` when nothing remains to advance. |
+| GET | `/session/:id/awards` | session reader | Returns: `{ stars[], leaderboard[], total_tokens, discovery_count }`. **Auth changed 2026-08-23 from None:** returns participant screen names. |
 | POST | `/session/:id/teachers-star` | `rlc:teacher` | Body: `{ participant_id }`. One per session — 409 if already assigned. |
 | POST | `/session/:id/ceremony` | `rlc:teacher` | Sequences `qc → ceremony → closed`. Emits each `ceremony:star` then `ceremony:end`. Returns: `{ success }`. |
 
@@ -1148,9 +1149,11 @@ Required on all collection screens. Non-negotiable.
 It was absent from this list and present in the implementation; the
 implementation is right. The glottal stop is a phoneme in the target languages,
 and a student who cannot type it will simply drop it — the same failure this bar
-exists to prevent for `ŋ`. Asserted in the UI's
-`src/types/rsc.preservation.test.ts` so the list and the bar cannot drift apart
-again.
+exists to prevent for `ŋ`. Asserted in
+`sparxstar-3iatlas-rlc-ui/src/types/rsc.preservation.test.ts` — the repo is named
+because this spec is carried in both and there is no such test in the engine, so
+the list and the bar cannot drift apart again *and* a reader is not sent looking
+for a file that was never here.
 
 `ŋ` is the highest-priority character. If not trivially accessible, students type `n` and never learn the difference. Linguistic sovereignty — not optional.
 
@@ -1186,8 +1189,30 @@ All four action types are queueable in IndexedDB: token save, vote, translation,
 > | Injecting a standing teacher token into a page | **Gone.** Authentication is an Identity Service token; authorization is `rlc_authorizations` rows in the engine (NODE-ADR-007). A reusable teacher token in page configuration is explicitly forbidden. |
 > | Injecting school/class/session context | The engine resolves school scope from the authenticated principal's grant. The browser does not supply it. |
 > | Owning the session workflow | The engine owns it, teacher-driven and server-authoritative (NODE-ADR-008). |
-> | myCred hooks and reward settlement | Still a **separate integration**, not yet built, and not a WordPress plugin. The engine writes its own append-only ledger and fires signed webhooks; who consumes them is an integration decision. |
-> | DVE promotion | Unchanged in intent: a token reaches `promoted` only by teacher approval (non-negotiable #10). The pipeline's host is not this component. |
+> | myCred hooks and reward settlement | Still a **separate integration**, not yet built, and not a WordPress plugin. The engine writes its own append-only ledger and fires signed webhooks; who consumes them is unassigned — see `OQ-NODE-008-A` below. |
+> | DVE promotion | Unchanged in intent: a token reaches `promoted` only by teacher approval (non-negotiable #10). The pipeline's host is unassigned — see `OQ-NODE-008-A`. |
+>
+> **`OQ-NODE-008-A` — two components lost their host and did not gain one.**
+> Retiring the orchestrator removed the named home for myCred settlement and for
+> the DVE submission step, and this change does not appoint a replacement: doing
+> so would be inventing an architectural decision rather than recording one, and
+> both are explicitly out of scope for the work that produced this amendment.
+>
+> What is true today, so nobody reads "superseded" as "handled":
+>
+> - **myCred settlement is unbuilt.** The engine's side is real and complete — an
+>   append-only `reward_ledger` and HMAC-signed webhooks on game and token events
+>   (`src/services/webhooks.ts`). Nothing receives them. XP accrues correctly and
+>   settles into no external reward.
+> - **DVE submission is unbuilt.** The promotion *gate* is real and enforced —
+>   `promoted` requires explicit teacher approval and the system never
+>   auto-promotes — so nothing leaks. But an approved token then goes nowhere: no
+>   code in either repository posts a derived envelope to
+>   `sparxstar-dheghom-dve-core`.
+>
+> Both need an owner ruling on where they live before Release 1 can claim reward
+> settlement or dictionary contribution. Neither blocks classroom gameplay, which
+> is why they are recorded here rather than fixed here.
 >
 > ---
 >

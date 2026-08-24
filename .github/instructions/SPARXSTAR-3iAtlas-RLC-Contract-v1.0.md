@@ -74,6 +74,18 @@ Valid on exactly three surfaces, all listed in §3 with `Auth: Bearer
 
 Adult tier only. A valid `lower_basic` / `upper_basic` / `senior_secondary`
 token is refused.
+
+**The verifier on these three surfaces is unchanged.** The 2026-08-23 amendment
+altered §2.1's *label* — Helios JWT to Identity token — and nothing about how an
+adult token is checked: all three still run `requireSuiteAccount`
+(`sparxstar-3iatlas-rlc-node-engine/src/middleware/suite.ts` — this contract is
+carried in both repositories, so the path is qualified), which verifies through
+`verifySuiteToken` exactly as before, with the same issuer pin, the same audience pin, the same RS256-and-`kid`
+requirement, the same scope refusal, the same adult-tier gate, and the same live
+session assertion. Stated because "§2.1 and §2.4 now name the same issuer" could
+be read as a behavioural change to the adult path; it is not. What changed is that
+the classroom path stopped using a *different* verifier and now calls the same
+one. No adult client needs to do anything differently.
 ---
 # 3. REST Endpoints — Exact Contracts
 ## 3.1 School & Class
