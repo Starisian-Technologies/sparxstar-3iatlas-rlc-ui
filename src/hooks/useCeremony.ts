@@ -143,16 +143,37 @@ export function useCeremony(session_id: string | null, options: UseCeremonyOptio
     const { unbind } = bindServerEvents(socket, {
       'ceremony:star': (ev: CeremonyStarEvent) => {
         // Idempotent by construction: same kind, same slot.
-        setStarsByKind((prev) => ({
-          ...prev,
-          [ev.star]: {
-            star: ev.star as StarKind,
-            participant_ids: ev.participant_ids,
-            screen_names: ev.screen_names,
-            xp_awarded: ev.xp_awarded,
-            seq: ev.seq
+        setStarsByKind((prev) => {
+          /**
+           * A NUMBERED entry always wins over a null-`seq` one for the same kind.
+           *
+           * Last-write-wins was not safe here. The teacher-star announcement
+           * (`seq: null`) and the run's numbered re-emission of that same star
+           * are two events for one slot, and the run normally arrives second, so
+           * plain overwrite happened to land on the numbered one. But nothing
+           * guarantees that order — a reconnect replay or a reordered delivery
+           * could put the null last, overwrite the numbered entry, and drop the
+           * star out of `numberedRevealed` permanently. `starsDone` compares
+           * that count against the server's `stars_total`, so the ceremony would
+           * never offer its exit and the class would sit on a finished ceremony
+           * that says it is incomplete.
+           *
+           * Preferring the numbered entry makes the merge order-independent,
+           * which is the same property `seq` gives `qc:token`.
+           */
+          const existing = prev[ev.star]
+          if (existing && typeof existing.seq === 'number' && ev.seq === null) return prev
+          return {
+            ...prev,
+            [ev.star]: {
+              star: ev.star as StarKind,
+              participant_ids: ev.participant_ids,
+              screen_names: ev.screen_names,
+              xp_awarded: ev.xp_awarded,
+              seq: ev.seq
+            }
           }
-        }))
+        })
         // Only a numbered event says anything about the run's length. The
         // teacher-star announcement (seq null) must not set it.
         if (typeof ev.total === 'number') setTotal(ev.total)

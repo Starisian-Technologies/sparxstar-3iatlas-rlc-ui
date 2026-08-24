@@ -934,6 +934,14 @@ socket.emit('qc:correction', {
 // assigns the Teacher's Star carries seq: null and the numbered run re-emits that
 // same star later — both must resolve to one entry.
 //
+// WHEN THE SAME KIND ARRIVES TWICE, THE NUMBERED ENTRY WINS (added 2026-08-24).
+// Not last-write-wins. Overwriting on each event is correct only while the run
+// happens to arrive second; a reconnect replay putting the null announcement last
+// would drop that star from the numbered count, and since a complete reveal is
+// decided by comparing numbered stars against `stars_total`, the ceremony would
+// report itself unfinished forever with no way forward. So keep a numbered entry
+// in preference to a null one, and let a numbered entry replace a null.
+//
 // BOTH emissions carry the same `xp_awarded`, read from the same game manifest.
 // It is display metadata, not an increment: a client must never accumulate XP
 // from these events. XP is granted server-side and read from the account (spec

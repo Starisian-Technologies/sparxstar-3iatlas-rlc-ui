@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { CeremonyScreen } from './CeremonyScreen'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import { socketRegistry } from '@/test/fakeSocket'
@@ -45,6 +45,19 @@ function star(kind: string, name: string, xp = 50) {
 /** A `ceremony:star` broadcast: the award plus its place in the server's run. */
 function starEvent(kind: string, name: string, seq: number | null, total: number | null) {
   return { ...star(kind, name), seq, total }
+}
+
+/**
+ * Let effects and timers land before asserting something did NOT change.
+ *
+ * `waitFor` is wrong for a negative assertion: its first check runs before the
+ * re-render, so it resolves against the pre-event DOM and passes whether or not
+ * the bug is present.
+ */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 60))
+  })
 }
 
 function renderCeremony(props: Partial<Parameters<typeof CeremonyScreen>[0]> = {}) {
@@ -207,6 +220,39 @@ describe('the ceremony follows the server', () => {
     await waitFor(() => expect(screen.getByText('Binta')).toBeTruthy())
     // Shown whole, and immediately exitable — there is no live moment to pace.
     await waitFor(() => expect(screen.getByText(/Return to session/i)).toBeTruthy())
+  })
+
+  /**
+   * A LATE TEACHER-STAR ANNOUNCEMENT MUST NOT UNDO A NUMBERED STAR.
+   *
+   * The teacher-star announcement (`seq: null`) and the run's numbered
+   * re-emission of that same star are two events for one slot. The run normally
+   * arrives second, so a plain last-write-wins merge happened to land on the
+   * numbered one — but nothing guarantees the order. A reconnect replay could put
+   * the null last, and with last-write-wins that dropped the star out of the
+   * numbered count for good, so `starsDone` never reached the server's
+   * `stars_total` and the exit never appeared: a finished ceremony that insists
+   * it is unfinished, with no way forward.
+   */
+  it('does not let a late null-seq announcement undo a numbered star', async () => {
+    renderCeremony()
+    const socket = await waitFor(() => socketRegistry.latest())
+    socket.server.connect()
+
+    // The full numbered run arrives first.
+    socket.server.emit('ceremony:star', starEvent('most_words', 'Ama', 0, 2))
+    socket.server.emit('ceremony:star', starEvent('teachers_star', 'Binta', 1, 2))
+    socket.server.emit('ceremony:end', { session_id: 'sess-1', stars_total: 2 })
+    await waitFor(() => expect(screen.getByText(/Return to session/i)).toBeTruthy())
+
+    // Then the out-of-sequence acknowledgement for a star already numbered.
+    socket.server.emit('ceremony:star', starEvent('teachers_star', 'Binta', null, null))
+
+    // Still complete. Under last-write-wins the numbered entry was replaced by
+    // the null one, numberedRevealed fell to 1 of 2, and this exit vanished.
+    await settle()
+    expect(screen.getByText(/Return to session/i)).toBeTruthy()
+    expect(screen.getByText('Binta')).toBeTruthy()
   })
 
   it('survives unknown and malformed ceremony traffic', async () => {
