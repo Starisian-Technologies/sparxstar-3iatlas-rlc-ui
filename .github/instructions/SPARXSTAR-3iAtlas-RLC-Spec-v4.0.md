@@ -178,8 +178,11 @@ reader can check the claim at its source:
   **dual-writes every grant to an append-only `reward_ledger`** in the same
   transaction (`src/models/ledger.ts`, NODE-ADR-004). `src/services/ledger.ts`
   reads it back. That is reward logic, implemented **in the Node engine**.
-- `src/games/manifests.ts` resolves scoring and star XP per registered
-  `GameManifest`, server-side.
+- `src/games/manifests.ts` (in the engine) resolves scoring from **two**
+  registries, and they are not interchangeable: `GameManifest` is keyed by the
+  closed RLC `Mode` union and carries `stars`/`star_xp`; `GameResultManifest`
+  is keyed by `game_type` for non-RLC games and has **no star fields at all**.
+  `dictionaryQuizManifest` is a `GameResultManifest`.
 - `src/clients/mycred.ts` exports **`StubMyCredClient`** — `getRemainingScreenTime`
   returns the local tier limit and `sessionStarted`/`sessionEnded` only log.
   **There is no live myCred integration.** Nothing external owns rewards today.
@@ -189,7 +192,8 @@ reader can check the claim at its source:
 | Concern | Owner |
 | :---- | :---- |
 | XP and its ledger | **This engine.** Node, server-authoritative. |
-| Scoring per game type | The registered `GameManifest` for that `mode`. |
+| Scoring, RLC modes | The registered `GameManifest` for that `mode`. |
+| Scoring, non-RLC games (incl. Dictionary) | The registered `GameResultManifest` for that `game_type`. |
 | Stars | Defined per manifest (`stars`, `star_xp`) for `rwc`/`rsc` **only**. |
 | Badges | **Undefined.** No inventory and no thresholds exist in any repo. |
 | Screen-time ledger | Still attributed to myCred — see §1.7 and the note below. |
@@ -201,7 +205,12 @@ ownership, settlement contract and display contract must be approved and added
 to a server-authoritative Node contract. A client may **render settled results
 and must never invent an award.**
 
-**No WordPress and no myCred in Dictionary Games**, in any form.
+**No WordPress and no myCred in Dictionary Games** — the boundary is the
+product, not the platform. Nothing in the Dictionary Games client, its BFF or
+its data path may call WordPress or myCred. That does not reach the engine's
+own outbox: `dictionary_quiz` settles through the generic `game.result` seam,
+which emits `game.result.settled`, and §6.6 routes that to a myCred hook. That
+mirror is engine-mediated, one-way, and predates the ruling.
 
 **Screen-time is a separate, still-open question.** myCred is named as the
 screen-time ledger in §1.7 and `src/services/sessions.ts` calls the stub for it.
@@ -223,7 +232,14 @@ Screen time is tracked per account per day across all 3iAtlas products combined 
 
 These are defaults. School admin can adjust within a configurable range via myCred / school dashboard. Hard ceiling cannot be removed — the system enforces it regardless of admin configuration.
 
-**Central ledger:** The screen-time ledger lives in myCred (as it spans all 3iAtlas products and myCred already holds per-account state). On `POST /api/v1/session/join`, the backend queries myCred for remaining daily quota. Join rejected with 423 Locked + localized "Daily limit reached" if quota exhausted. Successful joins emit `screentime.session.started` to myCred; session close emits `screentime.session.ended` with elapsed minutes.
+**Central ledger:** The screen-time ledger lives in myCred (as it spans all 3iAtlas products and myCred already holds per-account state). On `POST /api/v1/session/join`, the backend queries myCred for remaining daily quota. **If the quota is exhausted the join is rejected, and that rejection is NOT an
+account lockout** — a player who has used up the day's minutes must never be
+shown a lockout message or offered an unlock path. This snapshot deliberately
+does not restate the status code or body: §11's error table below and the
+Integration Contract are the home for the wire shape. (Corrected 2026-09: this
+sentence read "423 Locked + localized 'Daily limit reached'", which contradicted
+this same document's §11 table — 423 is `account_locked`, 451 is
+`screen_time_exceeded` — and the backend never sends localized strings.) Successful joins emit `screentime.session.started` to myCred; session close emits `screentime.session.ended` with elapsed minutes.
 
 When a student hits their limit mid-session, the session ends gracefully — not a hard crash. Teacher is notified so they can manage the classroom.
 
@@ -1120,9 +1136,9 @@ record, myCred remains the one-way wallet mirror.
 | Audio routed to Yahura | +20 XP | Student, Class, School |
 | QC round completed (per token reviewed) | +5 XP | Student, Class, School |
 | Translation submitted in QC | +10 XP | Student, Class, School |
-| Token reaches consensus | +50 XP + Gold badge | Student, Class, School |
-| Discovery — new word | +100 XP + Gold badge | Student, Class, School |
-| RSC — all 12 domains complete | +200 XP + Gold badge | Student, Class, School |
+| Token reaches consensus | +50 XP + **1 Gold** | Student, Class, School |
+| Discovery — new word | +100 XP + **1 Gold** | Student, Class, School |
+| RSC — all 12 domains complete | +200 XP + **1 Gold** | Student, Class, School |
 | Retroactive settlement | Delta XP | Student, Class, School |
 
 ## 6.6 Backend → Orchestrator Webhooks
@@ -1142,9 +1158,9 @@ site; there is no dispatch-by-`event_type` mechanism to extend.
 | `token.submitted` | Fire myCred hook → +10 XP |
 | `audio.routed` | Fire myCred hook → +20 XP |
 | `qc.round.completed` | Fire myCred hook → +5 XP |
-| `consensus.reached` | Fire myCred hook → +50 XP + Gold badge |
-| `discovery.found` | Fire myCred hook → +100 XP + Gold badge |
-| `rsc.completed` | Fire myCred hook → +200 XP + Gold badge |
+| `consensus.reached` | Fire myCred hook → +50 XP + **1 Gold** |
+| `discovery.found` | Fire myCred hook → +100 XP + **1 Gold** |
+| `rsc.completed` | Fire myCred hook → +200 XP + **1 Gold** |
 | `settlement.retroactive` | Fire myCred hook → delta XP |
 | `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with Helios Bearer auth |
 | `game.result.settled` | Fire myCred hook → XP per the settling `game_type`'s manifest (added 2026-08, GAME-SERVICE-INTAKE-SPEC-v1.0) |
