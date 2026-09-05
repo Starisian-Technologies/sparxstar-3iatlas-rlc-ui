@@ -14,7 +14,8 @@
 >
 > The engine repo's `AGENTS.md` §2 names its copy as canonical, and the engine
 > is where the behaviour being described is implemented. **This copy is a
-> snapshot: where it disagrees with the engine's, the engine's wins.** §1.6
+> snapshot. On any conflict the engine repo's copy is authoritative and this
+> one is wrong.** §1.6
 > below has been synced from it; the rest of this file has not been re-synced
 > and may still drift — that is a separate task.
 >
@@ -30,9 +31,10 @@
 
 ---
 
-| ⚠️ CANONICAL DOCUMENT — ALL THREE REPOS |
+| ⚠️ SUPERSEDED BANNER — this file is a SNAPSHOT |
 | :---- |
-| This is the single authoritative specification for: |
+| **The banner below is legacy.** It predates the 2026-09 correction in this file's header and is kept only so the diff against the engine's copy stays readable. This file is NOT canonical; the engine repo's copy is. Historic text follows. |
+| ~~This is the single authoritative specification for:~~ |
 | `sparxstar-3iatlas-rlc-ui` · `sparxstar-3iatlas-rlc-node-engine` · `sparxstar-3iatlas-rlc` |
 | It supersedes every prior document without exception. |
 | If another document conflicts with this one — **this document wins**. `supporting` docs (see this repo's `AGENTS.md` for the Status-field system) may be read but never override v4.0; `superseded` docs are ignored. |
@@ -163,16 +165,18 @@ This is grounded in educational research consensus (Google Classroom, Canvas, Se
 **Corrected 2026-09.** This section previously read "Rewards — myCred Hooks
 Only" and stated that *"AIWA does not implement reward logic, tiers, or
 redemption"* and that *"XP, Gold, stars, and badges are all myCred entities."*
-Both sentences contradicted this repository's own code and the locked Node-only
-product boundary. Under **code wins**, the code is the truth and the spec is
+Both sentences contradicted **the Node engine's code** — the engine is where
+this behaviour is implemented — and the locked Node-only product boundary. Under **code wins**, the code is the truth and the spec is
 corrected — not the reverse.
 
-**What the code actually does** (verify before trusting this paragraph):
+**What the engine's code does.** Every path below is in
+`sparxstar-3iatlas-rlc-node-engine`, NOT in this repository; they are cited so a
+reader can check the claim at its source:
 
 - `src/services/xp.ts` maintains lifetime, class and school XP counters and
   **dual-writes every grant to an append-only `reward_ledger`** in the same
   transaction (`src/models/ledger.ts`, NODE-ADR-004). `src/services/ledger.ts`
-  reads it back. That is reward logic, implemented here.
+  reads it back. That is reward logic, implemented **in the Node engine**.
 - `src/games/manifests.ts` resolves scoring and star XP per registered
   `GameManifest`, server-side.
 - `src/clients/mycred.ts` exports **`StubMyCredClient`** — `getRemainingScreenTime`
