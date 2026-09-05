@@ -1141,6 +1141,25 @@ record, myCred remains the one-way wallet mirror.
 | RSC — all 12 domains complete | +200 XP + **1 Gold** | Student, Class, School |
 | Retroactive settlement | Delta XP | Student, Class, School |
 
+> **Gold is a currency, not a badge (corrected 2026-09).** These three rows read
+> "Gold badge" until this pass, which is why §1.6 could say badges are undefined
+> while this table appeared to award one — the contradiction was the word, not
+> the model. What the engine grants is one unit of **Gold**:
+> `grantXp(ctx, xp, 1, tx)` in `rlc-node-engine` `src/services/qc.ts`
+> (`settleConsensus`) and `src/services/tokens.ts` (discovery, RSC completion),
+> which raises `lifetime_gold` and writes a `kind: 'gold'` row to
+> `reward_ledger`. `'badge'` is a *reserved* `LedgerKind` in `src/contract.ts`
+> with no writer anywhere in that repo — which is exactly what §1.6 means.
+> The two statements are consistent once the word is right: **Gold ships,
+> badges do not.**
+>
+> **For UI purposes, Gold is earn-only and has no spend path.** Earning is
+> implemented; ownership, redemption and whether a balance is ever shown to a
+> learner are not decided. Do not build a wallet, a shop, or a spendable
+> balance against this: showing a total a player can never use is a promise the
+> platform cannot keep today. Render Gold only as settled by the engine, per
+> the never-invent-an-award rule in §1.6.
+
 ## 6.6 Backend → Orchestrator Webhooks
 
 HMAC-SHA256 signed. `event_id` on every webhook for idempotency. Orchestrator verifies signature and deduplicates on `event_id`.
