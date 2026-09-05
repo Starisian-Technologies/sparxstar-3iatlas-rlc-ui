@@ -3,7 +3,20 @@
 ### Starisian Technologies / AI West Africa · Confidential · May 2026
 ### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
 
-> **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for the Status-field system — section heading/number varies per repo).
+> **Status: `snapshot`** — a DOWNSTREAM COPY, corrected 2026-09.
+>
+> This file previously declared itself `canonical`, as does
+> `sparxstar-3iatlas-rlc-node-engine/.github/instructions/sparxstar-3iatlas-rlc-spec-v4.0.md`
+> — two files each claiming to be "the single source of truth", which is exactly
+> the duplicate-home problem the Status-field system exists to prevent. The two
+> had also **already diverged** in content, so a reader could not tell which
+> statement to trust.
+>
+> The engine repo's `AGENTS.md` §2 names its copy as canonical, and the engine
+> is where the behaviour being described is implemented. **This copy is a
+> snapshot: where it disagrees with the engine's, the engine's wins.** §1.6
+> below has been synced from it; the rest of this file has not been re-synced
+> and may still drift — that is a separate task.
 >
 > **2026-07 correction note:** this revision consolidates and corrects
 > doc-vs-code drift found by direct inspection of `src/` (not by re-describing
@@ -145,13 +158,52 @@ writing. Read this row together with §3.11 rather than on its own.
 
 This is grounded in educational research consensus (Google Classroom, Canvas, Seesaw standard) and the principle that handwriting studies show productivity metrics are a poor proxy for language learning. A student composing a Mandinka sentence in their head before typing a single character is doing the most important cognitive work in the session.
 
-## 1.6 Rewards — myCred Hooks Only
+## 1.6 Rewards — Engine-Authoritative XP; Stars and Badges Undefined
 
-AIWA fires hooks to myCred. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. AIWA does not implement reward logic, tiers, or redemption. That is myCred's job.
+**Corrected 2026-09.** This section previously read "Rewards — myCred Hooks
+Only" and stated that *"AIWA does not implement reward logic, tiers, or
+redemption"* and that *"XP, Gold, stars, and badges are all myCred entities."*
+Both sentences contradicted this repository's own code and the locked Node-only
+product boundary. Under **code wins**, the code is the truth and the spec is
+corrected — not the reverse.
 
-The spec defines what signal AIWA fires. myCred decides what to do with it. School admins configure myCred directly.
+**What the code actually does** (verify before trusting this paragraph):
 
-XP, Gold, stars, and badges are all myCred entities. The backend fires the hook. Done.
+- `src/services/xp.ts` maintains lifetime, class and school XP counters and
+  **dual-writes every grant to an append-only `reward_ledger`** in the same
+  transaction (`src/models/ledger.ts`, NODE-ADR-004). `src/services/ledger.ts`
+  reads it back. That is reward logic, implemented here.
+- `src/games/manifests.ts` resolves scoring and star XP per registered
+  `GameManifest`, server-side.
+- `src/clients/mycred.ts` exports **`StubMyCredClient`** — `getRemainingScreenTime`
+  returns the local tier limit and `sessionStarted`/`sessionEnded` only log.
+  **There is no live myCred integration.** Nothing external owns rewards today.
+
+**The ruling, and what is authoritative:**
+
+| Concern | Owner |
+| :---- | :---- |
+| XP and its ledger | **This engine.** Node, server-authoritative. |
+| Scoring per game type | The registered `GameManifest` for that `mode`. |
+| Stars | Defined per manifest (`stars`, `star_xp`) for `rwc`/`rsc` **only**. |
+| Badges | **Undefined.** No inventory and no thresholds exist in any repo. |
+| Screen-time ledger | Still attributed to myCred — see §1.7 and the note below. |
+
+**Stars and badges are blocked, not delegated.** `dictionaryQuizManifest`
+carries `scoring_xp` and no `stars`/`star_xp`, so the dictionary games have no
+star rule at all. Before either ships, a canonical formula, inventory,
+ownership, settlement contract and display contract must be approved and added
+to a server-authoritative Node contract. A client may **render settled results
+and must never invent an award.**
+
+**No WordPress and no myCred in Dictionary Games**, in any form.
+
+**Screen-time is a separate, still-open question.** myCred is named as the
+screen-time ledger in §1.7 and `src/services/sessions.ts` calls the stub for it.
+That reference is left standing deliberately rather than deleted with the reward
+claims: removing it would put this spec *ahead* of the code in the opposite
+direction, which is the same drift being corrected here. Whether screen-time
+also moves to Node is not decided by this correction.
 
 ## 1.7 Screen Time Limits
 
