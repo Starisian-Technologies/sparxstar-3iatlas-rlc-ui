@@ -14,10 +14,11 @@
 >
 > The engine repo's `AGENTS.md` §2 names its copy as canonical, and the engine
 > is where the behaviour being described is implemented. **This copy is a
-> snapshot. On any conflict the engine repo's copy is authoritative and this
-> one is wrong.** §1.6
-> below has been synced from it; the rest of this file has not been re-synced
-> and may still drift — that is a separate task.
+> snapshot. On any conflict the engine repo's copy is authoritative and this one
+> is wrong.**
+>
+> §1.6 below has been synced from the engine's copy. The rest of this file has
+> not been re-synced and may still drift — that is a separate task.
 >
 > **2026-07 correction note:** this revision consolidates and corrects
 > doc-vs-code drift found by direct inspection of `src/` (not by re-describing
@@ -36,8 +37,8 @@
 | **The banner below is legacy.** It predates the 2026-09 correction in this file's header and is kept only so the diff against the engine's copy stays readable. This file is NOT canonical; the engine repo's copy is. Historic text follows. |
 | ~~This is the single authoritative specification for:~~ |
 | `sparxstar-3iatlas-rlc-ui` · `sparxstar-3iatlas-rlc-node-engine` · `sparxstar-3iatlas-rlc` |
-| It supersedes every prior document without exception. |
-| If another document conflicts with this one — **this document wins**. `supporting` docs (see this repo's `AGENTS.md` for the Status-field system) may be read but never override v4.0; `superseded` docs are ignored. |
+| ~~It supersedes every prior document without exception.~~ |
+| ~~If another document conflicts with this one — **this document wins**.~~ **Superseded:** this file is a snapshot and the engine repo's copy wins. `supporting` docs (see this repo's `AGENTS.md` for the Status-field system) may be read but never override v4.0; `superseded` docs are ignored. |
 | **Wire surface delegated:** exact endpoints, field names, encodings, and status codes live in the Integration Contract (`SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`, `supporting`). This spec governs **behavior** and does not define wire encoding; the two never claim the same fact. |
 | Do not deviate without explicit written approval from Max Barrett. |
 | If a rule blocks your approach — change the approach, not the rule. |
