@@ -43,8 +43,13 @@ authoritative where it disagrees with the engine's copy.
 Corrected 2026-09. Both files previously declared themselves canonical — "the
 single source of truth" — and had already diverged, so a reader could not tell
 which to believe. The engine is where the described behaviour is implemented, and
-its `AGENTS.md` §2 names its copy as canonical, so that is the source. Only §1.6
-of the snapshot has been re-synced; the rest may still drift.
+its `AGENTS.md` §2 names its copy as canonical, so that is the source.
+
+Synced from the engine so far: **§1.6** (reward ownership), the screen-time
+rejection sentence in **§1.7** (it claimed 423, contradicting the file's own
+§11 error table), and the six "Gold badge" rows in **§6.5/§6.6**. Everything
+else is unsynced and may still drift — the snapshot header lists the same set,
+and that list is the one to update when more is synced.
 
 UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.png`).
 

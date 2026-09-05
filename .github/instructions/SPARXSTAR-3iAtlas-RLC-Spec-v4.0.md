@@ -17,8 +17,19 @@
 > snapshot. On any conflict the engine repo's copy is authoritative and this one
 > is wrong.**
 >
-> §1.6 below has been synced from the engine's copy. The rest of this file has
-> not been re-synced and may still drift — that is a separate task.
+> **What has been synced from the engine's copy, and nothing else:**
+>
+> - **§1.6** — reward ownership in full (engine-authoritative XP and ledger, the
+>   two manifest registries, badges undefined, the myCred product boundary).
+> - **§1.7** — the screen-time rejection sentence only. It claimed 423 and
+>   contradicted §11's own error table; it now states the behaviour and defers
+>   the wire shape to §11 and the Integration Contract.
+> - **§6.5 / §6.6** — the six reward rows that read "Gold badge", plus the note
+>   defining Gold as a currency.
+>
+> Every other section is **unsynced** and may still drift. Re-syncing them is a
+> separate task; doing it blind here would risk overwriting UI-specific
+> corrections that have not been verified against the engine.
 >
 > **2026-07 correction note:** this revision consolidates and corrects
 > doc-vs-code drift found by direct inspection of `src/` (not by re-describing
