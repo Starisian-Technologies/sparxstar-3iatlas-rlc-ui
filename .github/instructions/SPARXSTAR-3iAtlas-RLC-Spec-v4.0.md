@@ -3,7 +3,33 @@
 ### Starisian Technologies / AI West Africa · Confidential · May 2026
 ### Corrected 2026-07 — doc-vs-code verification pass (see §3.10, §11)
 
-> **Status: `canonical`** — the single source of truth; wins every conflict (see this repo's `AGENTS.md` for the Status-field system — section heading/number varies per repo).
+> **Status: `snapshot`** — a DOWNSTREAM COPY, corrected 2026-09.
+>
+> This file previously declared itself `canonical`, as does
+> `sparxstar-3iatlas-rlc-node-engine/.github/instructions/sparxstar-3iatlas-rlc-spec-v4.0.md`
+> — two files each claiming to be "the single source of truth", which is exactly
+> the duplicate-home problem the Status-field system exists to prevent. The two
+> had also **already diverged** in content, so a reader could not tell which
+> statement to trust.
+>
+> The engine repo's `AGENTS.md` §2 names its copy as canonical, and the engine
+> is where the behaviour being described is implemented. **This copy is a
+> snapshot. On any conflict the engine repo's copy is authoritative and this one
+> is wrong.**
+>
+> **What has been synced from the engine's copy, and nothing else:**
+>
+> - **§1.6** — reward ownership in full (engine-authoritative XP and ledger, the
+>   two manifest registries, badges undefined, the myCred product boundary).
+> - **§1.7** — the screen-time rejection sentence only. It claimed 423 and
+>   contradicted §11's own error table; it now states the behaviour and defers
+>   the wire shape to §11 and the Integration Contract.
+> - **§6.5 / §6.6** — the six reward rows that read "Gold badge", plus the note
+>   defining Gold as a currency.
+>
+> Every other section is **unsynced** and may still drift. Re-syncing them is a
+> separate task; doing it blind here would risk overwriting UI-specific
+> corrections that have not been verified against the engine.
 >
 > **2026-07 correction note:** this revision consolidates and corrects
 > doc-vs-code drift found by direct inspection of `src/` (not by re-describing
@@ -17,12 +43,13 @@
 
 ---
 
-| ⚠️ CANONICAL DOCUMENT — ALL THREE REPOS |
+| ⚠️ SUPERSEDED BANNER — this file is a SNAPSHOT |
 | :---- |
-| This is the single authoritative specification for: |
+| **The banner below is legacy.** It predates the 2026-09 correction in this file's header and is kept only so the diff against the engine's copy stays readable. This file is NOT canonical; the engine repo's copy is. Historic text follows. |
+| ~~This is the single authoritative specification for:~~ |
 | `sparxstar-3iatlas-rlc-ui` · `sparxstar-3iatlas-rlc-node-engine` · `sparxstar-3iatlas-rlc` |
-| It supersedes every prior document without exception. |
-| If another document conflicts with this one — **this document wins**. `supporting` docs (see this repo's `AGENTS.md` for the Status-field system) may be read but never override v4.0; `superseded` docs are ignored. |
+| ~~It supersedes every prior document without exception.~~ |
+| ~~If another document conflicts with this one — **this document wins**.~~ **Superseded:** this file is a snapshot and the engine repo's copy wins. `supporting` docs (see this repo's `AGENTS.md` for the Status-field system) may be read but never override v4.0; `superseded` docs are ignored. |
 | **Wire surface delegated:** exact endpoints, field names, encodings, and status codes live in the Integration Contract (`SPARXSTAR-3iAtlas-RLC-Contract-v1.0.md`, `supporting`). This spec governs **behavior** and does not define wire encoding; the two never claim the same fact. |
 | Do not deviate without explicit written approval from Max Barrett. |
 | If a rule blocks your approach — change the approach, not the rule. |
@@ -145,13 +172,63 @@ writing. Read this row together with §3.11 rather than on its own.
 
 This is grounded in educational research consensus (Google Classroom, Canvas, Seesaw standard) and the principle that handwriting studies show productivity metrics are a poor proxy for language learning. A student composing a Mandinka sentence in their head before typing a single character is doing the most important cognitive work in the session.
 
-## 1.6 Rewards — myCred Hooks Only
+## 1.6 Rewards — Engine-Authoritative XP; Stars and Badges Undefined
 
-AIWA fires hooks to myCred. myCred handles all reward logic — points, stars, badges, display, redemption, adult vs student rules, school configuration. AIWA does not implement reward logic, tiers, or redemption. That is myCred's job.
+**Corrected 2026-09.** This section previously read "Rewards — myCred Hooks
+Only" and stated that *"AIWA does not implement reward logic, tiers, or
+redemption"* and that *"XP, Gold, stars, and badges are all myCred entities."*
+Both sentences contradicted **the Node engine's code** — the engine is where
+this behaviour is implemented — and the locked Node-only product boundary. Under **code wins**, the code is the truth and the spec is
+corrected — not the reverse.
 
-The spec defines what signal AIWA fires. myCred decides what to do with it. School admins configure myCred directly.
+**What the engine's code does.** Every path below is in
+`sparxstar-3iatlas-rlc-node-engine`, NOT in this repository; they are cited so a
+reader can check the claim at its source:
 
-XP, Gold, stars, and badges are all myCred entities. The backend fires the hook. Done.
+- `src/services/xp.ts` maintains lifetime, class and school XP counters and
+  **dual-writes every grant to an append-only `reward_ledger`** in the same
+  transaction (`src/models/ledger.ts`, NODE-ADR-004). `src/services/ledger.ts`
+  reads it back. That is reward logic, implemented **in the Node engine**.
+- `src/games/manifests.ts` (in the engine) resolves scoring from **two**
+  registries, and they are not interchangeable: `GameManifest` is keyed by the
+  closed RLC `Mode` union and carries `stars`/`star_xp`; `GameResultManifest`
+  is keyed by `game_type` for non-RLC games and has **no star fields at all**.
+  `dictionaryQuizManifest` is a `GameResultManifest`.
+- `src/clients/mycred.ts` exports **`StubMyCredClient`** — `getRemainingScreenTime`
+  returns the local tier limit and `sessionStarted`/`sessionEnded` only log.
+  **There is no live myCred integration.** Nothing external owns rewards today.
+
+**The ruling, and what is authoritative:**
+
+| Concern | Owner |
+| :---- | :---- |
+| XP and its ledger | **This engine.** Node, server-authoritative. |
+| Scoring, RLC modes | The registered `GameManifest` for that `mode`. |
+| Scoring, non-RLC games (incl. Dictionary) | The registered `GameResultManifest` for that `game_type`. |
+| Stars | Defined per manifest (`stars`, `star_xp`) for `rwc`/`rsc` **only**. |
+| Badges | **Undefined.** No inventory and no thresholds exist in any repo. |
+| Screen-time ledger | Still attributed to myCred — see §1.7 and the note below. |
+
+**Stars and badges are blocked, not delegated.** `dictionaryQuizManifest`
+carries `scoring_xp` and no `stars`/`star_xp`, so the dictionary games have no
+star rule at all. Before either ships, a canonical formula, inventory,
+ownership, settlement contract and display contract must be approved and added
+to a server-authoritative Node contract. A client may **render settled results
+and must never invent an award.**
+
+**No WordPress and no myCred in Dictionary Games** — the boundary is the
+product, not the platform. Nothing in the Dictionary Games client, its BFF or
+its data path may call WordPress or myCred. That does not reach the engine's
+own outbox: `dictionary_quiz` settles through the generic `game.result` seam,
+which emits `game.result.settled`, and §6.6 routes that to a myCred hook. That
+mirror is engine-mediated, one-way, and predates the ruling.
+
+**Screen-time is a separate, still-open question.** myCred is named as the
+screen-time ledger in §1.7 and `src/services/sessions.ts` calls the stub for it.
+That reference is left standing deliberately rather than deleted with the reward
+claims: removing it would put this spec *ahead* of the code in the opposite
+direction, which is the same drift being corrected here. Whether screen-time
+also moves to Node is not decided by this correction.
 
 ## 1.7 Screen Time Limits
 
@@ -166,7 +243,14 @@ Screen time is tracked per account per day across all 3iAtlas products combined 
 
 These are defaults. School admin can adjust within a configurable range via myCred / school dashboard. Hard ceiling cannot be removed — the system enforces it regardless of admin configuration.
 
-**Central ledger:** The screen-time ledger lives in myCred (as it spans all 3iAtlas products and myCred already holds per-account state). On `POST /api/v1/session/join`, the backend queries myCred for remaining daily quota. Join rejected with 423 Locked + localized "Daily limit reached" if quota exhausted. Successful joins emit `screentime.session.started` to myCred; session close emits `screentime.session.ended` with elapsed minutes.
+**Central ledger:** The screen-time ledger lives in myCred (as it spans all 3iAtlas products and myCred already holds per-account state). On `POST /api/v1/session/join`, the backend queries myCred for remaining daily quota. **If the quota is exhausted the join is rejected, and that rejection is NOT an
+account lockout** — a player who has used up the day's minutes must never be
+shown a lockout message or offered an unlock path. This snapshot deliberately
+does not restate the status code or body: §11's error table below and the
+Integration Contract are the home for the wire shape. (Corrected 2026-09: this
+sentence read "423 Locked + localized 'Daily limit reached'", which contradicted
+this same document's §11 table — 423 is `account_locked`, 451 is
+`screen_time_exceeded` — and the backend never sends localized strings.) Successful joins emit `screentime.session.started` to myCred; session close emits `screentime.session.ended` with elapsed minutes.
 
 When a student hits their limit mid-session, the session ends gracefully — not a hard crash. Teacher is notified so they can manage the classroom.
 
@@ -1063,10 +1147,29 @@ record, myCred remains the one-way wallet mirror.
 | Audio routed to Yahura | +20 XP | Student, Class, School |
 | QC round completed (per token reviewed) | +5 XP | Student, Class, School |
 | Translation submitted in QC | +10 XP | Student, Class, School |
-| Token reaches consensus | +50 XP + Gold badge | Student, Class, School |
-| Discovery — new word | +100 XP + Gold badge | Student, Class, School |
-| RSC — all 12 domains complete | +200 XP + Gold badge | Student, Class, School |
+| Token reaches consensus | +50 XP + **1 Gold** | Student, Class, School |
+| Discovery — new word | +100 XP + **1 Gold** | Student, Class, School |
+| RSC — all 12 domains complete | +200 XP + **1 Gold** | Student, Class, School |
 | Retroactive settlement | Delta XP | Student, Class, School |
+
+> **Gold is a currency, not a badge (corrected 2026-09).** These three rows read
+> "Gold badge" until this pass, which is why §1.6 could say badges are undefined
+> while this table appeared to award one — the contradiction was the word, not
+> the model. What the engine grants is one unit of **Gold**:
+> `grantXp(ctx, xp, 1, tx)` in `rlc-node-engine` `src/services/qc.ts`
+> (`settleConsensus`) and `src/services/tokens.ts` (discovery, RSC completion),
+> which raises `lifetime_gold` and writes a `kind: 'gold'` row to
+> `reward_ledger`. `'badge'` is a *reserved* `LedgerKind` in `src/contract.ts`
+> with no writer anywhere in that repo — which is exactly what §1.6 means.
+> The two statements are consistent once the word is right: **Gold ships,
+> badges do not.**
+>
+> **For UI purposes, Gold is earn-only and has no spend path.** Earning is
+> implemented; ownership, redemption and whether a balance is ever shown to a
+> learner are not decided. Do not build a wallet, a shop, or a spendable
+> balance against this: showing a total a player can never use is a promise the
+> platform cannot keep today. Render Gold only as settled by the engine, per
+> the never-invent-an-award rule in §1.6.
 
 ## 6.6 Backend → Orchestrator Webhooks
 
@@ -1085,9 +1188,9 @@ site; there is no dispatch-by-`event_type` mechanism to extend.
 | `token.submitted` | Fire myCred hook → +10 XP |
 | `audio.routed` | Fire myCred hook → +20 XP |
 | `qc.round.completed` | Fire myCred hook → +5 XP |
-| `consensus.reached` | Fire myCred hook → +50 XP + Gold badge |
-| `discovery.found` | Fire myCred hook → +100 XP + Gold badge |
-| `rsc.completed` | Fire myCred hook → +200 XP + Gold badge |
+| `consensus.reached` | Fire myCred hook → +50 XP + **1 Gold** |
+| `discovery.found` | Fire myCred hook → +100 XP + **1 Gold** |
+| `rsc.completed` | Fire myCred hook → +200 XP + **1 Gold** |
 | `settlement.retroactive` | Fire myCred hook → delta XP |
 | `token.promoted` | Submit derived token to DVE via SPARXSTAR internal HTTP API with Helios Bearer auth |
 | `game.result.settled` | Fire myCred hook → XP per the settling `game_type`'s manifest (added 2026-08, GAME-SERVICE-INTAKE-SPEC-v1.0) |
