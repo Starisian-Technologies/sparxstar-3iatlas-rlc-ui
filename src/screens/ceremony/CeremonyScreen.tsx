@@ -89,6 +89,7 @@ export function CeremonyScreen({
   alreadyComplete,
   revealIntervalMs = STAR_REVEAL_INTERVAL_MS
 }: CeremonyScreenProps) {
+  const { t } = useTranslation()
   const { tokens, resolved } = useTheme()
   const [showFireworks, setShowFireworks] = useState(false)
 
@@ -166,8 +167,8 @@ export function CeremonyScreen({
     return (
       <Screen centered>
         <div style={{ textAlign: 'center', color: tokens.textMuted }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>Loading ceremony…</div>
-          <div style={{ fontSize: 14 }}>Gathering class results.</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>{t('ceremony.loading', { defaultValue: 'Loading ceremony…' })}</div>
+          <div style={{ fontSize: 14 }}>{t('ceremony.loading_detail', { defaultValue: 'Gathering class results.' })}</div>
         </div>
       </Screen>
     )
@@ -176,7 +177,7 @@ export function CeremonyScreen({
     return (
       <Screen centered>
         <div style={{ textAlign: 'center', color: tokens.textMuted }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>Ceremony unavailable</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>{t('ceremony.unavailable', { defaultValue: 'Ceremony unavailable' })}</div>
           <div style={{ fontSize: 14 }}>{error ?? 'No awards data received.'}</div>
         </div>
       </Screen>
@@ -209,14 +210,14 @@ export function CeremonyScreen({
           <TenantLogo size="medium" />
         </div>
       }
-      footer={starsDone ? <Button onClick={onReturnToSession} large>Return to session</Button> : undefined}
+      footer={starsDone ? <Button onClick={onReturnToSession} large>{t('ceremony.return', { defaultValue: 'Return to session' })}</Button> : undefined}
     >
       {showFireworks && <Fireworks />}
 
       {/* Hero header */}
       <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0' }}>
         <div style={{ fontSize: 13, letterSpacing: 3, color: tokens.primary, fontWeight: 800 }}>
-          AWARDS CEREMONY
+          {t('ceremony.eyebrow', { defaultValue: 'AWARDS CEREMONY' })}
         </div>
         <div
           style={{
@@ -227,9 +228,9 @@ export function CeremonyScreen({
             textShadow: resolved === 'dark' ? `0 0 24px ${tokens.glow}` : 'none',
           }}
         >
-          Great game!
+          {t('ceremony.great_game', { defaultValue: 'Great game!' })}
         </div>
-        <div style={{ color: tokens.textMuted, fontSize: 15 }}>Here are your champions</div>
+        <div style={{ color: tokens.textMuted, fontSize: 15 }}>{t('ceremony.champions', { defaultValue: 'Here are your champions' })}</div>
       </div>
 
       {/* Podium top-3 */}
@@ -247,7 +248,7 @@ export function CeremonyScreen({
       {/* Star announcements */}
       {revealedStars.length > 0 && (
         <Card>
-          <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>Award announcements</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>{t('ceremony.announcements', { defaultValue: 'Award announcements' })}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {revealedStars.map((star) => (
               <StarRow key={`${star.star}-${star.participant_ids[0] ?? 'none'}`} star={star} />
@@ -259,7 +260,7 @@ export function CeremonyScreen({
       {/* Final leaderboard */}
       {starsDone && uiLeaderboard.length > 0 && (
         <Card>
-          <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>Final leaderboard</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: tokens.text, marginBottom: 8 }}>{t('ceremony.final_leaderboard', { defaultValue: 'Final leaderboard' })}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {uiLeaderboard.map((entry) => (
               <LeaderRow key={entry.participant_id} entry={entry} />
@@ -299,11 +300,12 @@ function PodiumBlock({
   barColor: string
   crown?: boolean
 }) {
+  const { t } = useTranslation()
   const { tokens, resolved } = useTheme()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, maxWidth: 120 }}>
       {crown && (
-        <svg width={28} height={20} viewBox="0 0 24 18" aria-label="First place" role="img">
+        <svg width={28} height={20} viewBox="0 0 24 18" aria-label={t('ceremony.first_place', { defaultValue: 'First place' })} role="img">
           <path d="M2 16h20l-2-12-5 5-5-7-5 7-5-5L2 16z" fill={tokens.starCrown} />
         </svg>
       )}

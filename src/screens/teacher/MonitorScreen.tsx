@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { createSocket } from '@/runtime/socket'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
@@ -26,6 +27,7 @@ interface MonitorScreenProps {
 }
 
 export function MonitorScreen({ session_id, join_code, onEndCollection }: MonitorScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const teacherToken = useMemo(() => getTeacherToken(), [])
   const auth = useMemo(
@@ -66,7 +68,7 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
       {/* ── Join-code hero ── */}
       <section style={joinCodeHeroStyle}>
         <div>
-          <div style={{ color: tokens.textMuted, fontSize: 12, letterSpacing: 1, fontWeight: 700 }}>JOIN CODE</div>
+          <div style={{ color: tokens.textMuted, fontSize: 12, letterSpacing: 1, fontWeight: 700 }}>{t('monitor.join_code', { defaultValue: 'JOIN CODE' })}</div>
           <div
             style={{
               fontSize: 36,
@@ -98,9 +100,9 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
       <div style={bodyStyle}>
         {/* Live Word Feed */}
         <section style={panelStyle}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>Live Word Feed</div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>{t('monitor.live_feed', { defaultValue: 'Live Word Feed' })}</div>
           {liveFeed.length === 0 && (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Waiting for submissions…</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('monitor.waiting_submissions', { defaultValue: 'Waiting for submissions…' })}</div>
           )}
           {liveFeed.map((ev) => (
             <div key={ev.id} style={rowStyle}>
@@ -115,7 +117,7 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
 
         {/* Leaderboard */}
         <section style={panelStyle}>
-          <div style={{ fontSize: 16, fontWeight: 800 }}>Players</div>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>{t('monitor.players', { defaultValue: 'Players' })}</div>
           {(session?.leaderboard ?? []).slice(0, 8).map((entry) => (
             <div key={entry.participant_id} style={rowStyle}>
               <span style={{ minWidth: 22, color: tokens.textMuted, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{entry.rank}</span>
@@ -125,13 +127,13 @@ export function MonitorScreen({ session_id, join_code, onEndCollection }: Monito
             </div>
           ))}
           {(session?.leaderboard ?? []).length === 0 && (
-            <div style={{ color: tokens.textMuted, fontSize: 13 }}>No players yet — waiting for joins.</div>
+            <div style={{ color: tokens.textMuted, fontSize: 13 }}>{t('monitor.no_players', { defaultValue: 'No players yet — waiting for joins.' })}</div>
           )}
         </section>
       </div>
 
 
-      {error && <div style={errorStyle}>Connection issue — retrying.</div>}
+      {error && <div style={errorStyle}>{t('monitor.reconnecting', { defaultValue: 'Connection issue — retrying.' })}</div>}
 
       {/* ── Teacher action buttons ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>

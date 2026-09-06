@@ -1,10 +1,20 @@
 /**
  * i18next initialization — v4.0 spec §1.8 / §7.1.
  *
- * Stub bundle: only English is wired right now. Mandinka, Wolof, Fula, French
- * bundles will be added as translation content is produced by the linguistic
- * team. Key extraction across screens lands in a separate PR; this file just
- * wires the system so `useTranslation()` works.
+ * ENGLISH ONLY, ON PURPOSE. Mandinka, Wolof, Fula and French are declared in
+ * SUPPORTED_LOCALES and have no bundle, so they fall back to English until AIWA
+ * supplies or approves the translations. Those are cultural and linguistic
+ * decisions under AIWA's authority — machine-translating them here would put
+ * invented orthography in front of the children whose language this exists to
+ * honour, which is worse than an honest English fallback.
+ *
+ * Key extraction across the student-facing screens is DONE and is enforced, not
+ * assumed: `src/i18n/noHardcodedStrings.test.ts` fails the build on a literal
+ * string in a student-facing component, and on any key whose bundled English
+ * disagrees with the `defaultValue` in the code.
+ *
+ * Adding a locale is: drop `<code>.json` beside `en/common.json`, import it, and
+ * add it to `resources` below. Nothing else changes.
  */
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'

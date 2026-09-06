@@ -167,6 +167,78 @@ export interface AccountXpResponse {
   lifetime_gold: number
 }
 
+/* ──────────────────── Stats & leaderboards: NODE-ADR-011 ─────────────────── */
+/* Mirrors the engine's src/contract.ts. Keep the two byte-identical in shape —
+ * the engine is the only authority for these numbers and this file exists so a
+ * client cannot quietly grow a field the server never sends. */
+
+/** `weekly` is bounded below by the most recent Monday 00:00 UTC. There is no
+ *  reset job — the window is computed at query time over immutable ledger rows. */
+export type StatsWindow = 'weekly' | 'all_time'
+
+/** Board separation band. Resolves to the account tier. */
+export type SkillBand = Tier
+
+/**
+ * One leaderboard row. PSEUDONYMOUS BY CONSTRUCTION — there is no `account_id`
+ * here and one must never be added, not even for the caller's own row. The
+ * client already knows its own id, so carrying it would buy nothing and turn
+ * every board into a screen-name-to-account-id mapping table.
+ */
+export interface LeaderboardEntry {
+  rank: number
+  screen_name: string
+  xp: number
+  is_self: boolean
+}
+
+export interface LeaderboardResponse {
+  window: StatsWindow
+  game_type: string | null
+  language: string | null
+  band: SkillBand | null
+  entries: LeaderboardEntry[]
+  next_cursor: string | null
+}
+
+export interface SelfStatsWindow {
+  xp: number
+  games_played: number
+  /** 0..1, or null when nothing was answered in the window. NEVER render null
+   *  as 0% — that reads as "you got everything wrong". */
+  accuracy: number | null
+  /** Rank on the board this account would appear on, reported even when opted
+   *  out. null when the account has no ranked XP in the window. */
+  rank: number | null
+}
+
+export interface AccountStatsResponse {
+  account_id: string
+  screen_name: string
+  band: SkillBand
+  weekly: SelfStatsWindow
+  all_time: SelfStatsWindow
+  stars: number
+  /** Always 0 today — nothing awards badges yet. */
+  badges: number
+  gold: number
+  leaderboard_opt_out: boolean
+}
+
+export interface LeaderboardPreferenceResponse {
+  account_id: string
+  opt_out: boolean
+}
+
+export interface LeaderboardQuery {
+  window?: StatsWindow
+  game_type?: string
+  language?: string
+  band?: SkillBand
+  limit?: number
+  cursor?: string
+}
+
 /* ───────────────────────────────── REST: §3.3 ────────────────────────────── */
 
 export interface ClassLeaderboardResponse {

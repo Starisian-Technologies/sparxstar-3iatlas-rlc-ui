@@ -15,6 +15,7 @@
  * the IME composition layer.
  */
 import { SPECIAL_CHARS } from '@/types'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '@/theme/useTheme'
 
 const LONG_VOWELS = ['aa', 'ee', 'ii', 'oo', 'uu'] as const
@@ -24,12 +25,13 @@ interface AccessoryBarProps {
 }
 
 export function AccessoryBar({ onInsert }: AccessoryBarProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
 
   return (
     <div
       role="toolbar"
-      aria-label="Special characters"
+      aria-label={t('accessory_bar.label', { defaultValue: 'Special characters' })}
       style={{
         display: 'flex',
         gap: 6,

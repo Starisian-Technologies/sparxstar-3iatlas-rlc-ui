@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { RlcRecorder } from '@/components/RlcRecorder'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
@@ -39,6 +40,7 @@ export function RwcCollectionScreen({
   onClose,
   onCollectionEnded,
 }: RwcCollectionScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const [word, setWord] = useState('')
   const [translation, setTranslation] = useState('')
@@ -222,19 +224,19 @@ export function RwcCollectionScreen({
   return (
     <div style={wrapStyle}>
       <header style={headerStyle}>
-        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label="Back to lobby">
+        <button type="button" onClick={onClose} style={closeBtnStyle} aria-label={t('collection_rwc.back', { defaultValue: 'Back to lobby' })}>
           <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <div style={chipStyle} aria-label={`Time remaining ${minutes} minutes ${seconds} seconds`}>
-          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>TIME</span>
+          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>{t('collection_rwc.time', { defaultValue: 'TIME' })}</span>
           <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </span>
         </div>
         <div style={chipStyle} aria-label={`${session?.participant_count ?? 0} players`}>
-          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>PLAYERS</span>
+          <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>{t('collection_rwc.players', { defaultValue: 'PLAYERS' })}</span>
           <span style={{ fontWeight: 800 }}>{session?.participant_count ?? 0}</span>
         </div>
         <div style={chipStyle} aria-label={`${myLeaderboard?.xp ?? 0} XP`}>
@@ -261,9 +263,9 @@ export function RwcCollectionScreen({
             value={word}
             onChange={(event) => setWord(event.target.value)}
             onFocus={() => handleInputFocus('word')}
-            placeholder={`Type a word in ${language}`}
+            placeholder={t('collection_rwc.word_placeholder', { defaultValue: 'Type a word in {{language}}…', language })}
             style={inputStyle}
-            aria-label="Word input"
+            aria-label={t('collection_rwc.word_aria', { defaultValue: 'Word input' })}
             // Indigenous-language words must not be "corrected" to English.
             autoCorrect="off"
             autoCapitalize="off"
@@ -272,7 +274,7 @@ export function RwcCollectionScreen({
             inputMode="text"
             lang={language}
           />
-          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle} aria-label="Submit word">
+          <button type="button" onClick={() => void submitWord()} disabled={!canSubmit || loading} style={sendBtnStyle} aria-label={t('collection_rwc.submit', { defaultValue: 'Submit word' })}>
             <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 5l7 7-7 7" />
             </svg>
@@ -284,9 +286,9 @@ export function RwcCollectionScreen({
             value={translation}
             onChange={(event) => setTranslation(event.target.value)}
             onFocus={() => handleInputFocus('translation')}
-            placeholder="Type translation (required)"
+            placeholder={t('collection_rwc.translation_placeholder', { defaultValue: 'English translation…' })}
             style={inputStyle}
-            aria-label="Translation input"
+            aria-label={t('collection_rwc.translation_aria', { defaultValue: 'Translation input' })}
             // The translation field accepts English — leave autocorrect on,
             // but turn off autoCapitalize so common-noun glosses aren't
             // sentence-cased.
@@ -318,7 +320,7 @@ export function RwcCollectionScreen({
       )}
 
       <section style={panelStyle}>
-        <div style={sectionTitleStyle}>Your words</div>
+        <div style={sectionTitleStyle}>{t('collection_rwc.your_words', { defaultValue: 'Your words' })}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
           {submittedWords.map((entry) => (
             <div key={entry.id} style={rowStyle}>
@@ -327,20 +329,20 @@ export function RwcCollectionScreen({
                   {entry.word}
                   <SpellingSignalDot signal={entry.spelling_signal} />
                 </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{entry.translation ?? 'No translation'}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{entry.translation ?? t('collection_rwc.no_translation', { defaultValue: 'No translation' })}</div>
               </div>
               {entry.syncStatus === 'queued'
-                ? <span style={queuedBadgeStyle}>queued</span>
+                ? <span style={queuedBadgeStyle}>{t('collection_rwc.queued', { defaultValue: 'queued' })}</span>
                 : <StarBadge variant="gold" count={`+${entry.xp_awarded}`} label={`${entry.xp_awarded} XP`} />
               }
             </div>
           ))}
-          {submittedWords.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No words yet.</div>}
+          {submittedWords.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('collection_rwc.no_words', { defaultValue: 'No words yet.' })}</div>}
         </div>
       </section>
 
       <section style={panelStyle}>
-        <div style={sectionTitleStyle}>Leaderboard</div>
+        <div style={sectionTitleStyle}>{t('collection_rwc.leaderboard', { defaultValue: 'Leaderboard' })}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(session?.leaderboard ?? []).slice(0, 4).map((entry) => (
             <div

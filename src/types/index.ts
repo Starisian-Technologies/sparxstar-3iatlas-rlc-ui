@@ -175,6 +175,10 @@ export interface AppState {
   role: AppRole
   session_id: string | null
   participant_id: string | null
+  /** The stable account behind this participant. Needed for the Stats screen,
+   *  which is owner-scoped on the engine. Distinct from participant_id, which is
+   *  per-session and is what QC/ceremony address. */
+  account_id: string | null
   /** HMAC participant token — kept in memory only, never persisted. */
   participant_token: string | null
   join_code: string | null
