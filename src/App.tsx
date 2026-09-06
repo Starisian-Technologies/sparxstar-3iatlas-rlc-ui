@@ -12,6 +12,7 @@ import { QcScreen } from '@/screens/qc/QcScreen'
 import { getTeacherToken } from '@/api/client'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
+import { StatsScreen } from '@/screens/StatsScreen'
 import { api } from '@/api/client'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
@@ -37,6 +38,7 @@ type Screen =
   | 'student_rsc_complete'
   | 'qc'
   | 'ceremony'
+  | 'stats'
 
 // A student still on a collection screen when the session leaves 'open' is routed
 // by the terminal status: 'ceremony'/'archived' skip straight to the ceremony so
@@ -56,6 +58,7 @@ export function App() {
     role: 'none',
     session_id: null,
     participant_id: null,
+    account_id: null,
     participant_token: null,
     join_code: null,
     display_name: null,
@@ -146,6 +149,7 @@ export function App() {
             ...s,
             session_id: result.session_id,
             participant_id: result.participant_id,
+            account_id: result.account_id ?? null,
             participant_token: result.participant_token ?? null,
             display_name: result.display_name,
             mode: result.mode as CollectionMode,
@@ -167,6 +171,12 @@ export function App() {
     )
   }
 
+  // ── Stats & competition ────────────────────────────────────────────────────
+  // Rendered from engine-computed values only; see StatsScreen's header.
+  if (screen === 'stats' && state.account_id) {
+    return <StatsScreen account_id={state.account_id} onBack={() => setScreen('student_lobby')} />
+  }
+
   // ── Student lobby ────────────────────────────────────────────────────────────
   if (screen === 'student_lobby' && state.session_id && state.display_name) {
     return (
@@ -174,6 +184,10 @@ export function App() {
         session_id={state.session_id}
         display_name={state.display_name}
         participant_token={state.participant_token}
+        // Only offered when the join actually returned an account_id — the
+        // Stats surface is owner-scoped on the engine and there is nothing to
+        // ask it about without one.
+        onViewStats={state.account_id ? () => setScreen('stats') : undefined}
         onEnterRound={() => {
           const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
           emitRuntimeEvent('ROUND_STARTED', {

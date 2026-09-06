@@ -30,6 +30,10 @@ import type {
   ClassResponse,
   BatchEvent,
   BatchResponse,
+  AccountStatsResponse,
+  LeaderboardResponse,
+  LeaderboardPreferenceResponse,
+  LeaderboardQuery,
 } from '@/contract'
 import type { SaveTokenPayload } from '@/types'
 
@@ -42,6 +46,13 @@ let _participantToken: string | null = null
 
 export function setParticipantToken(token: string | null): void {
   _participantToken = token
+}
+
+/** The in-memory participant token, for the read surfaces that accept either
+ *  principal. Null for an adult solo player, whose Identity token is used
+ *  instead — `sessionReadHeaders` picks between them. */
+function participantTokenForRead(): string | null {
+  return _participantToken
 }
 
 function participantAuthHeaders(): Record<string, string> {
@@ -250,6 +261,48 @@ export const api = {
         method: 'POST',
         headers: participantAuthHeaders(),
         body: JSON.stringify({ corrected_text }),
+      })
+    },
+  },
+
+  /**
+   * Stats and leaderboards (NODE-ADR-011). The engine computes every number
+   * here; this client only fetches and renders. Never derive a rank, a total,
+   * or a position on the client — a second scoring authority is exactly the
+   * defect the server-authoritative rule exists to prevent.
+   */
+  stats: {
+    /** The caller's own stats. Owner-only server-side; the id must be the
+     *  account the presented credential names. */
+    self(account_id: string): Promise<AccountStatsResponse> {
+      return request(`/account/${account_id}/stats`, {
+        headers: sessionReadHeaders(participantTokenForRead()),
+      })
+    },
+
+    /** One page of a pseudonymous board. Every filter is optional and absent
+     *  means "combined", which the response echoes back so the UI labels what
+     *  it actually got rather than what it asked for. */
+    leaderboard(q: LeaderboardQuery = {}): Promise<LeaderboardResponse> {
+      const params = new URLSearchParams()
+      if (q.window) params.set('window', q.window)
+      if (q.game_type) params.set('game_type', q.game_type)
+      if (q.language) params.set('language', q.language)
+      if (q.band) params.set('band', q.band)
+      if (q.limit !== undefined) params.set('limit', String(q.limit))
+      if (q.cursor) params.set('cursor', q.cursor)
+      const qs = params.toString()
+      return request(`/leaderboard${qs ? `?${qs}` : ''}`, {
+        headers: sessionReadHeaders(participantTokenForRead()),
+      })
+    },
+
+    /** Withdraw from / rejoin public boards. Owner-only. */
+    setLeaderboardOptOut(account_id: string, opt_out: boolean): Promise<LeaderboardPreferenceResponse> {
+      return request(`/account/${account_id}/leaderboard-preference`, {
+        method: 'PUT',
+        headers: sessionReadHeaders(participantTokenForRead()),
+        body: JSON.stringify({ opt_out }),
       })
     },
   },

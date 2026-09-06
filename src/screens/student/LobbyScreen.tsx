@@ -30,9 +30,12 @@ interface LobbyScreenProps {
   display_name: string
   participant_token: string | null
   onEnterRound: () => void
+  /** Absent when the session did not return an account_id — the Stats surface
+   *  is owner-scoped, so there is nothing to show without one. */
+  onViewStats?: (() => void) | undefined
 }
 
-export function LobbyScreen({ session_id, display_name, participant_token, onEnterRound }: LobbyScreenProps) {
+export function LobbyScreen({ session_id, display_name, participant_token, onEnterRound, onViewStats }: LobbyScreenProps) {
   const { t } = useTranslation()
   const { tokens } = useTheme()
   const auth = useMemo(
@@ -65,11 +68,18 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
         </div>
       }
       footer={
-        <Button onClick={onEnterRound} disabled={!canEnter} large>
-          {canEnter
-            ? t('lobby.start', { defaultValue: 'Start collecting' })
-            : t('lobby.waiting', { defaultValue: 'Waiting for the session to start…' })}
-        </Button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Button onClick={onEnterRound} disabled={!canEnter} large>
+            {canEnter
+              ? t('lobby.start', { defaultValue: 'Start collecting' })
+              : t('lobby.waiting', { defaultValue: 'Waiting for the session to start…' })}
+          </Button>
+          {onViewStats && (
+            <Button onClick={onViewStats} variant="ghost">
+              {t('lobby.view_stats', { defaultValue: 'Your progress' })}
+            </Button>
+          )}
+        </div>
       }
     >
       <ContinuityBanner isOnline={isOnline} hasConnectionIssue={Boolean(error)} />

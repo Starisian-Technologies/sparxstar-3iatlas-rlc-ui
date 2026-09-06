@@ -56,7 +56,8 @@
     "round_label": "Round {{round}} of {{total}}",
     "role": "Word Collector",
     "start": "Start collecting",
-    "todays_topic": "TODAY’S TOPIC"
+    "todays_topic": "TODAY’S TOPIC",
+    "view_stats": "Your progress"
   },
   "collection_rwc": {
     "word_label": "Your word",
@@ -301,5 +302,34 @@
     "stop_label": "Stop recording",
     "tap_to_record": "Tap to record",
     "try_again": "Try again"
+  },
+  "stats": {
+    "accuracy": "Accuracy",
+    "all_time": "All time",
+    "back": "← Back",
+    "board_all_time": "Top 10 all time",
+    "board_empty": "No scores yet. Be the first!",
+    "board_weekly": "Top 10 this week",
+    "games_played": "Games played",
+    "gold": "Gold",
+    "hide_from_boards": "Hide me from leaderboards",
+    "load_failed": "Could not load your stats. Please try again.",
+    "load_more_failed": "Could not load more. Please try again.",
+    "loading": "Loading your stats…",
+    "loading_more": "Loading…",
+    "no_answers_yet": "—",
+    "opted_out_note": "You are hidden from this board. Your own progress above still shows your place.",
+    "pref_failed": "Could not change that setting. Please try again.",
+    "privacy_body": "Boards only ever show your screen name. You can hide yourself at any time and still see your own progress.",
+    "privacy_heading": "Appearing on leaderboards",
+    "rank": "Rank",
+    "rejoin_boards": "Show me on leaderboards",
+    "show_more": "Show more",
+    "stars": "Stars",
+    "this_week": "This week",
+    "title": "Your progress",
+    "unranked": "Not ranked yet",
+    "window_label": "Time period",
+    "xp": "XP"
   }
 }
