@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AccessoryBar } from '@/components/AccessoryBar'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { StarBadge } from '@/components/StarBadge'
@@ -36,6 +37,7 @@ export function RscCollectionScreen({
   onCollectionCompleted,
   onCollectionEnded,
 }: RscCollectionScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const [step, setStep] = useState<Step>('sentence')
   const [sentence, setSentence] = useState('')
@@ -193,8 +195,8 @@ export function RscCollectionScreen({
         background: tokens.bg,
         color: tokens.text,
       }}>
-        <div style={{ fontSize: 22, fontWeight: 800 }}>All 12 sentences submitted</div>
-        <div style={{ fontSize: 15, color: tokens.textMuted }}>Waiting for the teacher to start the review…</div>
+        <div style={{ fontSize: 22, fontWeight: 800 }}>{t('collection_rsc.all_submitted', { defaultValue: 'All {{count}} sentences submitted', count: totalDomains })}</div>
+        <div style={{ fontSize: 15, color: tokens.textMuted }}>{t('collection_rsc.waiting_review', { defaultValue: 'Waiting for the teacher to start the review…' })}</div>
       </div>
     )
   }
@@ -235,7 +237,7 @@ export function RscCollectionScreen({
         {/* Progress info */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 13, color: tokens.textMuted, fontWeight: 600 }}>
-            {completedCount} of {totalDomains} done
+            {t('collection_rsc.progress', { defaultValue: '{{done}} of {{total}} done', done: completedCount, total: totalDomains })}
           </div>
           {lastResult && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -318,7 +320,7 @@ export function RscCollectionScreen({
           gap: 6,
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: tokens.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
-            Grammar type
+            {t('collection_rsc.grammar_type', { defaultValue: 'Grammar type' })}
           </div>
           <div style={{ fontSize: 20, fontWeight: 800, color: tokens.primary }}>
             {currentDomain.label}
@@ -327,7 +329,7 @@ export function RscCollectionScreen({
             {currentDomain.prompt}
           </div>
           <div style={{ fontSize: 13, color: tokens.textMuted }}>
-            Focus: <span style={{ color: tokens.text, fontWeight: 600 }}>{currentDomain.focus_element}</span>
+            {t('collection_rsc.focus_prefix', { defaultValue: 'Focus:' })} <span style={{ color: tokens.text, fontWeight: 600 }}>{currentDomain.focus_element}</span>
           </div>
         </div>
 
@@ -346,9 +348,9 @@ export function RscCollectionScreen({
               value={sentence}
               onChange={(e) => setSentence(e.target.value)}
               autoFocus
-              placeholder="Type your sentence…"
+              placeholder={t('collection_rsc.sentence_placeholder', { defaultValue: 'Type your sentence…' })}
               style={inputStyle}
-              aria-label="Sentence input"
+              aria-label={t('collection_rsc.sentence_aria', { defaultValue: 'Sentence input' })}
               autoCorrect="off"
               autoCapitalize="off"
               autoComplete="off"
@@ -374,7 +376,7 @@ export function RscCollectionScreen({
               htmlFor="rsc-translation"
               style={{ fontSize: 15, fontWeight: 700, color: tokens.text }}
             >
-              What does this sentence mean in English?
+              {t('collection_rsc.translate_prompt', { defaultValue: 'What does this sentence mean in English?' })}
             </label>
             <input
               id="rsc-translation"
@@ -383,9 +385,9 @@ export function RscCollectionScreen({
               value={translation}
               onChange={(e) => setTranslation(e.target.value)}
               autoFocus
-              placeholder="Translation…"
+              placeholder={t('collection_rsc.translation_placeholder', { defaultValue: 'Translation…' })}
               style={inputStyle}
-              aria-label="Translation input"
+              aria-label={t('collection_rsc.translation_aria', { defaultValue: 'Translation input' })}
               autoCapitalize="off"
               autoComplete="off"
               spellCheck
@@ -424,7 +426,7 @@ export function RscCollectionScreen({
         {step === 'recording' && (
           <>
             <label style={{ fontSize: 15, fontWeight: 700, color: tokens.text }}>
-              Record yourself saying the sentence
+              {t('collection_rsc.record_prompt', { defaultValue: 'Record yourself saying the sentence' })}
             </label>
             <div style={{
               border: `2px dashed ${tokens.border}`,
@@ -440,7 +442,7 @@ export function RscCollectionScreen({
               gap: 10,
             }}>
               <span style={{ fontSize: 44 }}>🎙</span>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>Starmus recorder</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{t('collection_rsc.recorder_title', { defaultValue: 'Starmus recorder' })}</div>
               <div style={{ fontSize: 12, opacity: 0.7 }}>(@sparxstar/starmus-audio — wiring in progress)</div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -479,12 +481,12 @@ export function RscCollectionScreen({
             onClick={() => void handleSubmit()}
             style={primaryBtnStyle(tokens, false)}
           >
-            Submit sentence
+            {t('collection_rsc.submit', { defaultValue: 'Submit sentence' })}
           </button>
         )}
 
         {loading && step !== 'recording' && (
-          <div style={{ textAlign: 'center', color: tokens.textMuted, fontSize: 14 }}>Submitting…</div>
+          <div style={{ textAlign: 'center', color: tokens.textMuted, fontSize: 14 }}>{t('collection_rsc.submitting', { defaultValue: 'Submitting…' })}</div>
         )}
 
         {error && (
@@ -515,9 +517,10 @@ function FocusPreview({
   focusWord: string | null
   tokens: { text: string; primary: string; textMuted: string }
 }) {
+  const { t } = useTranslation()
   if (!sentence.trim()) return null
   if (!focusWord) {
-    return <div style={{ fontSize: 14, color: tokens.textMuted }}>Keep typing to highlight the focus element.</div>
+    return <div style={{ fontSize: 14, color: tokens.textMuted }}>{t('collection_rsc.focus_hint', { defaultValue: 'Keep typing to highlight the focus element.' })}</div>
   }
   const escaped = focusWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = sentence.split(new RegExp(`(${escaped})`, 'i'))

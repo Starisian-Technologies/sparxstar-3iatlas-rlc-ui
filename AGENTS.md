@@ -34,22 +34,26 @@ It calls the `sparxstar-3iatlas-rlc-node-engine` Node backend over REST
 
 ## Canonical Spec
 
-**The canonical specification lives in the engine repo**, at
-`sparxstar-3iatlas-rlc-node-engine/.github/instructions/sparxstar-3iatlas-rlc-spec-v4.0.md`.
-This repo's `.github/instructions/SPARXSTAR-3iAtlas-RLC-Spec-v4.0.md` is a
-**snapshot** of it: authoritative over anything in this AGENTS.md, and NOT
-authoritative where it disagrees with the engine's copy.
+**The canonical specification lives in the product-specification registry**, at
+`Starisian-Technologies/sparxstar-product-specification-registry`,
+`specs/3iAtlas/rlc-games/rlc-games-tech-spec.md`.
 
-Corrected 2026-09. Both files previously declared themselves canonical — "the
-single source of truth" — and had already diverged, so a reader could not tell
-which to believe. The engine is where the described behaviour is implemented, and
-its `AGENTS.md` §2 names its copy as canonical, so that is the source.
+Corrected 2026-09-06. This section previously named the ENGINE repo's
+`.github/instructions/sparxstar-3iatlas-rlc-spec-v4.0.md` as canonical. That
+stopped being true on **2026-09-05**, when owner ruling (registry OQ-019) moved
+the canonical home to the registry and demoted the engine's copy to a working
+copy — a change the engine's own `AGENTS.md` §2 records and this file had not
+caught up with. Precedence today:
 
-Synced from the engine so far: **§1.6** (reward ownership), the screen-time
-rejection sentence in **§1.7** (it claimed 423, contradicting the file's own
-§11 error table), and the six "Gold badge" rows in **§6.5/§6.6**. Everything
-else is unsynced and may still drift — the snapshot header lists the same set,
-and that list is the one to update when more is synced.
+| Document | Authority |
+| :---- | :---- |
+| Registry `rlc-games-tech-spec.md` | **Canonical.** Wins every conflict. |
+| Engine `.github/instructions/…-v4.0.md` | Working copy. Yields to the registry. |
+| This repo's `.github/instructions/…-Spec-v4.0.md` | Snapshot. Yields to both. |
+| This `AGENTS.md` | Yields to all three. |
+
+Corrections to UI *behaviour* are still discovered here, in the code, and are
+then proposed to the registry — never hand-maintained as a rival original.
 
 UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.png`).
 
@@ -63,10 +67,27 @@ UI mockups live in `.github/instructions/` (`RLC-game-play.png`, `RLC-awards*.pn
 - **Never compute XP client-side.** XP comes from the backend on the `token:submitted` socket event and the `token/save` response.
 - **Token immutability.** Corrections are stored in `corrected_text` on the original token — never a new token, never overwriting `text`. UI says "correction submitted," never "word updated."
 - **AccessoryBar is mandatory** on every screen with a text input. `ŋ` must be the first character. Multi-character inserts (`aa ee ii oo uu`) must bypass IME autocorrect.
-- **Localization always.** Every student-facing string is an i18next localization key. No hardcoded English in any student-facing component. Launch locales: Mandinka, Wolof, Fula, English, French.
+- **Localization always.** Every student-facing string is an i18next localization
+  key. No hardcoded English in any student-facing component. Launch locales:
+  Mandinka, Wolof, Fula, English, French. **This is enforced, not trusted:**
+  `src/i18n/noHardcodedStrings.test.ts` fails the build on a literal string in a
+  student-facing component, and on any key whose bundled English disagrees with
+  the `defaultValue` in the code. Only English is bundled — the other four fall
+  back to English until **AIWA supplies or approves** them. Do not machine-
+  translate them; orthography is AIWA's authority.
 - **Submitter anonymized in QC.** The submitter's screen name is never displayed in any QC card, on student or teacher screens. Identity is revealed only during ceremony star reveals.
 - **Three-step sequence** in collection: text → translation → recording. State machine enforced as pedagogical guide, not a rejection gate. Steps not required by the selected depth are **hidden entirely** — never shown disabled.
-- **Keep the Starmus recorder placeholder** until the real widget is wired; do not implement audio recording inside the UI.
+- **Audio capture is `src/components/RlcRecorder.tsx`, and it is real.** Corrected
+  2026-09-06: this line used to read *"keep the Starmus recorder placeholder …
+  do not implement audio recording inside the UI"*, which the code has
+  contradicted since `#16`. `RlcRecorder` holds a live `MediaRecorder`, requests
+  the microphone, and posts the blob to Yahura. Do not re-placeholder it. The
+  rule that still holds without exception is the one below it: **audio never
+  enters the UI's data layer** — no audio file in any RLC API call, no audio
+  persisted, no retry buffer. The recorder holds bytes only between capture and
+  the Yahura POST, and a failed route re-prompts rather than caching.
+  (`RscCollectionScreen` still renders a labelled Starmus placeholder panel for
+  the RSC sentence flow; that one is genuinely unwired.)
 - **No WebSocket library beyond socket.io-client.** No custom WS protocol.
 - **No WordPress. At all.** RLC is entirely Node.js — no `@wordpress/*` packages, no `/wp-json` calls, no WordPress runtime dependency, no WordPress page mount, no WordPress-injected teacher token, no WordPress-owned session workflow. **There is no WordPress orchestrator and none is to be created** (owner ruling, 2026-08-23; canonical spec §8 is marked superseded). A host page supplies runtime globals; it is not a WordPress plugin.
 
@@ -149,7 +170,17 @@ QC sequence per token: Audio Vote (skipped if no transcription) → Orthography 
 - **One vote per participant per dimension per token** — disable vote buttons immediately after voting; never re-enable. Backend returns 409 on duplicate.
 - **Community validation** — show live vote counts as they arrive; never hide or delay.
 - **Screen-time enforcement** — on 423 at join or `screentime:limit-reached` mid-session, show a localized "Daily limit reached" screen and disconnect gracefully.
-- **Rights confirmation on T1** — teacher confirms each rights field; no forced defaults; `ai_training` never defaulted true.
+- **Rights confirmation on T1** — teacher confirms each rights field; no forced
+  defaults; `ai_training` never defaulted true. **Implemented 2026-09-06**:
+  `src/runtime/rights.ts` (domain: presets, the `unset | yes | no` tri-state, the
+  completeness rule) and `src/components/RightsConfirmation.tsx` (the T1 card).
+  Every field starts `unset` and Create Session is disabled until all three are
+  answered. `'unset'` is a real state distinct from an answered "no" — collapsing
+  them would let an untouched form submit as a deliberate refusal, which is a
+  fabricated consent answer. This replaced `placeholderRights()`, now deleted.
+  **Do not add a license identifier that is not in use on the platform**:
+  rights ride on every token through DVE and cannot be narrowed afterwards, so
+  extending `LICENSE_PRESETS` is an owner/AIWA decision, not a UI change.
 
 ---
 
@@ -227,9 +258,9 @@ Before opening a PR, `typecheck`, `lint`, `test`, and `build` must all pass.
 | 3 — Session core | **Big.** Tier-aware S1, T1 with rights confirmation, T2 with LB roster panel and locked-account list, socket.io connect, i18next wired (English), RLC_* host-global injection path, replace polling with sockets |
 | 4 — RWC | S2 already mostly done. Add AccessoryBar IME bypass + long vowels, drive XP from socket, Starmus mount |
 | 5 — RSC | S3 already mostly done. Add tri-state `focus_detected`, localize prompts |
-| 6 — QC | Submitter anonymized ✅. Three separate vote axes (pronunciation → spelling → meaning → conditional correction → translation) ✅ 2026-08-23. Remaining: the audio panel is a placeholder until `RlcRecorder` records; offline queue for vote/translate/correct. |
+| 6 — QC | Submitter anonymized ✅. Three separate vote axes (pronunciation → spelling → meaning → conditional correction → translation) ✅ 2026-08-23. `RlcRecorder` records ✅ (corrected 2026-09-06 — this row claimed it did not). Remaining: offline queue for vote/translate/correct; end-to-end verification of capture → Yahura → engine acknowledgement, which has never been run against live services. |
 | 7 — Awards | Extend CeremonyScreen with lifetime XP + school standing. Extract T4 from QcScreen. Localize star names. |
-| 9 — Polish | PWA ✅, screen-time signal handling ✅ (but screen-time is NOT enforced — the engine's quota client is a stub). Remaining: all-action offline queue, browser-level E2E for both modes |
+| 9 — Polish | PWA ✅, screen-time signal handling ✅, i18n key extraction ✅ (enforced by test), T1 rights confirmation ✅. **Screen-time is still NOT enforced** — the engine's myCred quota client is a stub that returns the full tier allowance on every call, so nothing accrues; `NODE-ADR-010` is *Proposed, awaiting owner ruling*, and its Question 0 (myCred vs PostgreSQL as ledger owner) is unanswered. `CLASSROOM_ENABLED` must stay unset until it is resolved. Remaining: all-action offline queue, browser-level E2E for both modes |
 
 ---
 

@@ -441,7 +441,7 @@ export function QcScreen({
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 type="button"
-                aria-label="Pronunciation yes"
+                aria-label={t('qc.vote_pronunciation_yes', { defaultValue: 'Pronunciation yes' })}
                 onClick={() => void handleVote(true)}
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.success, hasVoted, tokens)}
@@ -450,7 +450,7 @@ export function QcScreen({
               </button>
               <button
                 type="button"
-                aria-label="Pronunciation no"
+                aria-label={t('qc.vote_pronunciation_no', { defaultValue: 'Pronunciation no' })}
                 onClick={() => void handleVote(false)}
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.danger, hasVoted, tokens)}
@@ -484,7 +484,7 @@ export function QcScreen({
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 type="button"
-                aria-label="Vote yes"
+                aria-label={t('qc.vote_yes_label', { defaultValue: 'Vote yes' })}
                 onClick={() => void handleVote(true)}
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.success, hasVoted, tokens)}
@@ -493,7 +493,7 @@ export function QcScreen({
               </button>
               <button
                 type="button"
-                aria-label="Vote no"
+                aria-label={t('qc.vote_no_label', { defaultValue: 'Vote no' })}
                 onClick={() => void handleVote(false)}
                 disabled={hasVoted}
                 style={voteButtonStyle(tokens.danger, hasVoted, tokens)}
@@ -533,7 +533,7 @@ export function QcScreen({
               value={correction}
               onChange={(e) => setCorrection(e.target.value)}
               style={inputStyle}
-              aria-label="Correction input"
+              aria-label={t('qc.correction_label', { defaultValue: 'Correction input' })}
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
@@ -553,7 +553,7 @@ export function QcScreen({
               onChange={(e) => setTranslation(e.target.value)}
               placeholder={t('qc.translation_placeholder', { defaultValue: 'Type the English meaning…' })}
               style={{ ...inputStyle, opacity: translationSubmitted ? 0.5 : 1 }}
-              aria-label="Translation input"
+              aria-label={t('qc.translation_label', { defaultValue: 'Translation input' })}
               disabled={translationSubmitted}
               autoCapitalize="off"
               spellCheck
@@ -618,7 +618,7 @@ export function QcScreen({
                     appearance: 'none',
                     opacity: teacherStarAssigned ? 0.5 : 1,
                   }}
-                  aria-label="Select participant to award Teacher's Star"
+                  aria-label={t('qc.assign_star_select_label', { defaultValue: "Select participant to award Teacher's Star" })}
                 >
                   <option value="">{t('qc.assign_star_select_placeholder', { defaultValue: 'Select a student…' })}</option>
                   {participants.map((p) => (

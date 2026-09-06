@@ -3,6 +3,7 @@ import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
+import { TeacherSignedOut } from '@/screens/teacher/TeacherSignedOut'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
 import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
@@ -77,27 +78,19 @@ export function App() {
     )
   }
 
-  // ── Teacher missing token ─────────────────────────────────────────────────
-  // No /auth/login endpoint — teacher token must be injected by the orchestrator.
+  // ── Teacher not signed in ─────────────────────────────────────────────────
+  //
+  // The teacher's credential is an IDENTITY-ISSUED token supplied by the host
+  // page in memory (NODE-ADR-007: Identity authenticates, RLC authorizes). It
+  // proves who the teacher is and grants nothing; whether they may create a
+  // session is resolved server-side against RLC's own authorization records.
+  //
+  // This copy previously told the teacher to "open this page from the WordPress
+  // orchestrator". There is no WordPress orchestrator and none is to be created
+  // (owner ruling, 2026-08-23) — it named a component that does not exist, so a
+  // teacher who hit this screen was given an instruction they could not follow.
   if (screen === 'teacher_missing_token') {
-    return (
-      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#160001', color: '#fff' }}>
-        <div style={{ maxWidth: 420, textAlign: 'center' }}>
-          <h1 style={{ fontSize: 22, marginBottom: 8 }}>Teacher token missing</h1>
-          <p style={{ opacity: 0.8, marginBottom: 16, lineHeight: 1.5 }}>
-            This app needs a teacher token from the orchestrator (`window.RLC_TEACHER_TOKEN`).
-            Open this page from the WordPress orchestrator so it can inject the token in memory.
-          </p>
-          <button
-            type="button"
-            onClick={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }}
-            style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: '#FF2D78', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-    )
+    return <TeacherSignedOut onBack={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }} />
   }
 
   // ── Teacher setup ──────────────────────────────────────────────────────────

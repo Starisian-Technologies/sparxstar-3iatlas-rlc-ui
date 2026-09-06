@@ -10,7 +10,12 @@
     "join_cta": "Join a session",
     "teacher_cta": "Start a session (teacher)",
     "theme_hint_dark": "Dark · auto by time of day",
-    "theme_hint_light": "Light · auto by time of day"
+    "theme_hint_light": "Light · auto by time of day",
+    "stars_tagline": "Earn stars for every new word you teach",
+    "join": "Join a session",
+    "subtitle": "Collect words. Share your language.",
+    "teacher": "Start a session (teacher)",
+    "title": "Rapid Language Collection"
   },
   "join": {
     "title": "Join the session",
@@ -21,7 +26,24 @@
     "symbol_hint": "That's your symbol — tap to learn its meaning later",
     "join_button": "Join",
     "joining_button": "Joining…",
-    "error": "Could not join. Check your code and try again."
+    "error": "Could not join. Check your code and try again.",
+    "code_placeholder": "ABC123",
+    "password_label": "Password",
+    "password_placeholder": "••••••••••••",
+    "pin_label": "4-digit PIN",
+    "pin_placeholder": "••••",
+    "screen_name_placeholder": "What should we call you?",
+    "tap_your_name": "Tap your name to join.",
+    "who_are_you": "Who are you?",
+    "code_aria": "Six character session code",
+    "ask_teacher": "Ask your teacher for the code on the board.",
+    "avatar_hint": "That’s your symbol — tap to learn its meaning later",
+    "code_prefix": "Code:",
+    "looking_up": "Looking up session…",
+    "password_field": "Password",
+    "pin_field": "PIN (4 digits)",
+    "session_code": "Session code",
+    "your_name": "Your name"
   },
   "lobby": {
     "waiting": "Waiting for the session to start…",
@@ -31,7 +53,10 @@
     "time_label": "Time",
     "time_now": "Now",
     "enter_round": "Enter the round",
-    "round_label": "Round {{round}} of {{total}}"
+    "round_label": "Round {{round}} of {{total}}",
+    "role": "Word Collector",
+    "start": "Start collecting",
+    "todays_topic": "TODAY’S TOPIC"
   },
   "collection_rwc": {
     "word_label": "Your word",
@@ -43,7 +68,17 @@
     "add_another": "Add another",
     "saturated": "We have lots of that word — try a different one.",
     "saved_xp": "Word saved — you earned {{xp}} XP!",
-    "xp_format": "+{{xp}} XP"
+    "xp_format": "+{{xp}} XP",
+    "back": "Back to lobby",
+    "leaderboard": "Leaderboard",
+    "no_words": "No words yet.",
+    "players": "PLAYERS",
+    "time": "TIME",
+    "your_words": "Your words",
+    "word_aria": "Word input",
+    "translation_aria": "Translation input",
+    "no_translation": "No translation",
+    "queued": "queued"
   },
   "collection_rsc": {
     "sentence_label": "Type a sentence in {{language}}",
@@ -62,7 +97,18 @@
     "saturated": "Great! We have lots of that — try a different sentence.",
     "saved_xp": "Sentence saved — you earned {{xp}} XP!",
     "waiting": "All 12 sentences submitted",
-    "waiting_subtitle": "Waiting for the teacher to start the review…"
+    "waiting_subtitle": "Waiting for the teacher to start the review…",
+    "focus_hint": "Keep typing to highlight the focus element.",
+    "waiting_review": "Waiting for the teacher to start the review…",
+    "sentence_aria": "Sentence input",
+    "translation_aria": "Translation input",
+    "all_submitted": "All {{count}} sentences submitted",
+    "focus_prefix": "Focus:",
+    "grammar_type": "Grammar type",
+    "progress": "{{done}} of {{total}} done",
+    "record_prompt": "Record yourself saying the sentence",
+    "recorder_title": "Starmus recorder",
+    "translate_prompt": "What does this sentence mean in English?"
   },
   "round_complete": {
     "title": "Round {{round}} complete!",
@@ -117,7 +163,14 @@
     "start_ceremony": "Start ceremony →",
     "next_word": "Next word →",
     "advancing": "Moving the class…",
-    "error_vote": "Could not submit vote. Please try again."
+    "error_vote": "Could not submit vote. Please try again.",
+    "correction_label": "Correction input",
+    "translation_label": "Translation input",
+    "vote_pronunciation_no": "Pronunciation no",
+    "vote_pronunciation_yes": "Pronunciation yes",
+    "vote_yes_label": "Vote yes",
+    "vote_no_label": "Vote no",
+    "assign_star_select_label": "Select participant to award Teacher's Star"
   },
   "rsc_complete": {
     "title": "All done!",
@@ -125,7 +178,9 @@
     "submitted_count_other": "{{count}} sentences submitted",
     "subtitle": "You contributed to the class language record. Waiting for everyone else to finish…",
     "waiting_message": "Your teacher will start the review when everyone is ready.",
-    "xp_note": "XP for each sentence will appear after the review"
+    "xp_note": "XP for each sentence will appear after the review",
+    "body": "You contributed to the class language record. Waiting for everyone else to finish…",
+    "teacher_note": "Your teacher will start the review when everyone is ready."
   },
   "ceremony": {
     "title": "Session complete!",
@@ -142,7 +197,16 @@
       "teacher_award": "Teacher Award",
       "extra_winners_one": " +{{count}} more",
       "extra_winners_other": " +{{count}} more"
-    }
+    },
+    "announcements": "Award announcements",
+    "champions": "Here are your champions",
+    "final_leaderboard": "Final leaderboard",
+    "first_place": "First place",
+    "loading": "Loading ceremony…",
+    "loading_detail": "Gathering class results.",
+    "unavailable": "Ceremony unavailable",
+    "eyebrow": "AWARDS CEREMONY",
+    "great_game": "Great game!"
   },
   "teacher_login": {
     "label": "TEACHER",
@@ -154,7 +218,9 @@
     "sign_in": "Sign in",
     "signing_in": "Signing in…",
     "error": "Incorrect username or password. Please try again.",
-    "back": "← Back"
+    "back": "← Back",
+    "signed_out_body": "Open this page from your school portal so it can sign you in. Your session is never stored on this device.",
+    "signed_out_title": "You are not signed in"
   },
   "teacher_setup": {
     "label": "TEACHER",
@@ -172,7 +238,28 @@
     "depth_note": "Audio recording (full depth) is not enabled in this build.",
     "create_button": "Create session",
     "creating_button": "Creating…",
-    "error": "Could not create session. Please try again."
+    "error": "Could not create session. Please try again.",
+    "create": "Create session",
+    "create_failed": "Could not create session. Please try again.",
+    "creating": "Creating…",
+    "depth": "Collection depth",
+    "depth_translation": "Word + translation",
+    "duration": "Round duration",
+    "eyebrow": "TEACHER",
+    "language": "Language",
+    "minutes": "{{count}} min",
+    "missing_class": "Missing class context. Reload this page from your school portal.",
+    "mode": "Mode",
+    "rights": {
+      "ai_training_question": "May this language data help train AI models?",
+      "commercial_question": "May this language data be used commercially?",
+      "explainer": "These choices travel with every word your class contributes, to every system that receives it. They cannot be narrowed later, so please answer each one.",
+      "heading": "Data rights",
+      "incomplete": "Answer all three to start the session.",
+      "license_label": "License for the derived data",
+      "license_unset": "Choose a license…"
+    },
+    "topic": "Topic"
   },
   "monitor": {
     "join_code_label": "JOIN CODE",
@@ -187,10 +274,32 @@
     "no_translation": "No translation",
     "next_round": "Next round",
     "end_collection": "End collection & start QC",
-    "connection_issue": "Connection issue — retrying."
+    "connection_issue": "Connection issue — retrying.",
+    "join_code": "JOIN CODE",
+    "players": "Players",
+    "reconnecting": "Connection issue — retrying.",
+    "waiting_submissions": "Waiting for submissions…"
   },
   "errors": {
     "network": "Connection lost — changes will sync when you're back online.",
     "unknown": "Something went wrong. Please try again."
+  },
+  "common": {
+    "no": "No",
+    "yes": "Yes"
+  },
+  "accessory_bar": {
+    "label": "Special characters"
+  },
+  "recorder": {
+    "getting_mic": "Getting microphone…",
+    "say_this_word": "Say this word",
+    "sending": "Sending…",
+    "skip": "Skip",
+    "start_label": "Start recording",
+    "stop": "Stop",
+    "stop_label": "Stop recording",
+    "tap_to_record": "Tap to record",
+    "try_again": "Try again"
   }
 }

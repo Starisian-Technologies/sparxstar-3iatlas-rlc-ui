@@ -10,6 +10,7 @@
  * without touching this file's UI surface.
  */
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSessionSocket } from '@/hooks/useSessionSocket'
 import { ContinuityBanner } from '@/components/ContinuityBanner'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
@@ -32,6 +33,7 @@ interface LobbyScreenProps {
 }
 
 export function LobbyScreen({ session_id, display_name, participant_token, onEnterRound }: LobbyScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const auth = useMemo(
     () => participant_token ? { token: participant_token } : null,
@@ -64,7 +66,9 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
       }
       footer={
         <Button onClick={onEnterRound} disabled={!canEnter} large>
-          {canEnter ? 'Start collecting' : 'Waiting for teacher to open session…'}
+          {canEnter
+            ? t('lobby.start', { defaultValue: 'Start collecting' })
+            : t('lobby.waiting', { defaultValue: 'Waiting for the session to start…' })}
         </Button>
       }
     >
@@ -78,7 +82,7 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
             <div style={{ fontWeight: 800, fontSize: 18, color: tokens.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {display_name}
             </div>
-            <div style={{ color: tokens.textMuted, fontSize: 13 }}>Word Collector</div>
+            <div style={{ color: tokens.textMuted, fontSize: 13 }}>{t('lobby.role', { defaultValue: 'Word Collector' })}</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
             <div style={{ color: tokens.text, fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>
@@ -91,7 +95,7 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
       {/* Session summary */}
       <Card highlight>
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>TODAY&rsquo;S TOPIC</div>
+          <div style={{ fontSize: 12, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>{t('lobby.todays_topic', { defaultValue: 'TODAY\u2019S TOPIC' })}</div>
         </div>
         <div style={{ fontSize: 26, fontWeight: 800, color: tokens.primary, marginBottom: 12, lineHeight: 1.1 }}>
           {topic}
@@ -109,7 +113,7 @@ export function LobbyScreen({ session_id, display_name, participant_token, onEnt
           current={profile.score % LEVEL_XP_REQUIREMENT}
           target={LEVEL_XP_REQUIREMENT}
           level={Math.floor(profile.score / LEVEL_XP_REQUIREMENT) + 1}
-          title="Word Collector"
+          title={t('lobby.role', { defaultValue: 'Word Collector' })}
         />
         {profile.rank !== null && (
           <div style={{ marginTop: 10, fontSize: 13, color: tokens.textMuted }}>

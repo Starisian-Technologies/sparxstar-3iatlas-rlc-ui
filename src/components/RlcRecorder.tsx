@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '@/theme/useTheme'
 
 type Status = 'idle' | 'requesting' | 'recording' | 'uploading' | 'done' | 'error'
@@ -48,6 +49,7 @@ export function RlcRecorder({
   onError,
   onSkip,
 }: RlcRecorderProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const notSupported = typeof MediaRecorder === 'undefined'
   const [status, setStatus] = useState<Status>(notSupported ? 'error' : 'idle')
@@ -184,7 +186,7 @@ export function RlcRecorder({
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
-          Say this word
+          {t('recorder.say_this_word', { defaultValue: 'Say this word' })}
         </span>
         <button
           type="button"
@@ -192,7 +194,7 @@ export function RlcRecorder({
           disabled={status === 'uploading'}
           style={{ background: 'none', border: 'none', color: tokens.textMuted, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}
         >
-          Skip
+          {t('recorder.skip', { defaultValue: 'Skip' })}
         </button>
       </div>
 
@@ -204,16 +206,16 @@ export function RlcRecorder({
         <button
           type="button"
           onClick={() => void startRecording()}
-          aria-label="Start recording"
+          aria-label={t('recorder.start_label', { defaultValue: 'Start recording' })}
           style={actionBtnStyle(tokens.primary)}
         >
-          <MicIcon /> Tap to record
+          <MicIcon /> {t('recorder.tap_to_record', { defaultValue: 'Tap to record' })}
         </button>
       )}
 
       {status === 'requesting' && (
         <p style={{ fontSize: 14, color: tokens.textMuted, textAlign: 'center', margin: 0, padding: '6px 0' }}>
-          Getting microphone…
+          {t('recorder.getting_mic', { defaultValue: 'Getting microphone…' })}
         </p>
       )}
 
@@ -243,17 +245,17 @@ export function RlcRecorder({
           <button
             type="button"
             onClick={stopRecording}
-            aria-label="Stop recording"
+            aria-label={t('recorder.stop_label', { defaultValue: 'Stop recording' })}
             style={actionBtnStyle(tokens.danger)}
           >
-            <StopIcon /> Stop
+            <StopIcon /> {t('recorder.stop', { defaultValue: 'Stop' })}
           </button>
         </div>
       )}
 
       {status === 'uploading' && (
         <p style={{ fontSize: 14, color: tokens.textMuted, textAlign: 'center', margin: 0, padding: '6px 0' }}>
-          Sending…
+          {t('recorder.sending', { defaultValue: 'Sending…' })}
         </p>
       )}
 
@@ -276,7 +278,7 @@ export function RlcRecorder({
           <p style={{ fontSize: 14, color: tokens.danger, margin: 0 }}>{errorMsg}</p>
           {canRetry && (
             <button type="button" onClick={() => void startRecording()} style={actionBtnStyle(tokens.primary)}>
-              <MicIcon /> Try again
+              <MicIcon /> {t('recorder.try_again', { defaultValue: 'Try again' })}
             </button>
           )}
         </div>
