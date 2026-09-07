@@ -61,8 +61,30 @@ export function isRightsComplete(draft: RightsDraft): boolean {
  */
 export function toRights(draft: RightsDraft): Rights | null {
   if (!isRightsComplete(draft)) return null
+
+  /**
+   * THE LICENCE IS CHECKED AGAINST THE PRESETS, NOT TRUSTED FROM THE DRAFT.
+   *
+   * This used to be `draft.license as string` — a cast, which is a promise to
+   * the compiler rather than a check. The UI only ever offers `LICENSE_PRESETS`,
+   * but the draft is runtime state: devtools, a mutated DOM, or a future caller
+   * building a draft some other way all reach here.
+   *
+   * That matters more than a normal input check because of where the value
+   * goes. The licence rides on every token the class produces, through DVE, and
+   * rights cannot be narrowed after collection — so an unrecognised identifier
+   * is not a validation error to surface later, it is a permanent mislabelling
+   * of a community's language data. Returning null keeps the session
+   * uncreatable, which is the same refusal an incomplete draft gets.
+   *
+   * Narrowing rather than casting also means TypeScript keeps the invariant:
+   * if someone widens `RightsDraft['license']`, this stops compiling.
+   */
+  const license = draft.license
+  if (license === null || !LICENSE_PRESETS.includes(license)) return null
+
   return {
-    license: draft.license as string,
+    license,
     ai_training: draft.ai_training === 'yes',
     commercial: draft.commercial === 'yes',
   }

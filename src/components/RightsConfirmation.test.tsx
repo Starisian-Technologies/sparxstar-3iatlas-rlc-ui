@@ -141,3 +141,33 @@ describe('rights confirmation (spec §1.10)', () => {
     }
   })
 })
+
+describe('the licence is checked, not trusted', () => {
+  it('refuses a licence that is not a platform preset', () => {
+    // This was `draft.license as string` — a promise to the compiler, not a
+    // check. The UI only offers LICENSE_PRESETS, but the draft is runtime state:
+    // devtools, a mutated DOM, or a future caller building a draft another way
+    // all reach `toRights`.
+    //
+    // It matters more than a normal input check because of where the value
+    // goes: the licence rides on every token the class produces, through DVE,
+    // and rights cannot be narrowed after collection. An unrecognised
+    // identifier is not a validation error to catch later — it is a permanent
+    // mislabelling of a community's language data.
+    const tampered = {
+      license: 'CC-BY-4.0-INVENTED',
+      ai_training: 'yes' as const,
+      commercial: 'no' as const,
+    }
+    expect(toRights(tampered)).toBeNull()
+  })
+
+  it('accepts every identifier the platform actually offers', () => {
+    // The guard must not be so tight it rejects the presets themselves — that
+    // would make the session uncreatable through the normal path.
+    for (const license of LICENSE_PRESETS) {
+      const draft = { license, ai_training: 'yes' as const, commercial: 'no' as const }
+      expect(toRights(draft)?.license).toBe(license)
+    }
+  })
+})

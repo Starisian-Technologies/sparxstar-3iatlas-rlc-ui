@@ -142,18 +142,52 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     [],
   )
 
+  /**
+   * SELF-STATS: ONCE PER ACCOUNT, NOT ONCE PER PERIOD.
+   *
+   * The response carries BOTH windows, so switching weekly/all-time needs no
+   * request for these numbers — but this used to sit in the same effect as the
+   * board, keyed on `window_`, so every period switch refetched them anyway.
+   * Two round trips where the design says one, on the 2G links this platform
+   * targets. The screen's own docblock claimed the better behaviour; only the
+   * dependency array disagreed.
+   */
   useEffect(() => {
     let cancelled = false
-    boardGeneration.current += 1
-    if (hasLoadedOnce.current) setBoardLoading(true)
-    else setLoading(true)
+    setLoading(true)
     setError(null)
     void (async () => {
       try {
         const mine = await api.stats.self(account_id)
-        if (cancelled) return
-        setStats(mine)
-        const board = await loadBoard(window_, mine.band)
+        if (!cancelled) setStats(mine)
+      } catch {
+        if (!cancelled) {
+          setError(t('stats.load_failed', { defaultValue: 'Could not load your stats. Please try again.' }))
+          // Cleared here because the board effect below never runs without
+          // stats, so nothing else would take the screen out of loading.
+          setLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [account_id, t])
+
+  /**
+   * THE BOARD: reloads on a period change, and when something else invalidates
+   * it. Keyed on `band` rather than the whole `stats` object, so the opt-out
+   * toggle's `setStats` does not trigger a second load on top of its own.
+   */
+  const band = stats?.band
+  useEffect(() => {
+    if (!band) return
+    let cancelled = false
+    boardGeneration.current += 1
+    if (hasLoadedOnce.current) setBoardLoading(true)
+    void (async () => {
+      try {
+        const board = await loadBoard(window_, band)
         if (cancelled) return
         setEntries(board.entries)
         setCursor(board.next_cursor)
@@ -170,7 +204,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     return () => {
       cancelled = true
     }
-  }, [account_id, window_, reloadNonce, loadBoard, t])
+  }, [band, window_, reloadNonce, loadBoard, t])
 
   const loadMore = async () => {
     if (!cursor || !stats) return

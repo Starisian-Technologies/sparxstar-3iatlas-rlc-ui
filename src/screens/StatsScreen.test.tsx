@@ -281,3 +281,26 @@ describe('the period selector honours the radiogroup contract it advertises', ()
     await waitFor(() => expect(weekly.getAttribute('aria-checked')).toBe('true'))
   })
 })
+
+describe('switching period reloads only the board', () => {
+  it('does not refetch self-stats when the learner changes period', async () => {
+    // Self-stats carries BOTH windows, so a period change needs no request for
+    // the personal numbers. This lived in the same effect as the board, keyed on
+    // the period, so every switch refetched them: two round trips where the
+    // design says one, on the 2G links this platform targets.
+    //
+    // Counting CALLS is the assertion — the rendered output is identical either
+    // way, so nothing else would catch a regression here.
+    renderStats()
+    await waitFor(() => expect(screen.getByText('Awa')).toBeTruthy())
+
+    expect(selfMock).toHaveBeenCalledTimes(1)
+    const boardCallsBefore = boardMock.mock.calls.length
+
+    fireEvent.click(screen.getByRole('radio', { name: 'All time' }))
+    await waitFor(() => expect(boardMock.mock.calls.length).toBeGreaterThan(boardCallsBefore))
+
+    // The board reloaded; the learner's own numbers did not.
+    expect(selfMock).toHaveBeenCalledTimes(1)
+  })
+})
