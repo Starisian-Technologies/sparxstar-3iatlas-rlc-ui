@@ -69,16 +69,23 @@ function variantForCategory(category: StarKind): StarVariant {
 
 /** Star labels live in i18n (ceremony.stars.<kind>); the StarKind union maps 1:1. */
 
-/** Map the wire awards leaderboard ({participant_id, screen_name, tokens, session_xp})
- *  to the UI LeaderboardEntry shape with derived rank. */
+/**
+ * Map the wire awards leaderboard to the UI LeaderboardEntry shape.
+ *
+ * A RENAME, NOT A CALCULATION. This used to number the rows `idx + 1`, in the
+ * one place where a wrong placing is read out loud to the class. Two learners
+ * on the same token count are second together; deriving from position told one
+ * of them they were third.
+ */
 function awardsLeaderboardToUi(
   rows: AwardsResponse['leaderboard'],
 ): LeaderboardEntry[] {
-  return rows.map((row, idx) => ({
+  return rows.map((row) => ({
     participant_id: row.participant_id,
     display_name: row.screen_name,
     xp: row.session_xp,
-    rank: idx + 1,
+    rank: row.rank,
+    tied: row.tied,
   }))
 }
 

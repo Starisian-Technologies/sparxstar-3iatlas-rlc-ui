@@ -32,7 +32,6 @@ import type {
   BatchResponse,
   AccountStatsResponse,
   LeaderboardResponse,
-  LeaderboardPreferenceResponse,
   LeaderboardQuery,
 } from '@/contract'
 import type { SaveTokenPayload } from '@/types'
@@ -298,13 +297,6 @@ export const api = {
     },
 
     /** Withdraw from / rejoin public boards. Owner-only. */
-    setLeaderboardOptOut(account_id: string, opt_out: boolean): Promise<LeaderboardPreferenceResponse> {
-      return request(`/account/${account_id}/leaderboard-preference`, {
-        method: 'PUT',
-        headers: sessionReadHeaders(participantTokenForRead()),
-        body: JSON.stringify({ opt_out }),
-      })
-    },
   },
 
   events: {

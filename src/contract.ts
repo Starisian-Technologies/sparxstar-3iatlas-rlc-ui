@@ -185,20 +185,37 @@ export type SkillBand = Tier
  * client already knows its own id, so carrying it would buy nothing and turn
  * every board into a screen-name-to-account-id mapping table.
  */
+/** Which way a row moved since the previous comparable period. Server-computed:
+ *  a client would need the prior board, which it is never sent. */
+export type RankMovement = 'up' | 'down' | 'unchanged' | 'new'
+
+export type BoardScopeName = 'session' | 'class' | 'school' | 'national' | 'game' | 'all_games'
+
 export interface LeaderboardEntry {
   rank: number
   screen_name: string
   xp: number
   is_self: boolean
+  /** True when another row shares this rank. Stated by the server so the UI can
+   *  label a tie without counting rows it may not have received. */
+  tied: boolean
+  movement: RankMovement
 }
 
 export interface LeaderboardResponse {
   window: StatsWindow
+  scope: BoardScopeName
   game_type: string | null
   language: string | null
   band: SkillBand | null
   entries: LeaderboardEntry[]
   next_cursor: string | null
+  /** The caller's own row and its neighbours, when they are ranked but not on
+   *  this page. A board showing only the leaders tells a learner ranked 47th
+   *  nothing except that they are not on it. */
+  self_context: LeaderboardEntry[] | null
+  window_started_at: number | null
+  generated_at: number
 }
 
 export interface SelfStatsWindow {
@@ -207,8 +224,9 @@ export interface SelfStatsWindow {
   /** 0..1, or null when nothing was answered in the window. NEVER render null
    *  as 0% — that reads as "you got everything wrong". */
   accuracy: number | null
-  /** Rank on the board this account would appear on, reported even when opted
-   *  out. null when the account has no ranked XP in the window. */
+  /** Rank on the board this account actually appears on — their class, their
+   *  school, or the school-less board. null when the account has no ranked XP
+   *  in the window. */
   rank: number | null
 }
 
@@ -222,12 +240,6 @@ export interface AccountStatsResponse {
   /** Always 0 today — nothing awards badges yet. */
   badges: number
   gold: number
-  leaderboard_opt_out: boolean
-}
-
-export interface LeaderboardPreferenceResponse {
-  account_id: string
-  opt_out: boolean
 }
 
 export interface LeaderboardQuery {
@@ -306,7 +318,16 @@ export interface SessionStatusResponse {
   participant_count: number
   token_count: number
   time_remaining_seconds: number
-  leaderboard: Array<{ participant_id: string; screen_name: string; session_xp: number }>
+  leaderboard: Array<{
+    participant_id: string
+    screen_name: string
+    session_xp: number
+    /** SERVER-COMPUTED competition rank (1, 2, 2, 4). Render it; never derive
+     *  one from array position — that hands one of two tied learners second
+     *  place and the other third, on nothing but arrival order. */
+    rank: number
+    tied: boolean
+  }>
   class_xp_total: number
   participant_token?: string
 }
@@ -374,7 +395,16 @@ export interface CeremonyStarEvent extends Star {
 }
 export interface AwardsResponse {
   stars: Star[]
-  leaderboard: Array<{ participant_id: string; screen_name: string; tokens: number; session_xp: number }>
+  leaderboard: Array<{
+    participant_id: string
+    screen_name: string
+    tokens: number
+    session_xp: number
+    /** SERVER-COMPUTED competition rank. The ceremony is read aloud, so a tie
+     *  broken by array position is announced as a placing nobody earned. */
+    rank: number
+    tied: boolean
+  }>
   total_tokens: number
   discovery_count: number
 }

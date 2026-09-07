@@ -12,12 +12,17 @@
  * The board is pseudonymous by construction: rows carry a screen name and no
  * account id. The caller's own row is marked `is_self` by the server.
  *
- * ADULT BOARDS ONLY. Leaderboards are approved for adult users (owner ruling,
- * 2026-09-06); the engine excludes minor tiers from every board response by a
- * server-side tier rule. This screen does not implement that — and must not try
- * to, because a client-side filter is a filter an attacker skips. It renders
- * whatever rows the server returns, which for a minor is an empty board and a
- * null `rank`, while their own XP, accuracy and stars still show.
+ * EVERY LEARNER IS RANKED, WHATEVER THEIR AGE. An earlier version of this file
+ * said boards were adults-only and that the engine excluded minor tiers. That
+ * is no longer true and should never have read as a permanent property: the
+ * owner ruling of 2026-09-07 is that minors appear on classroom boards by
+ * screen name, participation on by default. The engine scopes a board to the
+ * caller's own class instead of filtering by age, so a learner sees their class
+ * and no learner is listed outside their school.
+ *
+ * The scoping is the SERVER'S, and this screen must never attempt its own — a
+ * client-side filter is a filter an attacker skips. It renders the rows it is
+ * given.
  *
  * Mobile-first, per the platform's Africa-first constraints: it renders at
  * 360px and every control clears 44px. Self-stats returns BOTH windows in one
@@ -39,9 +44,11 @@ import { Screen } from '@/components/Screen'
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
 import { useTheme } from '@/theme/useTheme'
+import type { TFunction } from 'i18next'
 import type {
   AccountStatsResponse,
   LeaderboardEntry,
+  RankMovement,
   SelfStatsWindow,
   StatsWindow,
 } from '@/contract'
@@ -60,6 +67,15 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   const [stats, setStats] = useState<AccountStatsResponse | null>(null)
   const [window_, setWindow] = useState<StatsWindow>('weekly')
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
+  /**
+   * The learner's own row and its neighbours, when the server says they are
+   * ranked but not on the page we were given.
+   *
+   * This is what stops the board being a wall a learner is simply not on. It
+   * comes from the server for the same reason ranks do: the client cannot see
+   * the rows it was not sent, so it cannot work out who is just ahead.
+   */
+  const [selfContext, setSelfContext] = useState<LeaderboardEntry[] | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -80,7 +96,6 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   const [boardLoading, setBoardLoading] = useState(false)
   const hasLoadedOnce = useRef(false)
   const [error, setError] = useState<string | null>(null)
-  const [savingPref, setSavingPref] = useState(false)
 
   // Identifies the board currently on screen. The primary effect bumps it on
   // every (account, window) change; any board request captures it at the moment
@@ -88,7 +103,6 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   const boardGeneration = useRef(0)
   // Bumped to ask the primary effect to reload the board that is actually on
   // screen, when something outside it (an opt-out) has invalidated those rows.
-  const [reloadNonce, setReloadNonce] = useState(0)
 
   /**
    * Roving tabindex for the period selector.
@@ -191,6 +205,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
         if (cancelled) return
         setEntries(board.entries)
         setCursor(board.next_cursor)
+        setSelfContext(board.self_context)
       } catch {
         if (!cancelled) setError(t('stats.load_failed', { defaultValue: 'Could not load your stats. Please try again.' }))
       } finally {
@@ -204,7 +219,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     return () => {
       cancelled = true
     }
-  }, [band, window_, reloadNonce, loadBoard, t])
+  }, [band, window_, loadBoard, t])
 
   const loadMore = async () => {
     if (!cursor || !stats) return
@@ -225,6 +240,9 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
       // accumulated list is the board so far, not a page that replaced another.
       setEntries((prev) => [...prev, ...next.entries])
       setCursor(next.next_cursor)
+      // Paging forward can reach the learner's own row; once it is on screen
+      // the separate context block would be a duplicate.
+      setSelfContext(next.self_context)
     } catch {
       if (boardGeneration.current === generation) {
         setError(t('stats.load_more_failed', { defaultValue: 'Could not load more. Please try again.' }))
@@ -234,32 +252,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     }
   }
 
-  const toggleOptOut = async () => {
-    if (!stats) return
-    const generation = boardGeneration.current
-    setSavingPref(true)
-    try {
-      const result = await api.stats.setLeaderboardOptOut(account_id, !stats.leaderboard_opt_out)
-      // The preference itself is not board-scoped, so it applies regardless of
-      // which period is now showing; only the refreshed rows below are.
-      setStats((prev) => (prev ? { ...prev, leaderboard_opt_out: result.opt_out } : prev))
-      const board = await loadBoard(window_, stats.band)
-      if (boardGeneration.current !== generation) {
-        // The player switched period while this was pending. These rows belong
-        // to the old board, but the board now on screen was fetched before the
-        // opt-out landed and so still reflects the old preference — reload it
-        // rather than leaving the player listed after asking to be hidden.
-        setReloadNonce((n) => n + 1)
-        return
-      }
-      setEntries(board.entries)
-      setCursor(board.next_cursor)
-    } catch {
-      setError(t('stats.pref_failed', { defaultValue: 'Could not change that setting. Please try again.' }))
-    } finally {
-      setSavingPref(false)
-    }
-  }
+
 
   if (loading) {
     return (
@@ -385,18 +378,10 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
               {window_ === 'weekly'
-                ? t('stats.board_weekly', { defaultValue: 'Top 10 this week' })
-                : t('stats.board_all_time', { defaultValue: 'Top 10 all time' })}
+                ? t('stats.board_weekly', { defaultValue: 'This week' })
+                : t('stats.board_all_time', { defaultValue: 'All time' })}
             </div>
 
-            {stats?.leaderboard_opt_out && (
-              <div role="status" style={{ fontSize: 13, color: tokens.textMuted, lineHeight: 1.5 }}>
-                {t('stats.opted_out_note', {
-                  defaultValue:
-                    'You are hidden from this board. Your own progress above still shows your place.',
-                })}
-              </div>
-            )}
 
             {/* Announced in place, so a screen-reader user learns the board is
                 being replaced instead of hearing the rows change silently. */}
@@ -421,6 +406,25 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
               <BoardRow key={`${entry.rank}-${entry.screen_name}-${index}`} entry={entry} />
             ))}
 
+            {selfContext && selfContext.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: tokens.textMuted,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {t('stats.your_position', { defaultValue: 'Where you are' })}
+                </div>
+                {selfContext.map((entry, index) => (
+                  <BoardRow key={`ctx-${entry.rank}-${entry.screen_name}-${index}`} entry={entry} />
+                ))}
+              </div>
+            )}
+
             {cursor && (
               <Button onClick={() => void loadMore()} variant="ghost" disabled={loadingMore}>
                 {loadingMore
@@ -430,27 +434,6 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
             )}
           </div>
         </Card>
-
-        {stats && (
-          <Card>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.text }}>
-                {t('stats.privacy_heading', { defaultValue: 'Appearing on leaderboards' })}
-              </div>
-              <div style={{ fontSize: 13, color: tokens.textMuted, lineHeight: 1.5 }}>
-                {t('stats.privacy_body', {
-                  defaultValue:
-                    'Boards only ever show your screen name. You can hide yourself at any time and still see your own progress.',
-                })}
-              </div>
-              <Button onClick={() => void toggleOptOut()} variant="ghost" disabled={savingPref}>
-                {stats.leaderboard_opt_out
-                  ? t('stats.rejoin_boards', { defaultValue: 'Show me on leaderboards' })
-                  : t('stats.hide_from_boards', { defaultValue: 'Hide me from leaderboards' })}
-              </Button>
-            </div>
-          </Card>
-        )}
 
         {error && stats && (
           <div role="alert" style={{ fontSize: 13, color: tokens.danger }}>
@@ -472,8 +455,45 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
+/**
+ * Rank movement, said in words as well as shown as a shape.
+ *
+ * NOT COLOUR ALONE, and not an arrow alone: the glyph is paired with a
+ * `title`/`aria-label` that names the direction, so the row means the same
+ * thing to a screen reader and to a learner who cannot distinguish the colours.
+ *
+ * `new` gets no glyph — a learner ranked for the first time has not moved, and
+ * an arrow would imply a comparison that does not exist.
+ */
+function Movement({ movement, t }: { movement: RankMovement; t: TFunction }) {
+  const { tokens } = useTheme()
+  if (movement === 'new') return null
+
+  const shown: Record<Exclude<RankMovement, 'new'>, { glyph: string; label: string; color: string }> = {
+    up: { glyph: '▲', label: t('stats.moved_up', { defaultValue: 'Moved up' }), color: tokens.success },
+    down: { glyph: '▼', label: t('stats.moved_down', { defaultValue: 'Moved down' }), color: tokens.textMuted },
+    unchanged: {
+      glyph: '–',
+      label: t('stats.moved_none', { defaultValue: 'No change' }),
+      color: tokens.textMuted,
+    },
+  }
+  const { glyph, label, color } = shown[movement]
+  return (
+    <span aria-label={label} title={label} style={{ fontSize: 12, color, minWidth: 14 }}>
+      {glyph}
+    </span>
+  )
+}
+
 function BoardRow({ entry }: { entry: LeaderboardEntry }) {
   const { tokens } = useTheme()
+  const { t } = useTranslation()
+  // A tie is announced, not left to a sighted reader to spot as a repeated
+  // number — a screen reader hears one row at a time and never sees the repeat.
+  const rankLabel = entry.tied
+    ? t('stats.rank_tied', { defaultValue: 'Joint {{rank}}', rank: entry.rank })
+    : t('stats.rank_plain', { defaultValue: 'Rank {{rank}}', rank: entry.rank })
   return (
     <div
       style={{
@@ -486,13 +506,25 @@ function BoardRow({ entry }: { entry: LeaderboardEntry }) {
         // The caller's own row is highlighted from the server's `is_self`, not
         // from a client-side id comparison — the board carries no account ids.
         background: entry.is_self ? tokens.primarySoft : 'transparent',
+        // Highlighting must not rest on background colour alone.
+        outline: entry.is_self ? `2px solid ${tokens.primary}` : 'none',
       }}
     >
-      <span style={{ minWidth: 36, fontWeight: 800, color: tokens.textMuted, fontSize: 14 }}>
-        #{entry.rank}
+      <span
+        aria-label={rankLabel}
+        style={{ minWidth: 44, fontWeight: 800, color: tokens.textMuted, fontSize: 14 }}
+      >
+        {entry.tied ? '=' : ''}#{entry.rank}
       </span>
+      <Movement movement={entry.movement} t={t} />
       <span style={{ flex: 1, fontWeight: entry.is_self ? 800 : 600, color: tokens.text, fontSize: 15 }}>
         {entry.screen_name}
+        {entry.is_self && (
+          <span style={{ fontSize: 12, fontWeight: 600, color: tokens.textMuted }}>
+            {' '}
+            {t('stats.you_marker', { defaultValue: '(you)' })}
+          </span>
+        )}
       </span>
       <span style={{ fontWeight: 700, color: tokens.text, fontSize: 15 }}>{entry.xp}</span>
     </div>

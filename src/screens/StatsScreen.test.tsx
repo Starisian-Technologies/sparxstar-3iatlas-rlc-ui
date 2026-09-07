@@ -17,14 +17,12 @@ import '@/i18n'
 
 const selfMock = vi.fn()
 const boardMock = vi.fn()
-const prefMock = vi.fn()
 
 vi.mock('@/api/client', () => ({
   api: {
     stats: {
       self: (...args: unknown[]) => selfMock(...args),
       leaderboard: (...args: unknown[]) => boardMock(...args),
-      setLeaderboardOptOut: (...args: unknown[]) => prefMock(...args),
     },
   },
 }))
@@ -40,7 +38,6 @@ const STATS: AccountStatsResponse = {
   stars: 2,
   badges: 0,
   gold: 5,
-  leaderboard_opt_out: false,
 }
 
 const BOARD: LeaderboardResponse = {
@@ -49,12 +46,16 @@ const BOARD: LeaderboardResponse = {
   language: null,
   band: 'lower_basic',
   entries: [
-    { rank: 1, screen_name: 'Awa', xp: 300, is_self: false },
-    { rank: 2, screen_name: 'Modou', xp: 200, is_self: false },
-    { rank: 2, screen_name: 'Ndeye', xp: 200, is_self: false },
-    { rank: 4, screen_name: 'Fatou', xp: 120, is_self: true },
+    { rank: 1, screen_name: 'Awa', xp: 300, is_self: false, tied: false, movement: 'unchanged' },
+    { rank: 2, screen_name: 'Modou', xp: 200, is_self: false, tied: true, movement: 'up' },
+    { rank: 2, screen_name: 'Ndeye', xp: 200, is_self: false, tied: true, movement: 'down' },
+    { rank: 4, screen_name: 'Fatou', xp: 120, is_self: true, tied: false, movement: 'unchanged' },
   ],
   next_cursor: null,
+  scope: 'all_games',
+  self_context: null,
+  window_started_at: 0,
+  generated_at: 0,
 }
 
 function renderStats() {
@@ -68,7 +69,6 @@ function renderStats() {
 beforeEach(() => {
   selfMock.mockResolvedValue(STATS)
   boardMock.mockResolvedValue(BOARD)
-  prefMock.mockResolvedValue({ account_id: ACCOUNT, opt_out: true })
 })
 
 describe('stats screen renders server results only', () => {
@@ -109,14 +109,26 @@ describe('stats screen renders server results only', () => {
     await waitFor(() => expect(screen.getByText('Not ranked yet')).toBeTruthy())
   })
 
-  it('preserves the server tie: two rows share rank 2', async () => {
+  it('preserves the server tie: two rows share rank 2, and says so', async () => {
     renderStats()
     await waitFor(() => expect(screen.getByText('Modou')).toBeTruthy())
     // Competition ranking arrives from the server; the client must not
     // renumber it into 1,2,3,4.
-    expect(screen.getAllByText('#2')).toHaveLength(2)
-    expect(screen.getByText('#4')).toBeTruthy()
-    expect(screen.queryByText('#3')).toBeTruthy() // the self-rank stat, not a row
+    expect(screen.getAllByLabelText('Joint 2')).toHaveLength(2)
+    expect(screen.getByLabelText('Rank 4')).toBeTruthy()
+    // The tie is in the ACCESSIBLE NAME, not only in a repeated glyph. A screen
+    // reader hears one row at a time and never sees the repetition that tells a
+    // sighted reader these two are level.
+    expect(screen.queryByLabelText('Rank 2')).toBeNull()
+  })
+
+  it('names rank movement in words rather than by colour or arrow alone', async () => {
+    renderStats()
+    await waitFor(() => expect(screen.getByText('Modou')).toBeTruthy())
+    // The fixture has Modou up and Ndeye down. A learner who cannot distinguish
+    // the colours, or who is using a screen reader, gets the same information.
+    expect(screen.getByLabelText('Moved up')).toBeTruthy()
+    expect(screen.getByLabelText('Moved down')).toBeTruthy()
   })
 
   it('scopes the board to the player’s own skill band', async () => {
@@ -126,26 +138,43 @@ describe('stats screen renders server results only', () => {
     expect(args.band).toBe('lower_basic')
   })
 
-  it('offers to hide the player from boards without hiding their own progress', async () => {
-    selfMock.mockResolvedValue({ ...STATS, leaderboard_opt_out: true })
+  it('shows a learner outside the page where they stand, not just the leaders', async () => {
+    // THE ANTI-TOP-10 PROPERTY. A board a learner is not on tells them only
+    // that they are not on it. The server sends their row and its neighbours;
+    // this asserts the screen actually renders them.
+    boardMock.mockResolvedValue({
+      ...BOARD,
+      entries: [
+        { rank: 1, screen_name: 'Awa', xp: 300, is_self: false, tied: false, movement: 'unchanged' },
+      ],
+      self_context: [
+        { rank: 11, screen_name: 'Binta', xp: 140, is_self: false, tied: false, movement: 'down' },
+        { rank: 12, screen_name: 'Fatou', xp: 120, is_self: true, tied: false, movement: 'up' },
+        { rank: 13, screen_name: 'Cherno', xp: 110, is_self: false, tied: false, movement: 'new' },
+      ],
+    })
     renderStats()
-    await waitFor(() => expect(screen.getByText('Show me on leaderboards')).toBeTruthy())
-    // Their own rank is still on screen while they are hidden from the board.
-    expect(screen.getByText('#3')).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('Where you are')).toBeTruthy())
+    expect(screen.getByLabelText('Rank 12')).toBeTruthy()
+    // And the reachable competitor immediately above them.
+    expect(screen.getByText('Binta')).toBeTruthy()
   })
 
-  it('sends the opt-out change to the server rather than hiding rows locally', async () => {
+  it('does not show a position block when the learner is already on the page', async () => {
+    // The default fixture has Fatou on the page with is_self, and the server
+    // therefore sends no context. Rendering one anyway would list them twice.
     renderStats()
-    await waitFor(() => expect(screen.getByText('Hide me from leaderboards')).toBeTruthy())
-    fireEvent.click(screen.getByText('Hide me from leaderboards'))
-    await waitFor(() => expect(prefMock).toHaveBeenCalledWith(ACCOUNT, true))
+    await waitFor(() => expect(screen.getByText('Fatou')).toBeTruthy())
+    expect(screen.queryByText('Where you are')).toBeNull()
   })
 
   it('never receives or renders an account id on a board row', async () => {
     renderStats()
     await waitFor(() => expect(screen.getByText('Awa')).toBeTruthy())
     for (const entry of BOARD.entries) {
-      expect(Object.keys(entry).sort()).toEqual(['is_self', 'rank', 'screen_name', 'xp'])
+      expect(Object.keys(entry).sort()).toEqual(
+        ['is_self', 'movement', 'rank', 'screen_name', 'tied', 'xp'].sort(),
+      )
     }
     expect(document.body.textContent).not.toContain(ACCOUNT)
   })
@@ -161,13 +190,13 @@ describe('a period change invalidates board requests already in flight', () => {
     const WEEKLY_PAGE_1: LeaderboardResponse = { ...BOARD, next_cursor: 'cur-1' }
     const WEEKLY_PAGE_2: LeaderboardResponse = {
       ...BOARD,
-      entries: [{ rank: 5, screen_name: 'StaleWeekly', xp: 90, is_self: false }],
+      entries: [{ rank: 5, screen_name: 'StaleWeekly', xp: 90, is_self: false, tied: false, movement: 'unchanged' }],
       next_cursor: null,
     }
     const ALL_TIME: LeaderboardResponse = {
       ...BOARD,
       window: 'all_time',
-      entries: [{ rank: 1, screen_name: 'AllTimeTop', xp: 5000, is_self: false }],
+      entries: [{ rank: 1, screen_name: 'AllTimeTop', xp: 5000, is_self: false, tied: false, movement: 'unchanged' }],
       next_cursor: null,
     }
 
@@ -197,45 +226,6 @@ describe('a period change invalidates board requests already in flight', () => {
     expect(screen.getByText('AllTimeTop')).toBeTruthy()
   })
 
-  it('does not overwrite the new period with the board refreshed after an opt-out', async () => {
-    const ALL_TIME: LeaderboardResponse = {
-      ...BOARD,
-      window: 'all_time',
-      entries: [{ rank: 1, screen_name: 'AllTimeTop', xp: 5000, is_self: false }],
-      next_cursor: null,
-    }
-    const WEEKLY_AFTER_OPT_OUT: LeaderboardResponse = {
-      ...BOARD,
-      entries: [{ rank: 1, screen_name: 'StaleWeekly', xp: 300, is_self: false }],
-      next_cursor: null,
-    }
-
-    let releasePref: (v: { account_id: string; opt_out: boolean }) => void = () => {}
-    prefMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          releasePref = resolve
-        }),
-    )
-    boardMock.mockImplementation((args: { window: string }) =>
-      Promise.resolve(args.window === 'all_time' ? ALL_TIME : WEEKLY_AFTER_OPT_OUT),
-    )
-
-    renderStats()
-    await waitFor(() => expect(screen.getByText('StaleWeekly')).toBeTruthy())
-
-    fireEvent.click(screen.getByText('Hide me from leaderboards'))
-    fireEvent.click(screen.getByText('All time'))
-    await waitFor(() => expect(screen.getByText('AllTimeTop')).toBeTruthy())
-
-    releasePref({ account_id: ACCOUNT, opt_out: true })
-
-    // The all-time board stays on screen; the weekly refresh triggered by the
-    // opt-out must not replace it.
-    await waitFor(() => expect(boardMock.mock.calls.length).toBeGreaterThan(1))
-    expect(screen.getByText('AllTimeTop')).toBeTruthy()
-    expect(screen.queryByText('StaleWeekly')).toBeNull()
-  })
 })
 
 describe('the period selector honours the radiogroup contract it advertises', () => {

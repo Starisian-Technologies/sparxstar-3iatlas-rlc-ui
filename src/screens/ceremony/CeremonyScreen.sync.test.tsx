@@ -27,7 +27,7 @@ const h = vi.hoisted(() => ({
       screen_names: string[]
       xp_awarded: number
     }>,
-    leaderboard: [] as Array<{ participant_id: string; screen_name: string; tokens: number; session_xp: number }>,
+    leaderboard: [] as Array<{ participant_id: string; screen_name: string; tokens: number; session_xp: number; rank: number; tied: boolean }>,
     total_tokens: 0,
     discovery_count: 0
   }
@@ -78,7 +78,7 @@ beforeEach(() => {
   socketRegistry.reset()
   h.awards = {
     stars: [],
-    leaderboard: [{ participant_id: 'p-Ama', screen_name: 'Ama', tokens: 3, session_xp: 30 }],
+    leaderboard: [{ participant_id: 'p-Ama', screen_name: 'Ama', tokens: 3, session_xp: 30, rank: 1, tied: false }],
     total_tokens: 4,
     discovery_count: 2
   }
