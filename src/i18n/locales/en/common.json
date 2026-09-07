@@ -43,7 +43,9 @@
     "password_field": "Password",
     "pin_field": "PIN (4 digits)",
     "session_code": "Session code",
-    "your_name": "Your name"
+    "your_name": "Your name",
+    "join_as": "Join as {{name}}",
+    "wrong_code": "← Wrong code?"
   },
   "lobby": {
     "waiting": "Waiting for the session to start…",
@@ -79,7 +81,10 @@
     "word_aria": "Word input",
     "translation_aria": "Translation input",
     "no_translation": "No translation",
-    "queued": "queued"
+    "queued": "queued",
+    "players_aria": "{{count}} players",
+    "time_remaining_aria": "{{minutes}} minutes {{seconds}} seconds remaining",
+    "xp_aria": "{{count}} XP"
   },
   "collection_rsc": {
     "sentence_label": "Type a sentence in {{language}}",
@@ -109,7 +114,8 @@
     "progress": "{{done}} of {{total}} done",
     "record_prompt": "Record yourself saying the sentence",
     "recorder_title": "Starmus recorder",
-    "translate_prompt": "What does this sentence mean in English?"
+    "translate_prompt": "What does this sentence mean in English?",
+    "recorder_unwired": "Recording is not available yet"
   },
   "round_complete": {
     "title": "Round {{round}} complete!",
@@ -181,7 +187,8 @@
     "waiting_message": "Your teacher will start the review when everyone is ready.",
     "xp_note": "XP for each sentence will appear after the review",
     "body": "You contributed to the class language record. Waiting for everyone else to finish…",
-    "teacher_note": "Your teacher will start the review when everyone is ready."
+    "teacher_note": "Your teacher will start the review when everyone is ready.",
+    "submitted_count": "{{count}} sentences submitted"
   },
   "ceremony": {
     "title": "Session complete!",
@@ -207,7 +214,8 @@
     "loading_detail": "Gathering class results.",
     "unavailable": "Ceremony unavailable",
     "eyebrow": "AWARDS CEREMONY",
-    "great_game": "Great game!"
+    "great_game": "Great game!",
+    "no_awards": "No awards data received."
   },
   "teacher_login": {
     "label": "TEACHER",
@@ -290,7 +298,8 @@
     "yes": "Yes"
   },
   "accessory_bar": {
-    "label": "Special characters"
+    "label": "Special characters",
+    "insert": "Insert {{char}}"
   },
   "recorder": {
     "getting_mic": "Getting microphone…",

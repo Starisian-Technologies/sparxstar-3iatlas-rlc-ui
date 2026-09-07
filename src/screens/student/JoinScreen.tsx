@@ -312,7 +312,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
               textAlign: 'center',
             }}
           >
-            ← Wrong code?
+            {t('join.wrong_code', { defaultValue: '← Wrong code?' })}
           </button>
         </div>
       </Screen>
@@ -479,7 +479,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
             textAlign: 'center',
           }}
         >
-          ← Wrong code?
+          {t('join.wrong_code', { defaultValue: '← Wrong code?' })}
         </button>
       </div>
     </Screen>
@@ -500,6 +500,7 @@ function RosterTile({
     primarySoft: string; glow: string; text: string; textMuted: string
   }
 }) {
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   return (
     <button
@@ -510,7 +511,7 @@ function RosterTile({
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
-      aria-label={`Join as ${screenName}`}
+      aria-label={t('join.join_as', { defaultValue: 'Join as {{name}}', name: screenName })}
       style={{
         background: hovered ? tokens.cardElevated : tokens.card,
         border: `1.5px solid ${hovered ? tokens.primary : tokens.border}`,

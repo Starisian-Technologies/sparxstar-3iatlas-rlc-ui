@@ -73,6 +73,7 @@ function CharButton({
   accent?: boolean
   compact?: boolean
 }) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   return (
     <button
@@ -82,7 +83,7 @@ function CharButton({
       onMouseDown={(e) => e.preventDefault()}
       onTouchStart={(e) => e.preventDefault()}
       onClick={() => onInsert(char)}
-      aria-label={`Insert ${char}`}
+      aria-label={t('accessory_bar.insert', { defaultValue: 'Insert {{char}}', char })}
       style={{
         minWidth: compact ? 48 : 44,
         minHeight: 44,

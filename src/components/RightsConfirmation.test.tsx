@@ -92,6 +92,48 @@ describe('rights confirmation (spec §1.10)', () => {
     expect(next.license).toBeNull()
   })
 
+  it('is one tab stop, and the unanswered group parks it on the first option', () => {
+    renderRights(EMPTY_RIGHTS_DRAFT)
+    // A radiogroup is a single tab stop. With nothing selected there is no
+    // chosen option to carry it, so the first holds it — per WAI-ARIA — which
+    // lets a keyboard user reach the group without anything being selected for
+    // them.
+    const radios = screen.getAllByRole('radio')
+    const tabbable = radios.filter((r) => r.getAttribute('tabindex') === '0')
+    expect(tabbable).toHaveLength(2) // one per question, not one per option
+    expect(radios[0].getAttribute('tabindex')).toBe('0')
+    expect(radios[1].getAttribute('tabindex')).toBe('-1')
+  })
+
+  it('selects with arrow keys, so a keyboard user can answer at all', () => {
+    const onChange = renderRights(EMPTY_RIGHTS_DRAFT)
+    const group = screen.getAllByRole('radiogroup')[0]
+    fireEvent.keyDown(group, { key: 'ArrowRight' })
+    expect(onChange).toHaveBeenCalledTimes(1)
+    // From unset, the arrow lands on the first option — a deliberate press by
+    // the person, not a default the component supplied.
+    expect((onChange.mock.calls[0][0] as RightsDraft).ai_training).toBe('yes')
+  })
+
+  it('wraps with arrow keys and jumps with Home/End', () => {
+    const onChange = renderRights({ ...EMPTY_RIGHTS_DRAFT, ai_training: 'yes' })
+    const group = screen.getAllByRole('radiogroup')[0]
+    fireEvent.keyDown(group, { key: 'ArrowRight' })
+    expect((onChange.mock.calls[0][0] as RightsDraft).ai_training).toBe('no')
+    fireEvent.keyDown(group, { key: 'End' })
+    expect((onChange.mock.calls[1][0] as RightsDraft).ai_training).toBe('no')
+    fireEvent.keyDown(group, { key: 'Home' })
+    expect((onChange.mock.calls[2][0] as RightsDraft).ai_training).toBe('yes')
+  })
+
+  it('ignores keys that are not part of the radio pattern', () => {
+    const onChange = renderRights(EMPTY_RIGHTS_DRAFT)
+    const group = screen.getAllByRole('radiogroup')[0]
+    fireEvent.keyDown(group, { key: 'a' })
+    fireEvent.keyDown(group, { key: 'Tab' })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('meets the 44px minimum touch target on every choice control', () => {
     renderRights(EMPTY_RIGHTS_DRAFT)
     for (const radio of screen.getAllByRole('radio')) {

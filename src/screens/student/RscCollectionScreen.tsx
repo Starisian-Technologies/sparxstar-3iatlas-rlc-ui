@@ -409,7 +409,7 @@ export function RscCollectionScreen({
                   fontSize: 16,
                 }}
               >
-                ← Back
+                {t('collection_rsc.back', { defaultValue: '← Back' })}
               </button>
               <button
                 type="button"
@@ -443,7 +443,7 @@ export function RscCollectionScreen({
             }}>
               <span style={{ fontSize: 44 }}>🎙</span>
               <div style={{ fontSize: 15, fontWeight: 600 }}>{t('collection_rsc.recorder_title', { defaultValue: 'Starmus recorder' })}</div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>(@sparxstar/starmus-audio — wiring in progress)</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>{t('collection_rsc.recorder_unwired', { defaultValue: 'Recording is not available yet' })}</div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
@@ -461,7 +461,7 @@ export function RscCollectionScreen({
                   fontSize: 16,
                 }}
               >
-                ← Back
+                {t('collection_rsc.back', { defaultValue: '← Back' })}
               </button>
               <button
                 type="button"

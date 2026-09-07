@@ -229,17 +229,17 @@ export function RwcCollectionScreen({
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div style={chipStyle} aria-label={`Time remaining ${minutes} minutes ${seconds} seconds`}>
+        <div style={chipStyle} aria-label={t('collection_rwc.time_remaining_aria', { defaultValue: '{{minutes}} minutes {{seconds}} seconds remaining', minutes, seconds })}>
           <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>{t('collection_rwc.time', { defaultValue: 'TIME' })}</span>
           <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </span>
         </div>
-        <div style={chipStyle} aria-label={`${session?.participant_count ?? 0} players`}>
+        <div style={chipStyle} aria-label={t('collection_rwc.players_aria', { defaultValue: '{{count}} players', count: session?.participant_count ?? 0 })}>
           <span style={{ color: tokens.textMuted, fontSize: 11, letterSpacing: 0.5 }}>{t('collection_rwc.players', { defaultValue: 'PLAYERS' })}</span>
           <span style={{ fontWeight: 800 }}>{session?.participant_count ?? 0}</span>
         </div>
-        <div style={chipStyle} aria-label={`${myLeaderboard?.xp ?? 0} XP`}>
+        <div style={chipStyle} aria-label={t('collection_rwc.xp_aria', { defaultValue: '{{count}} XP', count: myLeaderboard?.xp ?? 0 })}>
           <StarBadge variant="gold" size={14} count={myLeaderboard?.xp ?? 0} />
         </div>
         <SyncStatusIndicator syncState={syncState} pendingCount={pendingCount} />

@@ -85,7 +85,7 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
             color: tokens.primary,
             fontWeight: 700,
           }}>
-            {submittedCount} sentence{submittedCount !== 1 ? 's' : ''} submitted
+            {t('rsc_complete.submitted_count', { defaultValue: '{{count}} sentences submitted', count: submittedCount })}
           </div>
           <div style={{ fontSize: 15, color: tokens.textMuted, maxWidth: 280, lineHeight: 1.5 }}>
             {t('rsc_complete.body', { defaultValue: 'You contributed to the class language record. Waiting for everyone else to finish…' })}

@@ -12,6 +12,13 @@
  * The board is pseudonymous by construction: rows carry a screen name and no
  * account id. The caller's own row is marked `is_self` by the server.
  *
+ * ADULT BOARDS ONLY. Leaderboards are approved for adult users (owner ruling,
+ * 2026-09-06); the engine excludes minor tiers from every board response by a
+ * server-side tier rule. This screen does not implement that — and must not try
+ * to, because a client-side filter is a filter an attacker skips. It renders
+ * whatever rows the server returns, which for a minor is an empty board and a
+ * null `rank`, while their own XP, accuracy and stars still show.
+ *
  * Mobile-first, per the platform's Africa-first constraints: it renders at
  * 360px, every control clears 44px, and the two windows arrive in ONE response
  * so drawing this screen costs one round trip on a 2G link rather than two.
@@ -203,6 +210,12 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
               <Stat label={t('stats.xp', { defaultValue: 'XP' })} value={String(current.xp)} />
               <Stat
                 label={t('stats.rank', { defaultValue: 'Rank' })}
+                /* null covers two different situations and the copy has to work
+                   for both: an eligible player who has not scored yet, and a
+                   minor who is not on a board at all. "Not ranked yet" is true
+                   of the first and not misleading to the second — it does not
+                   claim a position, and it does not tell a child they were
+                   excluded, which is not this screen's news to break. */
                 value={
                   current.rank === null
                     ? t('stats.unranked', { defaultValue: 'Not ranked yet' })

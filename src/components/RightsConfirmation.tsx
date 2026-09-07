@@ -20,6 +20,7 @@
  * confirmation" actually requires — a No default would satisfy the letter of
  * that sentence while still being a default.
  */
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/Card'
 import { useTheme } from '@/theme/useTheme'
@@ -127,6 +128,24 @@ export function RightsConfirmation({ value, onChange, disabled = false }: Rights
  * A yes/no question with no third "default" position. Rendered as a radiogroup
  * so a screen reader announces it as an unanswered choice rather than as two
  * unrelated buttons.
+ *
+ * IMPLEMENTS THE FULL RADIO KEYBOARD PATTERN, not just the roles. A
+ * `role="radiogroup"` whose options are plain buttons *announces* itself as a
+ * radio group and then behaves like a row of buttons — arrow keys do nothing
+ * and every option is its own tab stop. That mismatch is worse than using no
+ * ARIA at all, because it tells assistive tech to expect an interaction the
+ * component does not support.
+ *
+ * So: roving tabindex (one tab stop for the group), arrow keys move AND select,
+ * Home/End jump to the ends. This is a consent control for a decision that
+ * cannot be narrowed afterwards; a teacher who navigates by keyboard has to be
+ * able to answer it as reliably as one who taps.
+ *
+ * While the question is unanswered there is no selected option to carry the tab
+ * stop, so the FIRST option holds it — the WAI-ARIA guidance for a radio group
+ * with no selection. Focus lands on the group without silently selecting
+ * anything, which is exactly the "no forced default" property this file exists
+ * to protect.
  */
 function TriQuestion({
   id,
@@ -143,10 +162,46 @@ function TriQuestion({
 }) {
   const { t } = useTranslation()
   const { tokens } = useTheme()
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const options: Array<{ key: Exclude<Tri, 'unset'>; label: string }> = [
     { key: 'yes', label: t('common.yes', { defaultValue: 'Yes' }) },
     { key: 'no', label: t('common.no', { defaultValue: 'No' }) },
   ]
+
+  /**
+   * Arrow keys move AND select, per the WAI-ARIA radio-group pattern — in a
+   * radio group, moving focus is choosing. From `unset`, an arrow selects the
+   * option it lands on, which is a deliberate act by the person pressing it,
+   * not a default the component supplied.
+   */
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (disabled) return
+    const currentIndex = options.findIndex((o) => o.key === value)
+    let nextIndex: number | null = null
+
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % options.length
+        break
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        nextIndex = currentIndex < 0 ? options.length - 1 : (currentIndex - 1 + options.length) % options.length
+        break
+      case 'Home':
+        nextIndex = 0
+        break
+      case 'End':
+        nextIndex = options.length - 1
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    onChange(options[nextIndex].key)
+    optionRefs.current[nextIndex]?.focus()
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -156,6 +211,7 @@ function TriQuestion({
       <div
         role="radiogroup"
         aria-labelledby={`rights-${id}-label`}
+        onKeyDown={onKeyDown}
         style={{
           display: 'flex',
           gap: 8,
@@ -165,14 +221,19 @@ function TriQuestion({
           borderRadius: 12,
         }}
       >
-        {options.map((opt) => {
+        {options.map((opt, index) => {
           const selected = value === opt.key
+          // Roving tabindex: the group is ONE tab stop. The selected option
+          // holds it; with nothing selected yet, the first option does.
+          const isTabStop = value === 'unset' ? index === 0 : selected
           return (
             <button
               key={opt.key}
+              ref={(el) => { optionRefs.current[index] = el }}
               type="button"
               role="radio"
               aria-checked={selected}
+              tabIndex={isTabStop ? 0 : -1}
               disabled={disabled}
               onClick={() => onChange(opt.key)}
               style={{

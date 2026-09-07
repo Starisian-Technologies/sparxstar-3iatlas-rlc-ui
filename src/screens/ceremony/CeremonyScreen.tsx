@@ -178,7 +178,7 @@ export function CeremonyScreen({
       <Screen centered>
         <div style={{ textAlign: 'center', color: tokens.textMuted }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: tokens.text, marginBottom: 6 }}>{t('ceremony.unavailable', { defaultValue: 'Ceremony unavailable' })}</div>
-          <div style={{ fontSize: 14 }}>{error ?? 'No awards data received.'}</div>
+          <div style={{ fontSize: 14 }}>{error ?? t('ceremony.no_awards', { defaultValue: 'No awards data received.' })}</div>
         </div>
       </Screen>
     )

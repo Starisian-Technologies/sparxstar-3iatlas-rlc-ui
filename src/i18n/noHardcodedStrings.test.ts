@@ -48,10 +48,26 @@ function filesUnder(path: string): string[] {
   return readdirSync(path).flatMap((entry) => filesUnder(join(path, entry)))
 }
 
-/** Visible JSX text between tags: `>Some words<`. */
-const JSX_TEXT = />\s*([A-Za-z][^<>{}\n]{2,})\s*</g
-/** Literal placeholder / aria-label / title attributes. */
-const ATTR = /(?:placeholder|aria-label|title)="([^"]{2,})"/g
+/**
+ * Visible JSX text between tags: `>Some words<`.
+ *
+ * The leading class is `[^<>{}\s]` and NOT `[A-Za-z]`. An earlier version
+ * anchored on A-Z, which quietly excused every visible string that opens with a
+ * bracket, a digit, a quote or a lowercase word — including
+ * "(@sparxstar/starmus-audio — wiring in progress)", which was sitting in a
+ * student-facing screen while this test reported a clean run. A guard whose
+ * regex is narrower than its own docstring is worse than no guard: it converts
+ * "we checked" into a false statement.
+ */
+const JSX_TEXT = />\s*([^<>{}\s][^<>{}\n]{2,})\s*</g
+/**
+ * Literal placeholder / aria-label / title attributes, single OR double quoted.
+ * Template-literal attributes (`aria-label={`...`}`) are caught separately
+ * below — they were the other hole, and interpolation is not translation.
+ */
+const ATTR = /(?:placeholder|aria-label|title)=(?:"([^"]{2,})"|'([^']{2,})')/g
+/** `attr={`text ${expr}`}` — English with a value spliced into it. */
+const TEMPLATE_ATTR = /(?:placeholder|aria-label|title)=\{`([^`]*[A-Za-z]{2,}[^`]*)`\}/g
 
 /**
  * Strings that are not English prose and never need translating: bare
@@ -64,8 +80,11 @@ function isTranslatable(value: string): boolean {
   if (v.length < 3) return false
   // No ASCII letters at all → symbols, dots, digits, punctuation.
   if (!/[A-Za-z]/.test(v)) return false
-  // An i18n interpolation or an expression fragment that slipped the regex.
-  if (v.includes('{{') || v.includes('${')) return false
+  // An i18n interpolation that already went through t().
+  if (v.includes('{{')) return false
+  // A bare JSX expression the regex clipped, e.g. `} of {`. Requires at least
+  // two consecutive letters somewhere to count as prose.
+  if (!/[A-Za-z]{2,}/.test(v)) return false
   return true
 }
 
@@ -81,11 +100,14 @@ describe('no hardcoded student-facing English (spec §1.8)', () => {
       for (const [regex, kind] of [
         [JSX_TEXT, 'text'],
         [ATTR, 'attribute'],
+        [TEMPLATE_ATTR, 'template-attribute'],
       ] as const) {
         regex.lastIndex = 0
         let match: RegExpExecArray | null
         while ((match = regex.exec(source)) !== null) {
-          const value = match[1]
+          // ATTR has two alternates (double- and single-quoted); take whichever matched.
+          const value = match[1] ?? match[2]
+          if (!value) continue
           if (!isTranslatable(value)) continue
           const line = source.slice(0, match.index).split('\n').length
           // Skip anything on a line that is plainly a comment.
