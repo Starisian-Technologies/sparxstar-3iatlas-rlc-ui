@@ -6,7 +6,7 @@
  * front of a classroom.
  */
 import { describe, it, expect } from 'vitest'
-import { mergeSessionStatus } from './sessionView'
+import { mergeSessionStatus } from '@/hooks/sessionView'
 import type { SessionStatusResponse } from '@/contract'
 
 function status(
