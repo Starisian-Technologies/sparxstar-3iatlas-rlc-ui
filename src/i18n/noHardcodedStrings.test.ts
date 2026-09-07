@@ -31,6 +31,11 @@ import { join } from 'node:path'
  */
 const STUDENT_FACING = [
   'src/screens/LandingScreen.tsx',
+  // Reachable from the lobby's "Your progress", so student-facing in the sense
+  // that matters here. It was missing from this list in the same change that
+  // added both the screen and this guard — a guard that does not scan the newest
+  // student surface reports a clean run it has not earned.
+  'src/screens/StatsScreen.tsx',
   'src/screens/student',
   'src/screens/qc',
   'src/screens/ceremony',

@@ -330,6 +330,7 @@
     "back": "← Back",
     "board_all_time": "Top 10 all time",
     "board_empty": "No scores yet. Be the first!",
+    "board_loading": "Loading the board…",
     "board_weekly": "Top 10 this week",
     "games_played": "Games played",
     "gold": "Gold",

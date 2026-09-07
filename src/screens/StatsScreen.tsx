@@ -63,6 +63,22 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  /**
+   * FULL-SCREEN LOADING IS FOR THE FIRST VISIT ONLY.
+   *
+   * It used to be set on every run of the effect below, including a period
+   * change — which unmounted this entire screen, radio group and all. Two costs,
+   * and the second is the serious one: the learner's own numbers blanked out
+   * even though switching period does not refetch them (both windows arrive in
+   * one response), and a keyboard user pressing an arrow key had the button
+   * they were standing on destroyed under them, dropping focus to the document.
+   * A radio group whose arrow keys lose your place is worse than one with no
+   * arrow keys at all.
+   *
+   * Now only the board reloads, and it says so in place.
+   */
+  const [boardLoading, setBoardLoading] = useState(false)
+  const hasLoadedOnce = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [savingPref, setSavingPref] = useState(false)
 
@@ -73,6 +89,49 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   // Bumped to ask the primary effect to reload the board that is actually on
   // screen, when something outside it (an opt-out) has invalidated those rows.
   const [reloadNonce, setReloadNonce] = useState(0)
+
+  /**
+   * Roving tabindex for the period selector.
+   *
+   * This group announces itself as a `radiogroup`, so assistive technology
+   * promises its users the radio-group contract: ONE tab stop, arrows to move
+   * and select, Home/End to jump. It shipped with the role and none of the
+   * behaviour, which is worse than plain buttons — a screen reader tells the
+   * learner to use arrow keys and nothing happens.
+   *
+   * The same pattern is implemented in `RightsConfirmation`'s `TriQuestion`;
+   * this mirrors it deliberately rather than inventing a second interaction.
+   */
+  const WINDOWS: readonly StatsWindow[] = ['weekly', 'all_time']
+  const windowRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  function onWindowKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const currentIndex = WINDOWS.indexOf(window_)
+    let nextIndex: number | null = null
+
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        nextIndex = (currentIndex + 1) % WINDOWS.length
+        break
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        nextIndex = (currentIndex - 1 + WINDOWS.length) % WINDOWS.length
+        break
+      case 'Home':
+        nextIndex = 0
+        break
+      case 'End':
+        nextIndex = WINDOWS.length - 1
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    setWindow(WINDOWS[nextIndex])
+    windowRefs.current[nextIndex]?.focus()
+  }
 
   const loadBoard = useCallback(
     async (w: StatsWindow, band: AccountStatsResponse['band'] | undefined) => {
@@ -86,7 +145,8 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   useEffect(() => {
     let cancelled = false
     boardGeneration.current += 1
-    setLoading(true)
+    if (hasLoadedOnce.current) setBoardLoading(true)
+    else setLoading(true)
     setError(null)
     void (async () => {
       try {
@@ -100,7 +160,11 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
       } catch {
         if (!cancelled) setError(t('stats.load_failed', { defaultValue: 'Could not load your stats. Please try again.' }))
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setBoardLoading(false)
+          hasLoadedOnce.current = true
+        }
       }
     })()
     return () => {
@@ -209,16 +273,20 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
         <div
           role="radiogroup"
           aria-label={t('stats.window_label', { defaultValue: 'Time period' })}
+          onKeyDown={onWindowKeyDown}
           style={{ display: 'flex', gap: 4, padding: 4, background: tokens.bg, border: `1px solid ${tokens.border}`, borderRadius: 12 }}
         >
-          {(['weekly', 'all_time'] as const).map((w) => {
+          {WINDOWS.map((w, index) => {
             const selected = window_ === w
             return (
               <button
                 key={w}
+                ref={(el) => { windowRefs.current[index] = el }}
                 type="button"
                 role="radio"
                 aria-checked={selected}
+                // One tab stop for the group: the selected option holds it.
+                tabIndex={selected ? 0 : -1}
                 onClick={() => setWindow(w)}
                 style={{
                   flex: '1 1 0',
@@ -296,14 +364,27 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
               </div>
             )}
 
-            {entries.length === 0 && (
+            {/* Announced in place, so a screen-reader user learns the board is
+                being replaced instead of hearing the rows change silently. */}
+            {boardLoading && (
+              <div role="status" aria-busy="true" style={{ fontSize: 14, color: tokens.textMuted }}>
+                {t('stats.board_loading', { defaultValue: 'Loading the board…' })}
+              </div>
+            )}
+
+            {!boardLoading && entries.length === 0 && (
               <div style={{ fontSize: 14, color: tokens.textMuted }}>
                 {t('stats.board_empty', { defaultValue: 'No scores yet. Be the first!' })}
               </div>
             )}
 
-            {entries.map((entry) => (
-              <BoardRow key={`${entry.rank}-${entry.screen_name}`} entry={entry} />
+            {entries.map((entry, index) => (
+              // Keyed by POSITION, not by (rank, screen_name). Ranks repeat on
+              // a tie and screen names are unique only within a school, so that
+              // pair can legitimately occur twice on one board — the same
+              // non-uniqueness the keyset cursor needed a third component for.
+              // Duplicate React keys silently reuse the wrong row.
+              <BoardRow key={`${entry.rank}-${entry.screen_name}-${index}`} entry={entry} />
             ))}
 
             {cursor && (

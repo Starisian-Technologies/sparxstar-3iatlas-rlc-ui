@@ -17,7 +17,7 @@ interface RlcRecorderProps {
   participant_token: string | null
   maxSeconds?: number
   onComplete: (result: RlcRecorderResult) => void
-  onError?: (error: 'mic_denied' | 'upload_failed' | 'yahura_unavailable') => void
+  onError?: (error: 'mic_denied' | 'mic_unavailable' | 'upload_failed' | 'yahura_unavailable') => void
   onSkip: () => void
 }
 
@@ -106,7 +106,11 @@ export function RlcRecorder({
       const denied = err instanceof Error && err.name === 'NotAllowedError'
       setErrorKind(denied ? 'mic_denied' : 'mic_unavailable')
       setStatus('error')
-      onErrorRef.current?.('mic_denied')
+      // Reports what actually happened. This used to send 'mic_denied' for both
+      // cases while the screen showed "unavailable" — so a caller acting on the
+      // callback would have offered a permissions prompt to someone whose device
+      // simply has no microphone.
+      onErrorRef.current?.(denied ? 'mic_denied' : 'mic_unavailable')
       return
     }
 

@@ -237,3 +237,47 @@ describe('a period change invalidates board requests already in flight', () => {
     expect(screen.queryByText('StaleWeekly')).toBeNull()
   })
 })
+
+describe('the period selector honours the radiogroup contract it advertises', () => {
+  // Marking a group `role="radiogroup"` promises assistive technology a
+  // specific interaction: one tab stop, arrows move AND select, Home/End jump.
+  // It shipped with the role and none of the behaviour, so a screen reader told
+  // the learner to press arrow keys and nothing happened. Pinning the behaviour
+  // rather than the role, because the role is the part that was already there.
+
+  it('moves and selects with arrow keys, and keeps a single tab stop', async () => {
+    renderStats()
+    await waitFor(() => expect(screen.getByText('Awa')).toBeTruthy())
+
+    const weekly = screen.getByRole('radio', { name: 'This week' })
+    const allTime = screen.getByRole('radio', { name: 'All time' })
+
+    // One tab stop: the selected option holds it, the other is removed from
+    // the tab order entirely.
+    expect(weekly.getAttribute('tabindex')).toBe('0')
+    expect(allTime.getAttribute('tabindex')).toBe('-1')
+
+    fireEvent.keyDown(weekly, { key: 'ArrowRight' })
+    await waitFor(() => expect(allTime.getAttribute('aria-checked')).toBe('true'))
+    expect(weekly.getAttribute('aria-checked')).toBe('false')
+    expect(allTime.getAttribute('tabindex')).toBe('0')
+
+    // Wraps, rather than stopping at the end.
+    fireEvent.keyDown(allTime, { key: 'ArrowRight' })
+    await waitFor(() => expect(weekly.getAttribute('aria-checked')).toBe('true'))
+  })
+
+  it('jumps to first and last with Home and End', async () => {
+    renderStats()
+    await waitFor(() => expect(screen.getByText('Awa')).toBeTruthy())
+
+    const weekly = screen.getByRole('radio', { name: 'This week' })
+    const allTime = screen.getByRole('radio', { name: 'All time' })
+
+    fireEvent.keyDown(weekly, { key: 'End' })
+    await waitFor(() => expect(allTime.getAttribute('aria-checked')).toBe('true'))
+
+    fireEvent.keyDown(allTime, { key: 'Home' })
+    await waitFor(() => expect(weekly.getAttribute('aria-checked')).toBe('true'))
+  })
+})
