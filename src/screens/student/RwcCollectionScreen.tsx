@@ -215,7 +215,7 @@ export function RwcCollectionScreen({
       // Store metadata for WORD_SUBMITTED event and audio prompt (used when the sync receipt arrives).
       submissionMetaRef.current.set(localId, { hasTranslation, word: wordValue })
     } catch {
-      setError('Could not submit. Try again.')
+      setError(t('collection_rwc.submit_failed', { defaultValue: 'Could not submit. Try again.' }))
     } finally {
       setLoading(false)
     }

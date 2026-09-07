@@ -9,6 +9,7 @@
  * Badge shows pending count when > 0. Badge clears when server confirms receipt.
  */
 
+import { useTranslation } from 'react-i18next'
 import type { SyncState } from '@/hooks/useSubmissionQueue'
 
 interface SyncStatusIndicatorProps {
@@ -29,10 +30,15 @@ const COLORS: Record<SyncState, string> = {
   syncing: '#F59E0B',   // amber
 }
 
-const ARIA_LABELS: Record<SyncState, string> = {
-  synced:  'Synced',
-  offline: 'Offline — sync unavailable',
-  syncing: 'Syncing…',
+/**
+ * This indicator has no visible text — the icon is `aria-hidden`, so the label
+ * IS the component for anyone using a screen reader. It is translated for the
+ * same reason the visible strings are.
+ */
+const ARIA_LABELS: Record<SyncState, { key: string; en: string }> = {
+  synced:  { key: 'sync.synced',  en: 'Synced' },
+  offline: { key: 'sync.offline', en: 'Offline — sync unavailable' },
+  syncing: { key: 'sync.syncing', en: 'Syncing…' },
 }
 
 export function SyncStatusIndicator({
@@ -40,13 +46,15 @@ export function SyncStatusIndicator({
   pendingCount,
   style,
 }: SyncStatusIndicatorProps) {
+  const { t } = useTranslation()
   const isSyncing = syncState === 'syncing'
+  const label = ARIA_LABELS[syncState]
 
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={ARIA_LABELS[syncState]}
+      aria-label={t(label.key, { defaultValue: label.en })}
       style={{
         minHeight: 44,
         minWidth:  44,

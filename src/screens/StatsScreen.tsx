@@ -20,10 +20,19 @@
  * null `rank`, while their own XP, accuracy and stars still show.
  *
  * Mobile-first, per the platform's Africa-first constraints: it renders at
- * 360px, every control clears 44px, and the two windows arrive in ONE response
- * so drawing this screen costs one round trip on a 2G link rather than two.
+ * 360px and every control clears 44px. Self-stats returns BOTH windows in one
+ * response, so switching weekly/all-time costs no request for the personal
+ * numbers. The board is a second request that cannot be merged into the first:
+ * it is scoped to the player's band, and the band is only known once self-stats
+ * has answered. Two round trips on open, one per period change after that.
+ *
+ * Both of those board requests are asynchronous and the player can change period
+ * while one is in flight. Every board response is therefore stamped with the
+ * generation that asked for it and dropped if that generation is no longer the
+ * live one — otherwise a slow weekly page could append itself to, or overwrite,
+ * an all-time board the player is already looking at.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Screen } from '@/components/Screen'
@@ -57,6 +66,14 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const [savingPref, setSavingPref] = useState(false)
 
+  // Identifies the board currently on screen. The primary effect bumps it on
+  // every (account, window) change; any board request captures it at the moment
+  // it is issued and applies its response only if it is still the live one.
+  const boardGeneration = useRef(0)
+  // Bumped to ask the primary effect to reload the board that is actually on
+  // screen, when something outside it (an opt-out) has invalidated those rows.
+  const [reloadNonce, setReloadNonce] = useState(0)
+
   const loadBoard = useCallback(
     async (w: StatsWindow, band: AccountStatsResponse['band'] | undefined) => {
       // Scoped to the player's own band so the ranking is against a comparable
@@ -68,6 +85,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
 
   useEffect(() => {
     let cancelled = false
+    boardGeneration.current += 1
     setLoading(true)
     setError(null)
     void (async () => {
@@ -88,10 +106,11 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     return () => {
       cancelled = true
     }
-  }, [account_id, window_, loadBoard, t])
+  }, [account_id, window_, reloadNonce, loadBoard, t])
 
   const loadMore = async () => {
     if (!cursor || !stats) return
+    const generation = boardGeneration.current
     setLoadingMore(true)
     try {
       const next = await api.stats.leaderboard({
@@ -100,12 +119,18 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
         limit: PAGE_SIZE,
         cursor,
       })
+      // A period change while this was in flight makes these rows the wrong
+      // board's. Appending them would interleave weekly and all-time ranks, and
+      // the cursor would then page the wrong board — so drop the whole response.
+      if (boardGeneration.current !== generation) return
       // Append rather than replace: keyset paging returns each row once, so the
       // accumulated list is the board so far, not a page that replaced another.
       setEntries((prev) => [...prev, ...next.entries])
       setCursor(next.next_cursor)
     } catch {
-      setError(t('stats.load_more_failed', { defaultValue: 'Could not load more. Please try again.' }))
+      if (boardGeneration.current === generation) {
+        setError(t('stats.load_more_failed', { defaultValue: 'Could not load more. Please try again.' }))
+      }
     } finally {
       setLoadingMore(false)
     }
@@ -113,11 +138,22 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
 
   const toggleOptOut = async () => {
     if (!stats) return
+    const generation = boardGeneration.current
     setSavingPref(true)
     try {
       const result = await api.stats.setLeaderboardOptOut(account_id, !stats.leaderboard_opt_out)
-      setStats({ ...stats, leaderboard_opt_out: result.opt_out })
+      // The preference itself is not board-scoped, so it applies regardless of
+      // which period is now showing; only the refreshed rows below are.
+      setStats((prev) => (prev ? { ...prev, leaderboard_opt_out: result.opt_out } : prev))
       const board = await loadBoard(window_, stats.band)
+      if (boardGeneration.current !== generation) {
+        // The player switched period while this was pending. These rows belong
+        // to the old board, but the board now on screen was fetched before the
+        // opt-out landed and so still reflects the old preference — reload it
+        // rather than leaving the player listed after asking to be hidden.
+        setReloadNonce((n) => n + 1)
+        return
+      }
       setEntries(board.entries)
       setCursor(board.next_cursor)
     } catch {
@@ -187,12 +223,12 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
                 style={{
                   flex: '1 1 0',
                   minHeight: 44,
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: 700,
                   background: selected ? tokens.primary : 'transparent',
                   color: selected ? tokens.textInverse : tokens.textMuted,
                   border: 'none',
-                  borderRadius: 8,
+                  borderRadius: 10,
                   cursor: 'pointer',
                 }}
               >

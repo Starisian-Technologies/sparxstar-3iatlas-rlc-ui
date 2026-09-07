@@ -38,6 +38,21 @@ function getSupportedMimeType(): string {
   return ''
 }
 
+/**
+ * Why a KIND and not a message string: the recorder both shows this to the
+ * learner and branches on it (only an upload failure is retriable). Holding the
+ * English sentence in state made those two uses the same value, so translating
+ * the sentence would have silently disabled retry.
+ */
+type ErrorKind = 'unsupported' | 'mic_denied' | 'mic_unavailable' | 'upload_failed'
+
+const ERROR_TEXT: Record<ErrorKind, { key: string; en: string }> = {
+  unsupported:     { key: 'recorder.err_unsupported',     en: 'Audio recording not supported in this browser — tap Skip.' },
+  mic_denied:      { key: 'recorder.err_mic_denied',      en: 'Microphone blocked — tap Skip.' },
+  mic_unavailable: { key: 'recorder.err_mic_unavailable', en: 'Microphone unavailable — tap Skip.' },
+  upload_failed:   { key: 'recorder.err_upload_failed',   en: 'Upload failed — tap Skip to continue.' },
+}
+
 export function RlcRecorder({
   token_id,
   session_id,
@@ -55,9 +70,7 @@ export function RlcRecorder({
   const [status, setStatus] = useState<Status>(notSupported ? 'error' : 'idle')
   const [elapsed, setElapsed] = useState(0)
   const [transcription, setTranscription] = useState('')
-  const [errorMsg, setErrorMsg] = useState(
-    notSupported ? 'Audio recording not supported in this browser — tap Skip.' : '',
-  )
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(notSupported ? 'unsupported' : null)
   const mountedRef = useRef(true)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -83,7 +96,7 @@ export function RlcRecorder({
   async function startRecording() {
     if (!mountedRef.current) return
     setStatus('requesting')
-    setErrorMsg('')
+    setErrorKind(null)
 
     let stream: MediaStream
     try {
@@ -91,8 +104,7 @@ export function RlcRecorder({
     } catch (err) {
       if (!mountedRef.current) return
       const denied = err instanceof Error && err.name === 'NotAllowedError'
-      const msg = denied ? 'Microphone blocked — tap Skip.' : 'Microphone unavailable — tap Skip.'
-      setErrorMsg(msg)
+      setErrorKind(denied ? 'mic_denied' : 'mic_unavailable')
       setStatus('error')
       onErrorRef.current?.('mic_denied')
       return
@@ -151,7 +163,7 @@ export function RlcRecorder({
       } catch (err) {
         if (!mountedRef.current) return
         const isYahura = err instanceof Error && err.message === 'yahura_unavailable'
-        setErrorMsg('Upload failed — tap Skip to continue.')
+        setErrorKind('upload_failed')
         setStatus('error')
         onErrorRef.current?.(isYahura ? 'yahura_unavailable' : 'upload_failed')
       }
@@ -172,7 +184,12 @@ export function RlcRecorder({
   }
 
   const pct = Math.min(100, (elapsed / maxSeconds) * 100)
-  const canRetry = status === 'error' && errorMsg === 'Upload failed — tap Skip to continue.'
+  // Derived from the error KIND, never from the rendered message. Comparing
+  // display text would have made retry stop being offered the moment this
+  // string was translated — the failure only appearing in the languages the
+  // classrooms actually use.
+  const canRetry = status === 'error' && errorKind === 'upload_failed'
+  const errorText = errorKind ? t(ERROR_TEXT[errorKind].key, { defaultValue: ERROR_TEXT[errorKind].en }) : ''
 
   return (
     <div style={{
@@ -275,7 +292,7 @@ export function RlcRecorder({
 
       {status === 'error' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <p style={{ fontSize: 14, color: tokens.danger, margin: 0 }}>{errorMsg}</p>
+          <p style={{ fontSize: 14, color: tokens.danger, margin: 0 }}>{errorText}</p>
           {canRetry && (
             <button type="button" onClick={() => void startRecording()} style={actionBtnStyle(tokens.primary)}>
               <MicIcon /> {t('recorder.try_again', { defaultValue: 'Try again' })}

@@ -68,6 +68,20 @@ const JSX_TEXT = />\s*([^<>{}\s][^<>{}\n]{2,})\s*</g
 const ATTR = /(?:placeholder|aria-label|title)=(?:"([^"]{2,})"|'([^']{2,})')/g
 /** `attr={`text ${expr}`}` — English with a value spliced into it. */
 const TEMPLATE_ATTR = /(?:placeholder|aria-label|title)=\{`([^`]*[A-Za-z]{2,}[^`]*)`\}/g
+/**
+ * A message pushed into error state as a literal. This was the third hole: an
+ * error the learner reads is as student-facing as a label, but it reaches the
+ * screen through a setter instead of JSX, so neither pattern above saw it. Nine
+ * English sentences were sitting behind these calls — including one the recorder
+ * then COMPARED ITSELF AGAINST to decide whether to offer a retry, which would
+ * have broken retry in exactly the languages the classrooms use.
+ *
+ * `setStatus` is deliberately NOT matched: throughout this codebase it carries a
+ * state discriminant (`'recording'`, `'uploading'`) that is never rendered, and
+ * including it produced six false positives that would have pushed the next
+ * person to widen the allowlist — which is how a guard gets switched off.
+ */
+const ERROR_SETTER = /set(?:Error|ErrorMsg|ErrorMessage|Message)\(\s*(?:"([^"]{3,})"|'([^']{3,})')\s*\)/g
 
 /**
  * Strings that are not English prose and never need translating: bare
@@ -101,6 +115,7 @@ describe('no hardcoded student-facing English (spec §1.8)', () => {
         [JSX_TEXT, 'text'],
         [ATTR, 'attribute'],
         [TEMPLATE_ATTR, 'template-attribute'],
+        [ERROR_SETTER, 'error-message'],
       ] as const) {
         regex.lastIndex = 0
         let match: RegExpExecArray | null

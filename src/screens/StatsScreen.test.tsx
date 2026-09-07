@@ -10,7 +10,7 @@
  */
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { StatsScreen } from './StatsScreen'
+import { StatsScreen } from '@/screens/StatsScreen'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import type { AccountStatsResponse, LeaderboardResponse } from '@/contract'
 import '@/i18n'
@@ -148,5 +148,92 @@ describe('stats screen renders server results only', () => {
       expect(Object.keys(entry).sort()).toEqual(['is_self', 'rank', 'screen_name', 'xp'])
     }
     expect(document.body.textContent).not.toContain(ACCOUNT)
+  })
+})
+
+describe('a period change invalidates board requests already in flight', () => {
+  // Both of these pin the same rule: a board response may only be applied if the
+  // period that asked for it is still the period on screen. Without that check a
+  // slow response lands on top of a board the player has already switched away
+  // from, mixing weekly and all-time ranks in one list.
+
+  it('drops a "load more" page that arrives after the player switched period', async () => {
+    const WEEKLY_PAGE_1: LeaderboardResponse = { ...BOARD, next_cursor: 'cur-1' }
+    const WEEKLY_PAGE_2: LeaderboardResponse = {
+      ...BOARD,
+      entries: [{ rank: 5, screen_name: 'StaleWeekly', xp: 90, is_self: false }],
+      next_cursor: null,
+    }
+    const ALL_TIME: LeaderboardResponse = {
+      ...BOARD,
+      window: 'all_time',
+      entries: [{ rank: 1, screen_name: 'AllTimeTop', xp: 5000, is_self: false }],
+      next_cursor: null,
+    }
+
+    let releasePage2: (v: LeaderboardResponse) => void = () => {}
+    const page2 = new Promise<LeaderboardResponse>((resolve) => {
+      releasePage2 = resolve
+    })
+
+    boardMock.mockImplementation((args: { window: string; cursor?: string }) => {
+      if (args.cursor) return page2
+      return Promise.resolve(args.window === 'all_time' ? ALL_TIME : WEEKLY_PAGE_1)
+    })
+
+    renderStats()
+    await waitFor(() => expect(screen.getByText('Awa')).toBeTruthy())
+
+    // Ask for page 2 of the weekly board, then switch to all-time before it lands.
+    fireEvent.click(screen.getByText('Show more'))
+    fireEvent.click(screen.getByText('All time'))
+    await waitFor(() => expect(screen.getByText('AllTimeTop')).toBeTruthy())
+
+    releasePage2(WEEKLY_PAGE_2)
+    await waitFor(() => expect(screen.queryByText('Show more')).toBeNull())
+
+    // The weekly page must not have been appended to the all-time board.
+    expect(screen.queryByText('StaleWeekly')).toBeNull()
+    expect(screen.getByText('AllTimeTop')).toBeTruthy()
+  })
+
+  it('does not overwrite the new period with the board refreshed after an opt-out', async () => {
+    const ALL_TIME: LeaderboardResponse = {
+      ...BOARD,
+      window: 'all_time',
+      entries: [{ rank: 1, screen_name: 'AllTimeTop', xp: 5000, is_self: false }],
+      next_cursor: null,
+    }
+    const WEEKLY_AFTER_OPT_OUT: LeaderboardResponse = {
+      ...BOARD,
+      entries: [{ rank: 1, screen_name: 'StaleWeekly', xp: 300, is_self: false }],
+      next_cursor: null,
+    }
+
+    let releasePref: (v: { account_id: string; opt_out: boolean }) => void = () => {}
+    prefMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releasePref = resolve
+        }),
+    )
+    boardMock.mockImplementation((args: { window: string }) =>
+      Promise.resolve(args.window === 'all_time' ? ALL_TIME : WEEKLY_AFTER_OPT_OUT),
+    )
+
+    renderStats()
+    await waitFor(() => expect(screen.getByText('StaleWeekly')).toBeTruthy())
+
+    fireEvent.click(screen.getByText('Hide me from leaderboards'))
+    fireEvent.click(screen.getByText('All time'))
+    await waitFor(() => expect(screen.getByText('AllTimeTop')).toBeTruthy())
+
+    releasePref({ account_id: ACCOUNT, opt_out: true })
+
+    // The all-time board stays on screen; the weekly refresh triggered by the
+    // opt-out must not replace it.
+    await waitFor(() => expect(boardMock.mock.calls.length).toBeGreaterThan(1))
+    expect(screen.getByText('AllTimeTop')).toBeTruthy()
+    expect(screen.queryByText('StaleWeekly')).toBeNull()
   })
 })

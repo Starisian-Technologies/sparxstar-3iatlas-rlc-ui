@@ -89,11 +89,11 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
         setPhase(mode === 'none' ? 'simple_name' : 'credentials')
         requestAnimationFrame(() => nameRef.current?.focus())
       } else if (parsed.type === 'session_unavailable') {
-        setError('This session has ended or the code has expired.')
+        setError(t('join.session_ended', { defaultValue: 'This session has ended or the code has expired.' }))
         setPhase('code')
         requestAnimationFrame(() => codeRef.current?.focus())
       } else {
-        setError('Code not found. Check the board and try again.')
+        setError(t('join.code_not_found', { defaultValue: 'Code not found. Check the board and try again.' }))
         setPhase('code')
         requestAnimationFrame(() => codeRef.current?.focus())
       }
@@ -106,13 +106,13 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     try {
       const result = await api.session.join({ join_code: code, screen_name: screenName })
       if (!('participant_id' in result)) {
-        setError('Unexpected server response. Please try again.')
+        setError(t('join.unexpected_response', { defaultValue: 'Unexpected server response. Please try again.' }))
         setLoading(false)
         return
       }
       onJoined({ ...result, display_name: screenName })
     } catch {
-      setError('Could not join. Please try again.')
+      setError(t('join.join_failed', { defaultValue: 'Could not join. Please try again.' }))
       setLoading(false)
     }
   }
@@ -130,7 +130,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
           : { join_code: code, screen_name: name.trim() }
       const result = await api.session.join(payload)
       if (!('participant_id' in result)) {
-        setError('Unexpected server response. Please try again.')
+        setError(t('join.unexpected_response', { defaultValue: 'Unexpected server response. Please try again.' }))
         setLoading(false)
         return
       }
@@ -138,7 +138,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     } catch (err) {
       const parsed = parseJoinError(err)
       if (parsed.type === 'locked') {
-        setError('Account locked after too many attempts. Ask your teacher to unlock it.')
+        setError(t('join.account_locked', { defaultValue: 'Account locked after too many attempts. Ask your teacher to unlock it.' }))
       } else if (parsed.type === 'invalid_credential') {
         const remaining = parsed.remaining
         setError(

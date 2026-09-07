@@ -51,7 +51,7 @@ export function RightsConfirmation({ value, onChange, disabled = false }: Rights
     background: tokens.bg,
     color: value.license === null ? tokens.textMuted : tokens.text,
     border: `1.5px solid ${value.license === null ? tokens.warning : tokens.border}`,
-    borderRadius: 12,
+    borderRadius: 8,
     fontSize: 16,
   }
 
@@ -240,12 +240,12 @@ function TriQuestion({
                 flex: '1 1 0',
                 // 44px minimum touch target.
                 minHeight: 44,
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 700,
                 background: selected ? tokens.primary : 'transparent',
                 color: selected ? tokens.textInverse : tokens.textMuted,
                 border: 'none',
-                borderRadius: 8,
+                borderRadius: 10,
                 cursor: disabled ? 'default' : 'pointer',
               }}
             >

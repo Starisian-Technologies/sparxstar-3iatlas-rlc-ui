@@ -175,7 +175,7 @@ export function RscCollectionScreen({
         onCollectionCompleted(nextCompleted.size)
       }
     } catch {
-      setError('Could not submit. Try again.')
+      setError(t('collection_rsc.submit_failed', { defaultValue: 'Could not submit. Try again.' }))
     } finally {
       setLoading(false)
     }
