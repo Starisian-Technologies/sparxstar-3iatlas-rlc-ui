@@ -59,10 +59,10 @@ export function RightsConfirmation({ value, onChange, disabled = false }: Rights
     <Card>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
             {t('teacher_setup.rights.heading', { defaultValue: 'Data rights' })}
           </div>
-          <div style={{ fontSize: 13, color: tokens.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 16, color: tokens.textMuted, marginTop: 4, lineHeight: 1.5 }}>
             {t('teacher_setup.rights.explainer', {
               defaultValue:
                 'These choices travel with every word your class contributes, to every system that receives it. They cannot be narrowed later, so please answer each one.',
@@ -71,7 +71,7 @@ export function RightsConfirmation({ value, onChange, disabled = false }: Rights
         </div>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: tokens.text }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: tokens.text }}>
             {t('teacher_setup.rights.license_label', { defaultValue: 'License for the derived data' })}
           </span>
           <select
@@ -113,7 +113,7 @@ export function RightsConfirmation({ value, onChange, disabled = false }: Rights
         />
 
         {!isRightsComplete(value) && (
-          <div role="status" style={{ fontSize: 13, color: tokens.warning }}>
+          <div role="status" style={{ fontSize: 16, color: tokens.warning }}>
             {t('teacher_setup.rights.incomplete', {
               defaultValue: 'Answer all three to start the session.',
             })}
@@ -205,7 +205,7 @@ function TriQuestion({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span id={`rights-${id}-label`} style={{ fontSize: 14, fontWeight: 600, color: tokens.text }}>
+      <span id={`rights-${id}-label`} style={{ fontSize: 16, fontWeight: 600, color: tokens.text }}>
         {question}
       </span>
       <div

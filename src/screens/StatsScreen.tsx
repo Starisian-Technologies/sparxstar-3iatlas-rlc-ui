@@ -25,11 +25,17 @@
  * given.
  *
  * Mobile-first, per the platform's Africa-first constraints: it renders at
- * 360px and every control clears 44px. Self-stats returns BOTH windows in one
+ * 360px and every control clears 44px. NO TEXT ON THIS SCREEN IS BELOW 16px:
+ * hierarchy is carried by weight, colour and letter-spacing instead of by
+ * shrinking type. The readers are children, often on small phones in poor
+ * light, and a 12px caption is the first thing that stops being read. Self-stats returns BOTH windows in one
  * response, so switching weekly/all-time costs no request for the personal
  * numbers. The board is a second request that cannot be merged into the first:
- * it is scoped to the player's band, and the band is only known once self-stats
- * has answered. Two round trips on open, one per period change after that.
+ * it is a separate resource. Both go out AT ONCE: the board used to wait on
+ * self-stats because the request carried the learner's `band`, and the band was
+ * only known once self-stats had answered. The engine now resolves an absent
+ * band to the caller's own, so the client no longer has to know it, and the two
+ * requests are independent.
  *
  * Both of those board requests are asynchronous and the player can change period
  * while one is in flight. Every board response is therefore stamped with the
@@ -97,12 +103,10 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   const hasLoadedOnce = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Identifies the board currently on screen. The primary effect bumps it on
-  // every (account, window) change; any board request captures it at the moment
+  // Identifies the board currently on screen. The board effect bumps it on
+  // every period change; any secondary board request captures it at the moment
   // it is issued and applies its response only if it is still the live one.
   const boardGeneration = useRef(0)
-  // Bumped to ask the primary effect to reload the board that is actually on
-  // screen, when something outside it (an opt-out) has invalidated those rows.
 
   /**
    * Roving tabindex for the period selector.
@@ -148,10 +152,13 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   }
 
   const loadBoard = useCallback(
-    async (w: StatsWindow, band: AccountStatsResponse['band'] | undefined) => {
+    async (w: StatsWindow) => {
       // Scoped to the player's own band so the ranking is against a comparable
       // cohort — the mitigation the leaderboard supersession is conditional on.
-      return api.stats.leaderboard({ window: w, band, limit: PAGE_SIZE })
+      // No `band`: the engine resolves an absent one to the caller's own, which
+      // is both the correct cohort and one fewer thing this screen has to know
+      // before it can ask.
+      return api.stats.leaderboard({ window: w, limit: PAGE_SIZE })
     },
     [],
   )
@@ -189,19 +196,22 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
   }, [account_id, t])
 
   /**
-   * THE BOARD: reloads on a period change, and when something else invalidates
-   * it. Keyed on `band` rather than the whole `stats` object, so the opt-out
-   * toggle's `setStats` does not trigger a second load on top of its own.
+   * THE BOARD, loaded independently of self-stats.
+   *
+   * It no longer waits for `stats.band`, so this effect and the self-stats one
+   * above run concurrently rather than in series.
    */
-  const band = stats?.band
   useEffect(() => {
-    if (!band) return
     let cancelled = false
     boardGeneration.current += 1
     if (hasLoadedOnce.current) setBoardLoading(true)
+    // Clear any error from a previous attempt: leaving it up after a load
+    // succeeds tells a learner their stats are broken while they are looking
+    // at them.
+    setError(null)
     void (async () => {
       try {
-        const board = await loadBoard(window_, band)
+        const board = await loadBoard(window_)
         if (cancelled) return
         setEntries(board.entries)
         setCursor(board.next_cursor)
@@ -219,16 +229,18 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     return () => {
       cancelled = true
     }
-  }, [band, window_, loadBoard, t])
+  }, [window_, loadBoard, t])
 
   const loadMore = async () => {
-    if (!cursor || !stats) return
+    if (!cursor) return
     const generation = boardGeneration.current
     setLoadingMore(true)
+    // Same reason as the board effect: a stale error must not outlive the
+    // failure it describes.
+    setError(null)
     try {
       const next = await api.stats.leaderboard({
         window: window_,
-        band: stats.band,
         limit: PAGE_SIZE,
         cursor,
       })
@@ -268,7 +280,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
     return (
       <Screen centered>
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 380 }}>
-          <div role="alert" style={{ color: tokens.danger, fontSize: 15 }}>{error}</div>
+          <div role="alert" style={{ color: tokens.danger, fontSize: 16 }}>{error}</div>
           <Button onClick={onBack} variant="ghost">
             {t('stats.back', { defaultValue: '← Back' })}
           </Button>
@@ -376,7 +388,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
 
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: tokens.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
               {window_ === 'weekly'
                 ? t('stats.board_weekly', { defaultValue: 'This week' })
                 : t('stats.board_all_time', { defaultValue: 'All time' })}
@@ -386,13 +398,13 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
             {/* Announced in place, so a screen-reader user learns the board is
                 being replaced instead of hearing the rows change silently. */}
             {boardLoading && (
-              <div role="status" aria-busy="true" style={{ fontSize: 14, color: tokens.textMuted }}>
+              <div role="status" aria-busy="true" style={{ fontSize: 16, color: tokens.textMuted }}>
                 {t('stats.board_loading', { defaultValue: 'Loading the board…' })}
               </div>
             )}
 
             {!boardLoading && entries.length === 0 && (
-              <div style={{ fontSize: 14, color: tokens.textMuted }}>
+              <div style={{ fontSize: 16, color: tokens.textMuted }}>
                 {t('stats.board_empty', { defaultValue: 'No scores yet. Be the first!' })}
               </div>
             )}
@@ -410,7 +422,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 16,
                     fontWeight: 700,
                     color: tokens.textMuted,
                     letterSpacing: 0.5,
@@ -436,7 +448,7 @@ export function StatsScreen({ account_id, onBack }: StatsScreenProps) {
         </Card>
 
         {error && stats && (
-          <div role="alert" style={{ fontSize: 13, color: tokens.danger }}>
+          <div role="alert" style={{ fontSize: 16, color: tokens.danger }}>
             {error}
           </div>
         )}
@@ -449,7 +461,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   const { tokens } = useTheme()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={{ fontSize: 12, color: tokens.textMuted, fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 16, color: tokens.textMuted, fontWeight: 600 }}>{label}</span>
       <span style={{ fontSize: 22, fontWeight: 800, color: tokens.text }}>{value}</span>
     </div>
   )
@@ -480,7 +492,7 @@ function Movement({ movement, t }: { movement: RankMovement; t: TFunction }) {
   }
   const { glyph, label, color } = shown[movement]
   return (
-    <span aria-label={label} title={label} style={{ fontSize: 12, color, minWidth: 14 }}>
+    <span aria-label={label} title={label} style={{ fontSize: 16, color, minWidth: 14 }}>
       {glyph}
     </span>
   )
@@ -512,21 +524,21 @@ function BoardRow({ entry }: { entry: LeaderboardEntry }) {
     >
       <span
         aria-label={rankLabel}
-        style={{ minWidth: 44, fontWeight: 800, color: tokens.textMuted, fontSize: 14 }}
+        style={{ minWidth: 44, fontWeight: 800, color: tokens.textMuted, fontSize: 16 }}
       >
         {entry.tied ? '=' : ''}#{entry.rank}
       </span>
       <Movement movement={entry.movement} t={t} />
-      <span style={{ flex: 1, fontWeight: entry.is_self ? 800 : 600, color: tokens.text, fontSize: 15 }}>
+      <span style={{ flex: 1, fontWeight: entry.is_self ? 800 : 600, color: tokens.text, fontSize: 16 }}>
         {entry.screen_name}
         {entry.is_self && (
-          <span style={{ fontSize: 12, fontWeight: 600, color: tokens.textMuted }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: tokens.textMuted }}>
             {' '}
             {t('stats.you_marker', { defaultValue: '(you)' })}
           </span>
         )}
       </span>
-      <span style={{ fontWeight: 700, color: tokens.text, fontSize: 15 }}>{entry.xp}</span>
+      <span style={{ fontWeight: 700, color: tokens.text, fontSize: 16 }}>{entry.xp}</span>
     </div>
   )
 }

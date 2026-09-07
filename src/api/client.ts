@@ -295,8 +295,6 @@ export const api = {
         headers: sessionReadHeaders(participantTokenForRead()),
       })
     },
-
-    /** Withdraw from / rejoin public boards. Owner-only. */
   },
 
   events: {

@@ -131,11 +131,30 @@ describe('stats screen renders server results only', () => {
     expect(screen.getByLabelText('Moved down')).toBeTruthy()
   })
 
-  it('scopes the board to the player’s own skill band', async () => {
+  it('leaves the skill band to the server rather than asking for its own', async () => {
+    // This used to assert the opposite — that the client read `band` off
+    // self-stats and sent it. That made a binding rule ("boards separate by
+    // skill band") depend on the client remembering to ask correctly, and it
+    // forced the board request to wait for the stats request. The engine
+    // resolves an absent band to the caller's own.
     renderStats()
     await waitFor(() => expect(boardMock).toHaveBeenCalled())
     const args = boardMock.mock.calls[0][0] as Record<string, unknown>
-    expect(args.band).toBe('lower_basic')
+    expect(args.band).toBeUndefined()
+  })
+
+  it('asks for the board without waiting for self-stats to answer', async () => {
+    // Two serial requests to draw one screen is a cost the 2G links this
+    // platform targets cannot absorb. Neither request depends on the other, so
+    // both must be in flight before either resolves.
+    let releaseSelf: (v: unknown) => void = () => {}
+    selfMock.mockImplementation(() => new Promise((resolve) => { releaseSelf = resolve }))
+
+    renderStats()
+    // The board request is issued while self-stats is still pending.
+    await waitFor(() => expect(boardMock).toHaveBeenCalled())
+    releaseSelf(STATS)
+    await waitFor(() => expect(screen.getByText('Awa')).toBeTruthy())
   })
 
   it('shows a learner outside the page where they stand, not just the leaders', async () => {
