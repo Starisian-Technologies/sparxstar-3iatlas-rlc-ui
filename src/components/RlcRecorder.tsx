@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '@/theme/useTheme'
 
 type Status = 'idle' | 'requesting' | 'recording' | 'uploading' | 'done' | 'error'
@@ -16,7 +17,7 @@ interface RlcRecorderProps {
   participant_token: string | null
   maxSeconds?: number
   onComplete: (result: RlcRecorderResult) => void
-  onError?: (error: 'mic_denied' | 'upload_failed' | 'yahura_unavailable') => void
+  onError?: (error: 'mic_denied' | 'mic_unavailable' | 'upload_failed' | 'yahura_unavailable') => void
   onSkip: () => void
 }
 
@@ -37,6 +38,21 @@ function getSupportedMimeType(): string {
   return ''
 }
 
+/**
+ * Why a KIND and not a message string: the recorder both shows this to the
+ * learner and branches on it (only an upload failure is retriable). Holding the
+ * English sentence in state made those two uses the same value, so translating
+ * the sentence would have silently disabled retry.
+ */
+type ErrorKind = 'unsupported' | 'mic_denied' | 'mic_unavailable' | 'upload_failed'
+
+const ERROR_TEXT: Record<ErrorKind, { key: string; en: string }> = {
+  unsupported:     { key: 'recorder.err_unsupported',     en: 'Audio recording not supported in this browser — tap Skip.' },
+  mic_denied:      { key: 'recorder.err_mic_denied',      en: 'Microphone blocked — tap Skip.' },
+  mic_unavailable: { key: 'recorder.err_mic_unavailable', en: 'Microphone unavailable — tap Skip.' },
+  upload_failed:   { key: 'recorder.err_upload_failed',   en: 'Upload failed — tap Skip to continue.' },
+}
+
 export function RlcRecorder({
   token_id,
   session_id,
@@ -48,14 +64,13 @@ export function RlcRecorder({
   onError,
   onSkip,
 }: RlcRecorderProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const notSupported = typeof MediaRecorder === 'undefined'
   const [status, setStatus] = useState<Status>(notSupported ? 'error' : 'idle')
   const [elapsed, setElapsed] = useState(0)
   const [transcription, setTranscription] = useState('')
-  const [errorMsg, setErrorMsg] = useState(
-    notSupported ? 'Audio recording not supported in this browser — tap Skip.' : '',
-  )
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(notSupported ? 'unsupported' : null)
   const mountedRef = useRef(true)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -81,7 +96,7 @@ export function RlcRecorder({
   async function startRecording() {
     if (!mountedRef.current) return
     setStatus('requesting')
-    setErrorMsg('')
+    setErrorKind(null)
 
     let stream: MediaStream
     try {
@@ -89,10 +104,13 @@ export function RlcRecorder({
     } catch (err) {
       if (!mountedRef.current) return
       const denied = err instanceof Error && err.name === 'NotAllowedError'
-      const msg = denied ? 'Microphone blocked — tap Skip.' : 'Microphone unavailable — tap Skip.'
-      setErrorMsg(msg)
+      setErrorKind(denied ? 'mic_denied' : 'mic_unavailable')
       setStatus('error')
-      onErrorRef.current?.('mic_denied')
+      // Reports what actually happened. This used to send 'mic_denied' for both
+      // cases while the screen showed "unavailable" — so a caller acting on the
+      // callback would have offered a permissions prompt to someone whose device
+      // simply has no microphone.
+      onErrorRef.current?.(denied ? 'mic_denied' : 'mic_unavailable')
       return
     }
 
@@ -149,7 +167,7 @@ export function RlcRecorder({
       } catch (err) {
         if (!mountedRef.current) return
         const isYahura = err instanceof Error && err.message === 'yahura_unavailable'
-        setErrorMsg('Upload failed — tap Skip to continue.')
+        setErrorKind('upload_failed')
         setStatus('error')
         onErrorRef.current?.(isYahura ? 'yahura_unavailable' : 'upload_failed')
       }
@@ -170,7 +188,12 @@ export function RlcRecorder({
   }
 
   const pct = Math.min(100, (elapsed / maxSeconds) * 100)
-  const canRetry = status === 'error' && errorMsg === 'Upload failed — tap Skip to continue.'
+  // Derived from the error KIND, never from the rendered message. Comparing
+  // display text would have made retry stop being offered the moment this
+  // string was translated — the failure only appearing in the languages the
+  // classrooms actually use.
+  const canRetry = status === 'error' && errorKind === 'upload_failed'
+  const errorText = errorKind ? t(ERROR_TEXT[errorKind].key, { defaultValue: ERROR_TEXT[errorKind].en }) : ''
 
   return (
     <div style={{
@@ -184,7 +207,7 @@ export function RlcRecorder({
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700, textTransform: 'uppercase' }}>
-          Say this word
+          {t('recorder.say_this_word', { defaultValue: 'Say this word' })}
         </span>
         <button
           type="button"
@@ -192,7 +215,7 @@ export function RlcRecorder({
           disabled={status === 'uploading'}
           style={{ background: 'none', border: 'none', color: tokens.textMuted, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}
         >
-          Skip
+          {t('recorder.skip', { defaultValue: 'Skip' })}
         </button>
       </div>
 
@@ -204,16 +227,16 @@ export function RlcRecorder({
         <button
           type="button"
           onClick={() => void startRecording()}
-          aria-label="Start recording"
+          aria-label={t('recorder.start_label', { defaultValue: 'Start recording' })}
           style={actionBtnStyle(tokens.primary)}
         >
-          <MicIcon /> Tap to record
+          <MicIcon /> {t('recorder.tap_to_record', { defaultValue: 'Tap to record' })}
         </button>
       )}
 
       {status === 'requesting' && (
         <p style={{ fontSize: 14, color: tokens.textMuted, textAlign: 'center', margin: 0, padding: '6px 0' }}>
-          Getting microphone…
+          {t('recorder.getting_mic', { defaultValue: 'Getting microphone…' })}
         </p>
       )}
 
@@ -243,17 +266,17 @@ export function RlcRecorder({
           <button
             type="button"
             onClick={stopRecording}
-            aria-label="Stop recording"
+            aria-label={t('recorder.stop_label', { defaultValue: 'Stop recording' })}
             style={actionBtnStyle(tokens.danger)}
           >
-            <StopIcon /> Stop
+            <StopIcon /> {t('recorder.stop', { defaultValue: 'Stop' })}
           </button>
         </div>
       )}
 
       {status === 'uploading' && (
         <p style={{ fontSize: 14, color: tokens.textMuted, textAlign: 'center', margin: 0, padding: '6px 0' }}>
-          Sending…
+          {t('recorder.sending', { defaultValue: 'Sending…' })}
         </p>
       )}
 
@@ -273,10 +296,10 @@ export function RlcRecorder({
 
       {status === 'error' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <p style={{ fontSize: 14, color: tokens.danger, margin: 0 }}>{errorMsg}</p>
+          <p style={{ fontSize: 14, color: tokens.danger, margin: 0 }}>{errorText}</p>
           {canRetry && (
             <button type="button" onClick={() => void startRecording()} style={actionBtnStyle(tokens.primary)}>
-              <MicIcon /> Try again
+              <MicIcon /> {t('recorder.try_again', { defaultValue: 'Try again' })}
             </button>
           )}
         </div>

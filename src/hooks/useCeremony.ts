@@ -23,6 +23,7 @@
  *              the run finished never receives the events at all. It fills in
  *              what was missed and is marked as such.
  */
+import { useTranslation } from 'react-i18next'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { createSocket, type SocketAuth } from '@/runtime/socket'
@@ -59,6 +60,7 @@ interface UseCeremonyOptions {
 }
 
 export function useCeremony(session_id: string | null, options: UseCeremonyOptions = {}): UseCeremonyResult {
+  const { t } = useTranslation()
   const [awards, setAwards] = useState<AwardsResponse | null>(null)
   const [total, setTotal] = useState<number | null>(null)
   const [finished, setFinished] = useState(false)
@@ -93,10 +95,10 @@ export function useCeremony(session_id: string | null, options: UseCeremonyOptio
       setError(null)
       return result
     } catch {
-      setError('Could not load awards.')
+      setError(t('ceremony.load_failed', { defaultValue: 'Could not load awards.' }))
       return null
     }
-  }, [])
+  }, [t])
 
   // Leaderboard and (when needed) the star list come from REST.
   useEffect(() => {

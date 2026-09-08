@@ -14,6 +14,7 @@
  * Senior Secondary students type their name and password.
  */
 import { useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/Button'
@@ -38,6 +39,7 @@ type Phase =
 type CredentialMode = 'pin' | 'password' | 'none'
 
 export function JoinScreen({ onJoined }: JoinScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const [phase, setPhase] = useState<Phase>('code')
   const [code, setCode] = useState('')
@@ -87,11 +89,11 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
         setPhase(mode === 'none' ? 'simple_name' : 'credentials')
         requestAnimationFrame(() => nameRef.current?.focus())
       } else if (parsed.type === 'session_unavailable') {
-        setError('This session has ended or the code has expired.')
+        setError(t('join.session_ended', { defaultValue: 'This session has ended or the code has expired.' }))
         setPhase('code')
         requestAnimationFrame(() => codeRef.current?.focus())
       } else {
-        setError('Code not found. Check the board and try again.')
+        setError(t('join.code_not_found', { defaultValue: 'Code not found. Check the board and try again.' }))
         setPhase('code')
         requestAnimationFrame(() => codeRef.current?.focus())
       }
@@ -104,13 +106,13 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     try {
       const result = await api.session.join({ join_code: code, screen_name: screenName })
       if (!('participant_id' in result)) {
-        setError('Unexpected server response. Please try again.')
+        setError(t('join.unexpected_response', { defaultValue: 'Unexpected server response. Please try again.' }))
         setLoading(false)
         return
       }
       onJoined({ ...result, display_name: screenName })
     } catch {
-      setError('Could not join. Please try again.')
+      setError(t('join.join_failed', { defaultValue: 'Could not join. Please try again.' }))
       setLoading(false)
     }
   }
@@ -128,7 +130,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
           : { join_code: code, screen_name: name.trim() }
       const result = await api.session.join(payload)
       if (!('participant_id' in result)) {
-        setError('Unexpected server response. Please try again.')
+        setError(t('join.unexpected_response', { defaultValue: 'Unexpected server response. Please try again.' }))
         setLoading(false)
         return
       }
@@ -136,7 +138,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     } catch (err) {
       const parsed = parseJoinError(err)
       if (parsed.type === 'locked') {
-        setError('Account locked after too many attempts. Ask your teacher to unlock it.')
+        setError(t('join.account_locked', { defaultValue: 'Account locked after too many attempts. Ask your teacher to unlock it.' }))
       } else if (parsed.type === 'invalid_credential') {
         const remaining = parsed.remaining
         setError(
@@ -182,9 +184,9 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 380, margin: '0 auto', width: '100%' }}>
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: 0 }}>Join the session</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: 0 }}>{t('join.title', { defaultValue: 'Join the session' })}</h1>
             <div style={{ color: tokens.textMuted, fontSize: 14 }}>
-              Ask your teacher for the code on the board.
+              {t('join.ask_teacher', { defaultValue: 'Ask your teacher for the code on the board.' })}
             </div>
           </div>
 
@@ -193,7 +195,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
               htmlFor="join-code"
               style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8, color: tokens.textMuted }}
             >
-              Session code
+              {t('join.session_code', { defaultValue: 'Session code' })}
             </label>
             <input
               id="join-code"
@@ -207,7 +209,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
               value={code}
               onChange={handleCodeChange}
               disabled={isProbing}
-              placeholder="ABC123"
+              placeholder={t('join.code_placeholder', { defaultValue: 'ABC123' })}
               style={{
                 ...inputBase,
                 fontSize: 32,
@@ -217,12 +219,12 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                 fontFamily: 'ui-monospace, "SFMono-Regular", Menlo, monospace',
                 opacity: isProbing ? 0.5 : 1,
               }}
-              aria-label="Six character session code"
+              aria-label={t('join.code_aria', { defaultValue: 'Six character session code' })}
             />
 
             {isProbing && (
               <div style={{ textAlign: 'center', marginTop: 12, color: tokens.textMuted, fontSize: 14 }}>
-                Looking up session…
+                {t('join.looking_up', { defaultValue: 'Looking up session…' })}
               </div>
             )}
 
@@ -261,8 +263,8 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 420, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: tokens.text, margin: 0 }}>Who are you?</h1>
-            <div style={{ color: tokens.textMuted, fontSize: 14 }}>Tap your name to join.</div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: tokens.text, margin: 0 }}>{t('join.who_are_you', { defaultValue: 'Who are you?' })}</h1>
+            <div style={{ color: tokens.textMuted, fontSize: 14 }}>{t('join.tap_your_name', { defaultValue: 'Tap your name to join.' })}</div>
           </div>
 
           {error && (
@@ -310,7 +312,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
               textAlign: 'center',
             }}
           >
-            ← Wrong code?
+            {t('join.wrong_code', { defaultValue: '← Wrong code?' })}
           </button>
         </div>
       </Screen>
@@ -340,7 +342,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 380, margin: '0 auto', width: '100%' }}>
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: 0 }}>Join the session</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: 0 }}>{t('join.title', { defaultValue: 'Join the session' })}</h1>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -349,7 +351,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
             fontSize: 14,
             color: tokens.textMuted,
           }}>
-            Code:
+            {t('join.code_prefix', { defaultValue: 'Code:' })}
             <span style={{
               fontFamily: 'ui-monospace, "SFMono-Regular", Menlo, monospace',
               fontWeight: 800,
@@ -366,7 +368,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
             <Avatar seed={name.trim()} size={72} highlight />
             <div style={{ color: tokens.textMuted, fontSize: 12 }}>
-              That&rsquo;s your symbol — tap to learn its meaning later
+              {t('join.avatar_hint', { defaultValue: 'That\u2019s your symbol \u2014 tap to learn its meaning later' })}
             </div>
           </div>
         )}
@@ -378,7 +380,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                 htmlFor="display-name"
                 style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: tokens.textMuted }}
               >
-                Your name
+                {t('join.your_name', { defaultValue: 'Your name' })}
               </label>
               <input
                 id="display-name"
@@ -386,7 +388,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="What should we call you?"
+                placeholder={t('join.screen_name_placeholder', { defaultValue: 'What should we call you?' })}
                 maxLength={40}
                 autoComplete="given-name"
                 style={inputBase}
@@ -400,7 +402,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                   htmlFor="student-pin"
                   style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: tokens.textMuted }}
                 >
-                  PIN (4 digits)
+                  {t('join.pin_field', { defaultValue: 'PIN (4 digits)' })}
                 </label>
                 <input
                   id="student-pin"
@@ -410,7 +412,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                   maxLength={4}
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                  placeholder="••••"
+                  placeholder={t('join.pin_placeholder', { defaultValue: '••••' })}
                   autoComplete="current-password"
                   style={{
                     ...inputBase,
@@ -419,7 +421,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                     textAlign: 'center',
                     fontFamily: 'ui-monospace, "SFMono-Regular", Menlo, monospace',
                   }}
-                  aria-label="4-digit PIN"
+                  aria-label={t('join.pin_label', { defaultValue: '4-digit PIN' })}
                 />
               </div>
             )}
@@ -430,18 +432,18 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
                   htmlFor="student-password"
                   style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: tokens.textMuted }}
                 >
-                  Password
+                  {t('join.password_field', { defaultValue: 'Password' })}
                 </label>
                 <input
                   id="student-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
+                  placeholder={t('join.password_placeholder', { defaultValue: '••••••••••••' })}
                   autoComplete="current-password"
                   style={inputBase}
                   onKeyDown={(e) => { if (e.key === 'Enter') void handleCredentialsJoin() }}
-                  aria-label="Password"
+                  aria-label={t('join.password_label', { defaultValue: 'Password' })}
                 />
               </div>
             )}
@@ -477,7 +479,7 @@ export function JoinScreen({ onJoined }: JoinScreenProps) {
             textAlign: 'center',
           }}
         >
-          ← Wrong code?
+          {t('join.wrong_code', { defaultValue: '← Wrong code?' })}
         </button>
       </div>
     </Screen>
@@ -498,6 +500,7 @@ function RosterTile({
     primarySoft: string; glow: string; text: string; textMuted: string
   }
 }) {
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   return (
     <button
@@ -508,7 +511,7 @@ function RosterTile({
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
-      aria-label={`Join as ${screenName}`}
+      aria-label={t('join.join_as', { defaultValue: 'Join as {{name}}', name: screenName })}
       style={{
         background: hovered ? tokens.cardElevated : tokens.card,
         border: `1.5px solid ${hovered ? tokens.primary : tokens.border}`,

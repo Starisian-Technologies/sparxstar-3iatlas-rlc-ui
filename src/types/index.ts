@@ -102,14 +102,21 @@ export interface Session extends Omit<SessionStatusResponse, 'leaderboard'> {
 
 /**
  * UI leaderboard view — the wire shape carries { participant_id, screen_name,
- * session_xp }; the UI maps to display_name/xp so existing screens compile.
- * Rank is derived UI-side (the wire returns the list already sorted).
+ * session_xp, rank, tied }; the UI maps to display_name/xp so existing screens
+ * compile.
+ *
+ * RANK AND TIED COME FROM THE SERVER. They used to be derived here from list
+ * position, which is wrong whenever two learners are level: `index + 1` gives
+ * them 1 and 2 and silently invents a winner out of arrival order. The engine
+ * ranks with competition ranking (1, 2, 2, 4) and says which rows are tied,
+ * because only the engine can see the whole population.
  */
 export interface LeaderboardEntry {
   participant_id: string
   display_name: string
   xp: number
   rank: number
+  tied: boolean
 }
 
 // ─── Offline queue payload (UI-only) ─────────────────────────────────────────
@@ -175,6 +182,10 @@ export interface AppState {
   role: AppRole
   session_id: string | null
   participant_id: string | null
+  /** The stable account behind this participant. Needed for the Stats screen,
+   *  which is owner-scoped on the engine. Distinct from participant_id, which is
+   *  per-session and is what QC/ceremony address. */
+  account_id: string | null
   /** HMAC participant token — kept in memory only, never persisted. */
   participant_token: string | null
   join_code: string | null

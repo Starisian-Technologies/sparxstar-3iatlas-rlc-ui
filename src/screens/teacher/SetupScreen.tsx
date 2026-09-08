@@ -8,6 +8,7 @@
  * still start a session if the dictionary endpoint is offline.
  */
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Screen } from '@/components/Screen'
 import { Card } from '@/components/Card'
@@ -15,7 +16,13 @@ import { Button } from '@/components/Button'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from '@/theme/useTheme'
-import { placeholderRights } from '@/runtime/rights'
+import { RightsConfirmation } from '@/components/RightsConfirmation'
+import {
+  EMPTY_RIGHTS_DRAFT,
+  isRightsComplete,
+  toRights,
+  type RightsDraft,
+} from '@/runtime/rights'
 import type { CollectionMode, CollectionDepth, CreateSessionResponse } from '@/types'
 
 function getClassId(): string | null {
@@ -136,6 +143,7 @@ function useDictionarySetup(selectedLang: string) {
 }
 
 export function SetupScreen({ onCreated }: SetupScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const [mode, setMode] = useState<CollectionMode>('rwc')
   const [language, setLanguage] = useState('mandinka')
@@ -147,6 +155,9 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   const [depth, setDepth] = useState<CollectionDepth>('translation_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Spec §1.10: no defaults. Every rights field starts unanswered and the
+  // teacher must confirm each one before a session can exist.
+  const [rightsDraft, setRightsDraft] = useState<RightsDraft>(EMPTY_RIGHTS_DRAFT)
   const { languages, domains, ready } = useDictionarySetup(language)
 
   useEffect(() => {
@@ -166,13 +177,23 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
   const handleCreate = async () => {
     const class_id = getClassId()
     if (!class_id) {
-      setError('Missing class context. Please reload from the orchestrator.')
+      setError(t('teacher_setup.missing_class', { defaultValue: 'Missing class context. Reload this page from your school portal.' }))
       return
     }
-    // Resolve rights OUTSIDE the try so placeholderRights()'s production throw
-    // ("consent stage not wired") propagates as a hard failure instead of being
-    // masked as a generic "try again" network error.
-    const rights = placeholderRights()
+    // Rights come from the teacher's confirmation, and only from there. There is
+    // no fallback: an incomplete envelope must not reach the wire, and there is
+    // no value that could stand in for an answer the teacher has not given.
+    // The button is disabled in this state, so reaching here means a bug, not a
+    // user error.
+    const rights = toRights(rightsDraft)
+    if (!rights) {
+      setError(
+        t('teacher_setup.rights.incomplete', {
+          defaultValue: 'Answer all three to start the session.',
+        }),
+      )
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -189,7 +210,7 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
       })
       onCreated({ ...result, mode, collection_depth: depth, language })
     } catch {
-      setError('Could not create session. Please try again.')
+      setError(t('teacher_setup.create_failed', { defaultValue: 'Could not create session. Please try again.' }))
     } finally {
       setLoading(false)
     }
@@ -221,23 +242,23 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
         </div>
       }
       footer={
-        <Button onClick={() => void handleCreate()} disabled={loading || !ready} large>
-          {loading ? 'Creating…' : 'Create session'}
+        <Button onClick={() => void handleCreate()} disabled={loading || !ready || !isRightsComplete(rightsDraft)} large>
+          {loading ? t('teacher_setup.creating', { defaultValue: 'Creating…' }) : t('teacher_setup.create', { defaultValue: 'Create session' })}
         </Button>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 420, margin: '0 auto', width: '100%' }}>
         <div>
-          <div style={{ fontSize: 13, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>TEACHER</div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: '4px 0 0 0' }}>New session</h1>
+          <div style={{ fontSize: 13, color: tokens.textMuted, letterSpacing: 1, fontWeight: 700 }}>{t('teacher_setup.eyebrow', { defaultValue: 'TEACHER' })}</div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: tokens.text, margin: '4px 0 0 0' }}>{t('teacher_setup.title', { defaultValue: 'New session' })}</h1>
         </div>
 
         <Card>
-          <Field label="Mode">
+          <Field label={t('teacher_setup.mode', { defaultValue: 'Mode' })}>
             <SegmentedControl
               options={[
-                { value: 'rwc', label: 'Words' },
-                { value: 'rsc', label: 'Sentences' },
+                { value: 'rwc', label: t('teacher_setup.mode_words', { defaultValue: 'Words' }) },
+                { value: 'rsc', label: t('teacher_setup.mode_sentences', { defaultValue: 'Sentences' }) },
               ]}
               value={mode}
               onChange={(v) => setMode(v as CollectionMode)}
@@ -246,13 +267,13 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
         </Card>
 
         <Card>
-          <Field label="Language">
+          <Field label={t('teacher_setup.language', { defaultValue: 'Language' })}>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               disabled={!ready}
               style={selectStyle}
-              aria-label="Session language"
+              aria-label={t('teacher_setup.language', { defaultValue: 'Language' })}
             >
               {languages.map((l) => (
                 <option key={l.slug} value={l.slug} style={{ background: tokens.bg, color: tokens.text }}>{l.name}</option>
@@ -262,13 +283,13 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
 
           <div style={{ height: 12 }} />
 
-          <Field label="Topic">
+          <Field label={t('teacher_setup.topic', { defaultValue: 'Topic' })}>
             <select
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               disabled={!ready}
               style={selectStyle}
-              aria-label="Semantic domain"
+              aria-label={t('teacher_setup.topic', { defaultValue: 'Topic' })}
             >
               {domains.map((d) => (
                 <option key={d.slug} value={d.slug} style={{ background: tokens.bg, color: tokens.text }}>{d.name}</option>
@@ -278,9 +299,9 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
         </Card>
 
         <Card>
-          <Field label="Round duration">
+          <Field label={t('teacher_setup.duration', { defaultValue: 'Round duration' })}>
             <SegmentedControl
-              options={DURATIONS.map((d) => ({ value: String(d), label: `${d} min` }))}
+              options={DURATIONS.map((d) => ({ value: String(d), label: t('teacher_setup.minutes', { defaultValue: '{{count}} min', count: d }) }))}
               value={String(duration)}
               onChange={(v) => setDuration(Number(v))}
             />
@@ -288,17 +309,19 @@ export function SetupScreen({ onCreated }: SetupScreenProps) {
 
           <div style={{ height: 14 }} />
 
-          <Field label="Collection depth">
+          <Field label={t('teacher_setup.depth', { defaultValue: 'Collection depth' })}>
             <SegmentedControl
               options={[
-                { value: 'translation_only', label: 'Word + translation' },
-                { value: 'basic', label: 'Word only' },
+                { value: 'translation_only', label: t('teacher_setup.depth_translation', { defaultValue: 'Word + translation' }) },
+                { value: 'basic', label: t('teacher_setup.depth_basic', { defaultValue: 'Word only' }) },
               ]}
               value={depth}
               onChange={(v) => setDepth(v as CollectionDepth)}
             />
           </Field>
         </Card>
+
+        <RightsConfirmation value={rightsDraft} onChange={setRightsDraft} disabled={loading} />
 
         {error && (
           <div

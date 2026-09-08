@@ -7,6 +7,7 @@
  * the join path is obviously the main road.
  */
 import { Screen } from '@/components/Screen'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/Button'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -19,6 +20,7 @@ interface LandingScreenProps {
 }
 
 export function LandingScreen({ onJoin, onTeacher }: LandingScreenProps) {
+  const { t } = useTranslation()
   const { tokens, resolved } = useTheme()
 
   return (
@@ -46,10 +48,10 @@ export function LandingScreen({ onJoin, onTeacher }: LandingScreenProps) {
               color: tokens.primary,
             }}
           >
-            Rapid Language Collection
+            {t('landing.title', { defaultValue: 'Rapid Language Collection' })}
           </div>
           <div style={{ fontSize: 16, color: tokens.textMuted }}>
-            Collect words. Share your language.
+            {t('landing.subtitle', { defaultValue: 'Collect words. Share your language.' })}
           </div>
         </div>
 
@@ -68,15 +70,15 @@ export function LandingScreen({ onJoin, onTeacher }: LandingScreenProps) {
           }}
         >
           <StarBadge variant="discovery" size={14} />
-          <span>Earn stars for every new word you teach</span>
+          <span>{t('landing.stars_tagline', { defaultValue: 'Earn stars for every new word you teach' })}</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
           <Button onClick={onJoin} variant="primary" large>
-            Join a session
+            {t('landing.join', { defaultValue: 'Join a session' })}
           </Button>
           <Button onClick={onTeacher} variant="ghost">
-            Start a session (teacher)
+            {t('landing.teacher', { defaultValue: 'Start a session (teacher)' })}
           </Button>
         </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSessionPoll } from '@/hooks/useSessionPoll'
 import { TenantLogo } from '@/components/TenantLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -12,6 +13,7 @@ interface RscCompleteScreenProps {
 }
 
 export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnded }: RscCompleteScreenProps) {
+  const { t } = useTranslation()
   const { tokens } = useTheme()
   const hasCollectionEndedRef = useRef(false)
   const [pollingEnabled, setPollingEnabled] = useState(true)
@@ -76,17 +78,17 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 30, fontWeight: 900, color: tokens.text, letterSpacing: -0.5 }}>
-            All done!
+            {t('rsc_complete.title', { defaultValue: 'All done!' })}
           </div>
           <div style={{
             fontSize: 18,
             color: tokens.primary,
             fontWeight: 700,
           }}>
-            {submittedCount} sentence{submittedCount !== 1 ? 's' : ''} submitted
+            {t('rsc_complete.submitted_count', { defaultValue: '{{count}} sentences submitted', count: submittedCount })}
           </div>
           <div style={{ fontSize: 15, color: tokens.textMuted, maxWidth: 280, lineHeight: 1.5 }}>
-            You contributed to the class language record. Waiting for everyone else to finish…
+            {t('rsc_complete.body', { defaultValue: 'You contributed to the class language record. Waiting for everyone else to finish…' })}
           </div>
         </div>
 
@@ -105,7 +107,7 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
         }}>
           <PulsingDot color={tokens.primary} />
           <div style={{ fontSize: 14, color: tokens.textMuted, lineHeight: 1.5 }}>
-            Your teacher will start the review when everyone is ready.
+            {t('rsc_complete.teacher_note', { defaultValue: 'Your teacher will start the review when everyone is ready.' })}
           </div>
         </div>
 
@@ -118,7 +120,7 @@ export function RscCompleteScreen({ session_id, submittedCount, onCollectionEnde
           color: tokens.textMuted,
         }}>
           <span style={{ fontSize: 16 }}>⭐</span>
-          <span>XP for each sentence will appear after the review</span>
+          <span>{t('rsc_complete.xp_note', { defaultValue: 'XP for each sentence will appear after the review' })}</span>
         </div>
       </div>
     </div>

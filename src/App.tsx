@@ -3,6 +3,7 @@ import { LandingScreen } from '@/screens/LandingScreen'
 import { JoinScreen } from '@/screens/student/JoinScreen'
 import { LobbyScreen } from '@/screens/student/LobbyScreen'
 import { SetupScreen } from '@/screens/teacher/SetupScreen'
+import { TeacherSignedOut } from '@/screens/teacher/TeacherSignedOut'
 import { MonitorScreen } from '@/screens/teacher/MonitorScreen'
 import { RwcCollectionScreen } from '@/screens/student/RwcCollectionScreen'
 import { RscCollectionScreen } from '@/screens/student/RscCollectionScreen'
@@ -11,6 +12,7 @@ import { QcScreen } from '@/screens/qc/QcScreen'
 import { getTeacherToken } from '@/api/client'
 import { QcTeacherScreen } from '@/screens/teacher/QcTeacherScreen'
 import { CeremonyScreen } from '@/screens/ceremony/CeremonyScreen'
+import { StatsScreen } from '@/screens/StatsScreen'
 import { api } from '@/api/client'
 import { useSubmissionQueue } from '@/hooks/useSubmissionQueue'
 import { emitRuntimeEvent } from '@/runtime/events'
@@ -36,6 +38,7 @@ type Screen =
   | 'student_rsc_complete'
   | 'qc'
   | 'ceremony'
+  | 'stats'
 
 // A student still on a collection screen when the session leaves 'open' is routed
 // by the terminal status: 'ceremony'/'archived' skip straight to the ceremony so
@@ -55,6 +58,7 @@ export function App() {
     role: 'none',
     session_id: null,
     participant_id: null,
+    account_id: null,
     participant_token: null,
     join_code: null,
     display_name: null,
@@ -77,27 +81,19 @@ export function App() {
     )
   }
 
-  // ── Teacher missing token ─────────────────────────────────────────────────
-  // No /auth/login endpoint — teacher token must be injected by the orchestrator.
+  // ── Teacher not signed in ─────────────────────────────────────────────────
+  //
+  // The teacher's credential is an IDENTITY-ISSUED token supplied by the host
+  // page in memory (NODE-ADR-007: Identity authenticates, RLC authorizes). It
+  // proves who the teacher is and grants nothing; whether they may create a
+  // session is resolved server-side against RLC's own authorization records.
+  //
+  // This copy previously told the teacher to "open this page from the WordPress
+  // orchestrator". There is no WordPress orchestrator and none is to be created
+  // (owner ruling, 2026-08-23) — it named a component that does not exist, so a
+  // teacher who hit this screen was given an instruction they could not follow.
   if (screen === 'teacher_missing_token') {
-    return (
-      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#160001', color: '#fff' }}>
-        <div style={{ maxWidth: 420, textAlign: 'center' }}>
-          <h1 style={{ fontSize: 22, marginBottom: 8 }}>Teacher token missing</h1>
-          <p style={{ opacity: 0.8, marginBottom: 16, lineHeight: 1.5 }}>
-            This app needs a teacher token from the orchestrator (`window.RLC_TEACHER_TOKEN`).
-            Open this page from the WordPress orchestrator so it can inject the token in memory.
-          </p>
-          <button
-            type="button"
-            onClick={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }}
-            style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: '#FF2D78', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-    )
+    return <TeacherSignedOut onBack={() => { setState(s => ({ ...s, role: 'none' })); setScreen('landing') }} />
   }
 
   // ── Teacher setup ──────────────────────────────────────────────────────────
@@ -153,6 +149,7 @@ export function App() {
             ...s,
             session_id: result.session_id,
             participant_id: result.participant_id,
+            account_id: result.account_id ?? null,
             participant_token: result.participant_token ?? null,
             display_name: result.display_name,
             mode: result.mode as CollectionMode,
@@ -174,6 +171,12 @@ export function App() {
     )
   }
 
+  // ── Stats & competition ────────────────────────────────────────────────────
+  // Rendered from engine-computed values only; see StatsScreen's header.
+  if (screen === 'stats' && state.account_id) {
+    return <StatsScreen account_id={state.account_id} onBack={() => setScreen('student_lobby')} />
+  }
+
   // ── Student lobby ────────────────────────────────────────────────────────────
   if (screen === 'student_lobby' && state.session_id && state.display_name) {
     return (
@@ -181,6 +184,10 @@ export function App() {
         session_id={state.session_id}
         display_name={state.display_name}
         participant_token={state.participant_token}
+        // Only offered when the join actually returned an account_id — the
+        // Stats surface is owner-scoped on the engine and there is nothing to
+        // ask it about without one.
+        onViewStats={state.account_id ? () => setScreen('stats') : undefined}
         onEnterRound={() => {
           const nextScreen = state.mode === 'rsc' ? 'student_rsc_collection' : 'student_rwc_collection'
           emitRuntimeEvent('ROUND_STARTED', {
